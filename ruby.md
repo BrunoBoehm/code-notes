@@ -49,7 +49,7 @@ We can also use this way
 ```ruby
 answer = "Flamboyance"
 puts "A group of flamingos is called a " + answer + "."
-``
+```
 
 ## Defining methods
 Methods define a new thing that your program can do. Variables are a mechanism to teach your Ruby program about data; methods teach your Ruby program about a new routine or behavior it can use. Variables are like nouns, methods are like verbs.
@@ -257,6 +257,7 @@ elsif name == "The Queen of Hearts"
 else
   puts "Whoooo are you?"
 end 
+# note we can finish with an elsif, without else
 
 
 #let's refactor
@@ -378,6 +379,7 @@ until counter == 20 #it will break out when counter == 20 becomes true
   counter += 1
 end
 ```
+Note that the return value of a `while loop is always nil. If we want our method to return something else, we have to tell it to do so.
 
 ### Each
 The most important thing to remember about `each` is that it does not change the return value. It implicitly returns the original array.
@@ -616,9 +618,111 @@ def hamburger(toppings)
     puts "I love #{topping} on my burgers!"
   end
 end
+
+# > I love pickles on my burgers!
+# > I love mushrooms on my burgers!
+# > I love bacon on my burgers!
+# => [nil, nil, nil]
 ```
 
+Note: we are using puts, which always has a nil return value, so if we remove it it will return what we want.
 
+```ruby
+def burger(toppings)
+  toppings.collect do |topping|
+    "I love #{topping} on my burgers"
+  end
+end
+
+# => ["I love pickles on my burgers", "I love mushrooms on my burgers", "I love bacon on my burgers"]
+```
+
+Another example of `.collect` is 
+```ruby
+def reverse_each_word(sentence)
+  sentence.split.collect {|word| word.reverse}.join(" ")
+end
+```
+
+To understand under the hood how the `.collect` method works:
+```ruby
+def hello(array)
+  i = 0
+  collection = []
+  while i < array.length
+    collection << yield(array[i])
+    i += 1
+  end
+  collection
+end
+
+hello(["Tim", "Tom", "Jim"]) { |name| "Hi, #{name}" }
+
+# => ["Hi, Tim", "Hi, Tom", "Hi, Jim"]
+```
+
+### Boolean enumerators
+`.all?` enumerator: the block passed to it must return `true` for every iteration for the entire `#all`? expression or method to return `true`.
+
+```ruby
+all_odd = [1,3].all? do |number|
+  number.odd? # Will evaluate to true for 1, true for 3
+end 
+#=> true
+
+all_odd 
+#=> true
+```
+
+`.none?` is the opposite, where we are interested in none of the elements in a collection producing a true expression within the block passed to `#none?`.
+
+```ruby
+[1,3].none?{|i| i.even?} #=> true
+```
+
+Use `.any?` to ensure that at least one element in a collection will create a `true` expression within the block passed.
+
+```ruby
+[1,2,100].any?{|i| i > 99} #=> true
+```
+
+`#include?` will return true if the given object exists in the element. If it doesn't find a match, it will return `false`.
+
+```ruby
+the_numbers = [4,8,15,16,23,42]
+the_numbers.include?(42)   #=> true
+the_numbers.include?(6)   #=> false
+```
+
+### Select, detect, reject
+When you evoke `#select on a collection, the return value will be a new array containing all the elements of the collection that cause the block passed to #select to return `true`.
+
+```ruby
+[1,2,3,4,5].select do |number|
+  number.even?
+end 
+#=> [2,4]
+
+[1,2,3].select{|i| i.is_a?(String)} 
+#=> []
+```
+
+`#detect` will only return the first element that makes the block true. Note that `.detect` and `.find` are two names for the same method.
+
+```ruby
+[1,2,3].detect{|i| i.odd?} 
+#=> 1
+
+[1,2,3,4].detect{|i| i.is_a?(String)} 
+#=> nil
+```
+
+`#reject` will return an array with the elements for which the block is false.
+
+```ruby
+[1,2].reject{|i| i.even?} 
+#=> [1]
+```
 
 ## Blocks
 Blocks are part of what make the Ruby language special, powerful, and loved.
@@ -631,11 +735,73 @@ primary_colors.each do |color| # do begins a block
 end # end terminates the block
 ``
 The iterator `#each` yields each element one at a time to every iteration via a variable declared with the opening of the block.
-A block is a chunk of code between braces, { } or between do/end keywords that you can pass to a method almost exactly like you can pass an argument to a method. When invoking an iterator like #each, the variable name inside the pipes acts as an argument that is being passed into the block. The iterator will pass, or yield, each element of the collection on which it is called to the block. Each element, as it gets passed into the block, will be equal to the variable name inside the pipes.
 
+A block is a chunk of code between braces, { } or between do/end keywords that you can pass to a method almost exactly like you can pass an argument to a method. 
 
+When invoking an iterator like #each or #map, the variable name inside the pipes acts as an argument that is being passed into the block. 
+The iterator will pass, or yield, each element of the collection on which it is called to the block. 
+Each element, as it gets passed into the block, will be equal to the variable name inside the pipes.
 
+Under the hood, these methods rely on the `yield` keyword. When used inside the body of a method, it will allow you to call that method with a block and pass, or "yield", to that block. It says "stop executing the code in this method and instead execute the code in the block. Then, return to the code in the method."
 
+```ruby
+def yielding
+  puts "the program is executing the code inside the method"
+  yield
+  puts "now we are back in the method"
+end
+
+# To call this method with a block, we use the following syntax
+yielding {puts "the method has yielded to the block!"}
+
+# > "the program is executing the code inside the method"
+# > "the method has yielded to the block!"
+# > "now we are back in the method"
+```
+You can yield values/parameters to a block (they will get in the |i| "pipe" placeholder of the block).
+```ruby
+def yielding_with_arguments(num)
+  puts "the program is executing the code inside the method"
+  yield(num)
+  puts "now we are back in the method"
+end
+
+# for instance, with argument 2 and a block, where |i| is the placeholder for the yielded value
+yielding_with_arguments(2) {|i| puts i * 2}
+
+# => "the program is executing the code inside the method"
+# => 4
+# => "now we are back in the method"
+```
+
+You can use `.block_given?` to test whether a block is passed
+```ruby
+def hello_t(array)
+  if block_given?
+    i = 0
+    while i < array.length
+      yield(array[i])
+      i = i + 1
+    end
+    array
+  else
+    puts "Hey! No block was given!"
+  end
+end
+
+# we are using a while loop to iterate over an array and yielding each member of the array in turn to a block.
+
+hello_t(["Tim", "Tom", "Jim"]) do |name|
+    if name.start_with?("T")
+        puts "Hi, #{name}"
+    end
+end
+
+# > Hi, Tim
+# > Hi, Tom
+# => ["Tim", "Tom", "Jim"]
+```
+More about [blocks, proces, lambdas](http://www.reactive.io/tips/2008/12/21/understanding-ruby-blocks-procs-and-lambdas)
 
 
 
@@ -653,6 +819,7 @@ A block is a chunk of code between braces, { } or between do/end keywords that y
 #=> "Hello world" 
 "Hello World".swapcase
 #=> "hELLO wORLD" 
+name.start_with?("T")
 ```
 
 To pause a program for some time you can use [sleep](http://stackoverflow.com/questions/1329967/tell-ruby-program-to-wait-some-amount-of-time)
