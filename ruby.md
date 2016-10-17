@@ -27,6 +27,56 @@ a, b, c = 10, 20, 30
 9 <=> 9
 ```
 
+## Data types
+### String
+Strings are mutable, meaning that we can manipulate them in various ways by adding, removing, or replacing characters.
+Ruby accounts for that possible mutability by allocating more memory for it. Ruby has to store each of them separately because any one of them may change in the future. We can test this by asking an object for its `object_id`.
+
+```ruby
+a = "hello "
+a << "world"   #=> "hello world"
+a[1]                   #=> "e"
+a[2, 3]                #=> "llo"
+a[2..3]                #=> "ll"
+a["lo"]                #=> "lo"
+a["bye"]               #=> nil
+"".empty?              #=> true
+
+"hello".include? "lo"   #=> true
+"hello".index('e')      #=> 1
+"abcd".insert(3, 'X')   #=> "abcXd"
+a[1]="X"                #=> "X"
+
+"hello".capitalize    #=> "Hello"
+"HELLO".capitalize    #=> "Hello"
+"123ABC".capitalize   #=> "123abc"
+
+"this is a string".slice!(3..6)     #=> " is "
+" now's  the time".split            #=> ["now's", "the", "time"]
+
+"hello\n".chomp              #=> "hello"
+```
+Adn for the record
+```ruby
+Escape Sequence Description
+\t  Insert a tab in the text at this point.
+\b  Insert a backspace in the text at this point.
+\n  Insert a newline in the text at this point.
+\r  Insert a carriage return in the text at this point.
+\f  Insert a formfeed in the text at this point.
+\'  Insert a single quote character in the text at this point.
+\"  Insert a double quote character in the text at this point.
+\\  Insert a backslash character in the text at this point.
+```
+
+### Integers
+
+### Symbols
+A symbol is similar to a string, but with one primary distinction: a symbol can't be changed, is immutable: symbols are unique. This is the reason we use them as keys for hashes. This means that its state can't be modified after it is created and it will always be the same size in memory. If you have multiple references to one symbol, all of those references will always point to the same object.
+
+Why use symbols as hash keys? Since all copies of `:steven` have the same object_id, they use up less memory! `"Steven"` uses a new slot of memory each time you create it. :steven does not. This is because keys do not need to be mutable.
+
+
 ## Variable assignment
 
 ```ruby
@@ -62,7 +112,7 @@ def greeting # Method Signature
 end # Method Closing
 
 greeting
-``
+```
 Make a new file called greeting.rb with this code in it. Save your file and run it with `$ ruby greeting.rb` 
 
 ### Method arguments
@@ -329,7 +379,8 @@ end
 ```
 
 ### While and Until
-The `while` construct is a little different from the loop construct that we looked at earlier. The `while` construct will keep executing a block as long as a specific condition is `true`. Don't forget the counter or you'll end up with an infinite loop.
+The `while` construct is a little different from the loop construct that we looked at earlier. The `while` construct will keep executing a block as long as a specific condition is `true`. Since this is a lower level iterator, we will need to explicitly add a counter or you'll end up with an infinite loop.
+
 ```ruby
 counter = 0
 while counter < 20
@@ -504,7 +555,20 @@ To delete a particular element anywhere in an array, use delete:
 ```ruby
 arr = [1, 2, 2, 3]
 arr.delete(2) #=> [1, 3]
-``
+```
+
+To delete at a specific index, use `delete_at`
+```ruby
+a = ["ant", "bat", "cat", "dog"]
+a.delete_at(2)    
+#=> "cat"
+
+a                 
+#=> ["ant", "bat", "dog"]
+
+a.delete_at(99)   
+#=> nil
+```
 
 ### Accessing the elements of an array
 Index starts at 0, so just use `famous_cats[2]`, or using the negative index `famous_cats[-1]` (last element is -1 because before 0 which is the beginning)
@@ -586,7 +650,7 @@ The `.join` method, when called on a array, will convert it into a string.
 ```
 
 ### Collect and Map
-Remember the `.each` method does not change the return value. It implicitly returns the original array. 
+**Remember the `.each` method does not change the return value. It implicitly returns the original array**. 
 
 ```ruby
 toppings = ["pickles", "mushrooms", "bacon"]
@@ -694,8 +758,8 @@ the_numbers.include?(42)   #=> true
 the_numbers.include?(6)   #=> false
 ```
 
-### Select, detect, reject
-When you evoke `#select on a collection, the return value will be a new array containing all the elements of the collection that cause the block passed to #select to return `true`.
+### Search enumerators: .select, .detect, .reject
+When you evoke `#select` on a collection, the return value will be a new array containing all the elements of the collection that cause the block passed to #select to return `true`.
 
 ```ruby
 [1,2,3,4,5].select do |number|
@@ -723,6 +787,271 @@ end
 [1,2].reject{|i| i.even?} 
 #=> [1]
 ```
+
+### Sorting data
+So far, when we've iterated with methods like `.each` or `.collect`, we iterate over one element of the collection at a time. Now, in order to compare the elements in our array to one another, we need an enumerator that allows us to yield two elements at once.
+
+To sort from smaller to bigger (low to high = ascending), we can use the "combined comparison operator", also called "spaceship operator". It returns 
+- `0` if the first operand equals the second (and `.sort` leaves them at their place), 
+- `-1` if the first operand is less than the second (since the order is good, `.sort` will once again leave them in their current places)
+- `1` if the first operand is greater than the second (`.sort` will switch them)
+
+```ruby
+array = [7, 3, 1, 2, 6, 5]
+ 
+array.sort do |a, b|
+  a <=> b
+end
+ 
+#  => [1, 2, 3, 5, 6, 7]
+```
+
+Simply calling `.sort` has the desired effect. 
+
+```ruby
+dishes = ["steak", "apple pie", "vegetable soup"]
+ 
+dishes.sort
+
+# => ["apple pie", "steak", "vegetable soup"]
+```
+
+## Hashes
+
+### Simple hashes
+Up until this point, we've stored our data in list-form using arrays. An array is like a numbered list. It stores a group of items which are accessible via their location, or index number, in the list.
+
+Unliked an array, a hash is not indexed by number. Hashes store data in an associated manner: key-value pair. Each key is unique. Keys in hashes can be any type of data: strings, integers or symbols.
+
+They are set equal to their associated values by using the => symbol, known for this use as the "hash-rocket".
+```ruby
+hash = {"key" => "value", "another_key" => "another value"}
+```
+
+class constructor: `hash = Hash.new`
+litteral constructor: `hash = {}`
+
+Accessing data in a hash.
+Instead of using `array[index]` you use `hash[key]` to get the value. Using [] is referred to as the "bracket method" (a method like any other).
+
+To add data you can write `pets["bird"] = "Sammy"`. Instead of << (the shovel method) that we use to add items to arrays, hashes use the "bracket-equals" method to add data. Indeed hashes are not numbered lists. The data stored in them is not indexed by number, but instead associated to a unique key. Consequently a hash has no concept of the "end of the list", like an array.
+
+```ruby
+hash_name[new_key_name]= new_value
+
+hash = {first: "first value!", second: "second value!"}
+hash[:third] = "third value!"
+ 
+puts hash
+#  > {first: "first value!", second: "second value!", third: "third value!"}
+```
+
+Since keys don't need to be mutable, and since mutable objects like strings take up more space in memory, we use immutable, memory-saving `:symbols` as hash keys. In Ruby 1.9, we were introduced with the option of forgoing the hash-rocket (=>) when writing key/value pairs when the key is a symbol.
+
+This leads to the following syntax
+```ruby
+flatiron_school = {:instructor => "Isaac Newton"}
+
+#becoming 
+flatiron_school = {instructor: "Isaac Newton"}
+```
+
+### Hash iteration with .each and .map/.collect
+When we iterate over arrays, we iterate over one element at a time––each index in an array contains just one object. In a hash however, data is stored in key/value pairs so we will be iterating over those pairs.
+
+```ruby
+hash = {key1: "value1", key2: "value2"}
+ 
+hash.each do |key, value|
+  puts "#{key}: #{value}"
+end
+```
+Remember that `#each` returns the original collection on which you are calling the method.
+Use `#each` instead of collect if you don't want to collect the key/value pair that answer to the block being `true`.
+
+```ruby
+# passengers = {
+# suite_a: "Amanda Presley",
+# suite_b: "Seymour Hoffman",
+# suite_c: "Alfred Tennyson",
+# }
+
+def select_winner(passengers)
+  winner = ""
+  passengers.each do |suite, name|
+    winner = name if suite == :suite_a && name.start_with?("A")
+  end
+  winner
+end
+```
+
+With `.collect` we can iterate over a collection of data, such as an array or a hash, and return a collection of the data therein. We use it to collect the values of the hash's keys and/or collect data that we've operated on over the course of an iteration.
+
+```ruby
+birthday_kids = {
+    "Timmy" => 9, 
+    "Sarah" => 6, 
+    "Amanda" => 27
+}
+
+birthday_kids.collect do |kids_name, age|
+    age
+end
+ 
+# => [9, 6, 27]
+```
+Note that the return value is an array of the values we collected.
+
+### Multi-dimensional / Nested Hashes
+A key in a hash can point to a value that is a collection of objects, i.e. an array or even another hash. Nested hashes allow us to further group, or associate, the data we are working with.
+
+In particular, we will encounter these data structures when working with data you will pull from APIs.
+
+```ruby
+instructors = ["Avi", "Jeff", "Rose"]
+
+dev_team = ["Jonas", "Logan", "Amanda", "Seiji", "Kate", "Spencer"]
+
+# we can unite them under a hash
+flatiron_school = {
+  instructors: ["Avi", "Jeff", "Rose"], 
+  dev_team: ["Jonas", "Logan", "Amanda", "Seiji", "Kate", "Spencer"]
+}
+
+instructors = flatiron_school[:instructors]
+ # => ["Avi", "Jeff", "Rose"]
+
+instructors[0]
+#  => "Avi"
+```
+Let's now add data to the nested hash.
+
+```ruby
+contacts = {
+  "Jon Snow" => {
+    name: "Jon",
+    email: "jon_snow@thewall.we",
+    favorite_ice_cream_flavors: ["chocolate", "vanilla"]  },
+  "Freddy Mercury" => {
+    name: "Freddy",
+    email: "freddy@mercury.com",
+    favorite_ice_cream_flavors: ["strawberry", "cookie dough", "mint chip"]
+  }
+}
+
+contacts["Jon Snow"][:favorite_ice_cream_flavors]
+#  => ["chocolate", "vanilla"]
+
+contacts["Jon Snow"][:favorite_ice_cream_flavors] << "mint chip"
+
+puts contacts
+#  > {
+  "Jon Snow" => {
+    name: "Jon",
+    email: "jon_snow@thewall.we",
+    favorite_ice_cream_flavors: ["chocolate", "vanilla", "mint chip"]
+  },
+  "Freddy Mercury" => {
+    name: "Freddy",
+    email: "freddy@mercury.com",
+    favorite_ice_cream_flavors: ["strawberry", "cookie dough", "mint chip"]
+  }
+}
+```
+To add a key/value pair to a nested hash
+```ruby
+contacts["Jon Snow"][:address] = "The Lord Commander's Rooms, The Wall, Westeros"
+ 
+puts contacts
+  #  >
+  {
+    "Jon Snow" => {
+     :name=>"Jon",
+     :email=>"jon_snow@thewall.we",
+     :favorite_ice_cream_flavors=>["chocolate", "vanilla", "mint chip"],
+     :address=>"The Lord Commander's Rooms, The Wall, Westeros"
+    },
+    "Freddy Mercury"=> {
+     :name=>"Freddy",
+     :email=>"freddy@mercury.com",
+     :favorite_ice_cream_flavors=> ["cookie dough", "mint chip"]
+    }
+  }
+```
+
+### Iterating on a nested hash
+So much of what we do in programming involves storing data in hashes. Often the hashes that we will encounter will have more than one level. Let's iterate over our nested hash one level at a time.
+
+```ruby
+contacts = {
+  "Jon Snow" => {
+    name: "Jon",
+    email: "jon_snow@thewall.we", 
+    favorite_ice_cream_flavors: ["chocolate", "vanilla", "mint chip"],
+        knows: nil
+  },
+  "Freddy Mercury" => {
+    name: "Freddy",
+    email: "freddy@mercury.com",
+    favorite_ice_cream_flavors: ["strawberry", "cookie dough", "mint chip"]
+  }
+}
+
+contacts.each do |person, data|
+ 
+  data.each do |attribute, value|
+
+    if attribute == :favorite_ice_cream_flavors
+      value.each do |flavor|
+        puts "#{flavor}"
+      end
+    end
+
+  end
+end
+```
+
+### Hash methods
+You can collect all of the values in a hash with the `#values` method:
+```ruby
+groceries = {fruit: "Banana", vegetable: "Broccoli", dessert: "Cookie"}
+ 
+groceries.values
+#  => ["Banana", "Broccoli", "Cookie"]
+```
+
+Use `.flatten` when you don't want an array with multiple sub-arrays as an answers
+```ruby
+groceries = {
+  dairy: ["milk", "yogurt", "cheese"],
+  vegetable: ["carrots", "broccoli", "cucumbers"],
+  meat: ["chicken", "steak", "salmon"],
+  grains: ["rice", "pasta"]
+}
+
+groceries.values
+#=> [["milk", "yogurt", "cheese"], ["carrots", "broccoli", "cucumbers"], ["chicken", "steak", "salmon"], ["rice", "pasta"]]
+
+groceries.values.flatten
+#=> ["milk", "yogurt", "cheese", "carrots", "broccoli", "cucumbers", "chicken", "steak", "salmon", "rice", "pasta"]
+```
+
+To returns an array containing all of the keys in the hash that `#keys` has been called on:
+```ruby
+groceries = {fruit: "Banana", vegetable: "Broccoli", dessert: "Cookie"}
+ 
+groceries.keys
+#  => [:fruit, :vegetable, :dessert]
+```
+
+You can use the `#min` method on a hash to return the key/value pair whose key is the lowest value.
+```ruby
+letters = {a: 1, b: 2}
+ 
+letters.min
+#  => [:a, 1]
+```
+
 
 ## Blocks
 Blocks are part of what make the Ruby language special, powerful, and loved.
@@ -803,6 +1132,18 @@ end
 ```
 More about [blocks, proces, lambdas](http://www.reactive.io/tips/2008/12/21/understanding-ruby-blocks-procs-and-lambdas)
 
+### other useful methods working with blocks
+`.delete_if` can be used to iterate through a hash or array and delete the key/value pair if the block returns `true`. 
+
+```ruby
+contacts.each do |person, contact_details_hash|
+  contact_details_hash.each do |attribute, data|
+    if attribute == :favorite_ice_cream_flavors
+      data.delete_if {|ice_cream| ice_cream == "strawberry"}
+    end
+  end
+end
+```
 
 
 
@@ -833,4 +1174,86 @@ sleep(2.hours); sleep(3.days) # etc., etc.
 #Or shorter
 sleep(0.5) #Half a second
 ```
+
+## REGEX
+We use regular expressions to encode *patterns* for matching, searching, and substitution. Here's a sample RegEx for email validation:
+```ruby
+/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}/i
+```
+Regular expressions are an extremely powerful way to search through strings and blocks of text for specific patterns. They can be used for data validation, searching, mass file renaming, and finding records in a database.
+
+In Ruby, regular expressions are generally written between forward slashes: `/your regex/`. This is the 'literal' alternative to creating a regular expression object using the following syntax: `Regexp.new('your regex')`.
+
+Regex | Function
+--- | ---
+\d | match any digit from 0 to 9 [0-9]
+\w | match any word character (letters, numbers, and underscores), or [A-Za-z0-9_]
+\W | match the non-word characters in your text
+. | wildcard: any character
+[abc] | any of a, b, or c
+[^abc] |  not a, b, or c
+^abc | string starts with abc
+abc$ | ends with abc
+/^...$/ | leading ^ and trailing $ match the beginning and the ending of the input string, respectively. That is, the entire input string shall match with this regex, instead of a part of the input string.
+\. | escape .
+\\ | escapted \
+\t \n \r | tab, linefeed, carriage return
+\b | word boundary
+a* | 0 or more "a"
+a+ | 1 or more "a"
+\w+ | one or more words
+a? | 0 or 1 "a" 
+[\.-]? | matches 0 or 1 occurrence of [\.-]
+[aeiou] | all instances of vowels in a string
+[\.-] | matches character . or -. We need to use \. to represent . as . has special meaning in regex
+[^aeiou] | all instances of vowels in a string except these
+[a-j] | single characters in the first 10 letters of the alphabet [abcdefghij]
+[0-9] | any occurence of single character in between [0123456789]
+a{5} | exactly five "a"
+a{2,} | 2 or more "a" 
+a{1,3} | between one & three
+\.\w{2,3} | matches a . followed by two or three word characters, e.g., ".com", ".edu", ".us"
+(gif|png|jpg|jpeg) | or operator
+[aeiou]{2} | instances of two consecutive vowels (ie, 'ae', 'ie', 'oo', etc)
+/.../i | modifier i after the regex specifies case-insensitive matching
+
+The `.scan` method returns an array of all items in your string that match a given Regular Expression.
+```ruby
+"The rain in Spain lies mainly in the plain".scan(/\w+ain/)
+=> ["rain", "Spain", "main", "plain"]
+```
+
+The `.match` method returns the first item in your string that matches a given Regular Expression as a MatchData object. 
+```ruby
+"The rain in Spain lies mainly in the plain".match(/\w+ain/)
+=> #<MatchData "rain"> 
+ 
+"The rain in Spain lies mainly in the plain".match(/France/)
+=> nil
+```
+
+`.grep` is an enumerable method for pattern searching in arrays and hashes.
+```ruby
+names = ["Jeri Faria", "Althea Voth", "Audry Donoho", "Scotty Chaves", "Lance Barrio", "Zachary Newhall", "Stefany Janey", "Tressie Kinsel", "Raven Grimsley", "Marketta Gaylor", "Leota Crowe", "Mazie Norman", "Damien Loffredo"]
+ 
+#Get items from array where first name has five letters:
+names.grep(/^\w{5}\s/)
+ 
+=> ["Audry Donoho", "Lance Barrio", "Raven Grimsley", "Leota Crowe", "Mazie Norman"]
+```
+
+Using parentheses in our regex allows us to create 'groups' that we can refer to in our scan/match/grep methods as indexes in an array.
+```ruby
+numbers = "202-555-0192 202-555-0147 202-555-0131 202-555-0116 202-555-0192 202-555-0197"
+ 
+number_breakdown = numbers.scan(/(\d+)-(\d+)-(\d+)/)
+=> [["202", "555", "0192"], ["202", "555", "0147"], ["202", "555", "0131"], ["202", "555", "0116"], ["202", "555", "0192"], ["202", "555", "0197"]] 
+ 
+number_breakdown[0]
+=> ["202", "555", "0192"]
+ 
+number_breakdown[0][1]
+=> "555"
+```
+
 
