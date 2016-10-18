@@ -249,9 +249,14 @@ sqlite3 pets_database.db < 01_insert_cats_into_cats_table.sql
 
 #### SELECTING
 We also want to read the data with the `SELECT` statement. We specify the names of the columns we want to SELECT and then tell SQL the table we want to select them FROM.
+
+If we want to get the names of all the dogs and cats, we can no longer run a query with just the column name: `SELECT name FROM cats,dogs;` would return an error.
 ```
 SELECT [names of columns we want to select] FROM [table we're reading from];
 SELECT name FROM cats;
+SELECT cats.name FROM cats;
+SELECT cats.name, dogs.name FROM cats, dogs;
+
 SELECT name, age FROM cats;
 
 SELECT id, name, age, breed FROM cats;
@@ -269,6 +274,14 @@ SELECT * FROM cats;
 If you only want to select unique values, you can use the DISTINCT keyword.
 ```
 SELECT DISTINCT name FROM cats;
+```
+We can format the output
+```
+.header on       # output the name of each column
+.mode column     # now we are in column mode, enabling us to run the next two .width commands
+.width auto      # adjusts and normalizes column width
+# or
+.width NUM1, NUM2 # customize column width
 ```
 
 #### WHERE (select on condition)
@@ -306,7 +319,58 @@ sqlite> DELETE FROM cats WHERE id = 3;
 ### Basic SQL Queries
 The term "query" refers to any SQL statement that retrieves data from your database. `SELECT`is already a query. Queries can help us manipulate, view and analyze data.
 
+#### Order By
+This modifier allows us to order the table rows returned by a certain `SELECT` statement. The default is to order in ascending order. If we want to specify though, we can use `ASC` for "ascending" or `DESC` for "descending."
 
+```
+SELECT column_name FROM table_name ORDER BY column_name ASC|DESC;
+
+sqlite> SELECT * FROM cats ORDER BY age;
+
+sqlite> SELECT * FROM cats ORDER BY age DESC;
+```
+
+#### Limit
+`LIMIT` is used to determine the number of records you want to return from a dataset.
+
+```
+SELECT * FROM cats ORDER BY age DESC LIMIT 1;
+```
+
+#### Between
+Let's say we urgently need to select all of the cats whose age is between 1 and 3. To create such a query, we can use `BETWEEN`.
+
+```
+SELECT column_name(s) FROM table_name WHERE column_name BETWEEN value1 AND value2;
+
+SELECT name FROM cats WHERE age BETWEEN 1 AND 3;
+```
+
+#### Null
+We can add data with missing values using the `NULL` keyword.
+```
+INSERT INTO cats (name, age, breed) VALUES (NULL, NULL, "Tabby");
+
+SELECT * FROM cats WHERE name IS NULL;
+```
+
+#### Count
+SQL aggregate functions are SQL statements that retrieve minimum and maximum values from a column, sum values in a column, get the average of a column's values, or count a number of records that meet certain conditions. `COUNT` will count the number of records that meet certain condition.
+```
+SELECT COUNT([column name]) FROM [table name] WHERE [column name] = [value]
+
+SELECT COUNT(owner_id) FROM cats WHERE owner_id = 1;
+```
+
+#### Group by
+GROUP BY is a great function for aggregating results into different
+segments — you can even use it on multiple columns!
+
+```
+SELECT breed, COUNT(breed) FROM cats GROUP BY breed;
+
+SELECT breed, owner_id, COUNT(breed) FROM cats GROUP BY breed, owner_id;
+```
 
 
 
