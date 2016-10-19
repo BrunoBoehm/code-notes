@@ -28,7 +28,7 @@ Notice that every time you make an instance of a class, Ruby tells you that the 
 We send the fido instance a message object_id by separating the receiving object, fido and the message, object_id by a dot (.). When we send an object a message through `dot notation`, we are evoking the corresponding method on the object. We are `calling` the object_id method on fido.
 
 ### Instance Methods
-We're used to defining methods already with the def keyword. If we place this method definition within the body of a class, that method becomes a specific behavior of instances of that class, not a generic procedure we can just call whenever we want.
+We're used to defining methods already with the def keyword. If we place this method definition within the body of a class, that method becomes a specific behavior of instances of that class, not a generic procedure we can just call whenever we want. It represents an objectfs ability to have logic.
 
 ```ruby
 class Dog
@@ -131,7 +131,7 @@ kanye.name
 
 Our Person class' `#name` method is referred to as a "getter" or reader method. It returns information stored in an instance variable. In order to make a person's name attribute writable, we need to define a "setter" method.
 
-We can initialize several attributes
+We can initialize several attributes. Initializing is making sure the object can do something at the moment it is instantiated. `#initialize` is a hook / a callback / a lifecycle event, because it is a method automatically fired by another method (everytime you call `#new` on the Baby class).
 ```ruby
 def initialize(first_name, last_name)
     @first_name = first_name
@@ -146,10 +146,8 @@ In object-oriented Ruby, there is a strong convention to have a setter and a get
 
 ```ruby
 class Person
- 
   attr_reader :name
   attr_writer :name
- 
 end
 ```
 
