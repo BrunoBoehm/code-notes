@@ -371,6 +371,11 @@ SELECT breed, COUNT(breed) FROM cats GROUP BY breed;
 
 SELECT breed, owner_id, COUNT(breed) FROM cats GROUP BY breed, owner_id;
 ```
-
-
+### SQL Aggregate functions
+Imagine writing 
+- an application for a restaurant owner to track her customers and transactions
+- an app that an e-commerce company uses to store users, transactions and shopping behaviors. 
+- a social networking application whose administrators want to keep track of the number of times a user logs on and identify who their most frequent users are. 
+- a program to discover who clients biggest spenders are or what they make on average over a busy weekend. 
+- a feature to know who their most frequent buyers are and how much they spend on average on a given item, and so on.
 
