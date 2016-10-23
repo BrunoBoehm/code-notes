@@ -456,8 +456,8 @@ hash   #=> {"cat"=>0, "dog"=>1, "wombat"=>2}
 ```
 
 ## Arrays
-An array is like a basket––it is a container for a collection of data.
-An array is like a _list_ but in code form. Arrays can contain any data types in any combination––strings, integers, other arrays, hashes, etc.
+An array is like a basket: it is a container for a collection of data.
+An array is like a _list_ but in code form. Arrays can contain any data types in any combination: strings, integers, other arrays, hashes, etc.
 All about the [arrays](https://docs.ruby-lang.org/en/2.0.0/Array.html)
 
 ```ruby
@@ -601,7 +601,7 @@ You can also use a few helper methods
 You can also get the *first* index number of an element by using `.index()`
 ```ruby
 famous_cats.index("Maru")
-#  └── nil
+# > nil
 ```
 
 ### Informations about an array
@@ -613,7 +613,7 @@ browsers.empty? #=> false
 browsers.include?('Konqueror') #=> false
 ```
 ### Working with arrays
-For strings, this means alphabetically, for numerical values, this means from smallest number to highest number. The​ .sort ​method works by implicitly comparing elements with the "spaceship" operator​ <=> ​(because it looks like a flying saucer, swoosh!) and moving them accordingly.​
+For strings, this means alphabetically, for numerical values, this means from smallest number to highest number. The `.sort` method works by implicitly comparing elements with the "spaceship" operator `<=>` (because it looks like a flying saucer, swoosh!) and moving them accordingly.
 
 ```ruby
 famous_cats = ["lil' bub", "grumpy cat", "maru"]
@@ -621,7 +621,7 @@ famous_cats.sort
 #=> ["grumpy cat", "lil' bub", "maru"]
 ```
 
-Because sort returns a new array, we generally store it into another variable. So we would do sorted_cats = famous_cats.sort. If you don't care about the unsorted version of the array you can call `sort!` (destructive). This will sort the existing array without requiring you to save the return into a new variable. It's a ruby convention that a method with the ! will do the operation in place. It will modify the receiver of the method (AKA the thing to the left of the dot).
+Because sort returns a new array, we generally store it into another variable. So we would do `sorted_cats = famous_cats.sort`. If you don't care about the unsorted version of the array you can call `sort!` (destructive). This will sort the existing array without requiring you to save the return into a new variable. It's a ruby convention that a method with the `!` will do the operation in place. It will modify the receiver of the method (AKA the thing to the left of the dot).
 
 To reverse an array
 ```ruby
@@ -864,7 +864,7 @@ flatiron_school = {instructor: "Isaac Newton"}
 ```
 
 ### Hash iteration with .each and .map/.collect
-When we iterate over arrays, we iterate over one element at a time––each index in an array contains just one object. In a hash however, data is stored in key/value pairs so we will be iterating over those pairs.
+When we iterate over arrays, we iterate over one element at a time: each index in an array contains just one object. In a hash however, data is stored in key/value pairs so we will be iterating over those pairs.
 
 ```ruby
 hash = {key1: "value1", key2: "value2"}
@@ -1069,13 +1069,13 @@ primary_colors.each do |color| # do begins a block
   # the lines between the do/end are the block's body
   puts "Primary Color #{color} is #{color.length} letters long."
 end # end terminates the block
-``
+```
 The iterator `#each` yields each element one at a time to every iteration via a variable declared with the opening of the block.
 
 A block is a chunk of code between braces, { } or between do/end keywords that you can pass to a method almost exactly like you can pass an argument to a method. 
 
-When invoking an iterator like #each or #map, the variable name inside the pipes acts as an argument that is being passed into the block. 
-The iterator will pass, or yield, each element of the collection on which it is called to the block. 
+When invoking an iterator like `#each` or `#map`, the variable name inside the pipes acts as an argument that is being passed into the block. 
+The iterator will pass, or `yield`, each element of the collection on which it is called to the block. 
 Each element, as it gets passed into the block, will be equal to the variable name inside the pipes.
 
 Under the hood, these methods rely on the `yield` keyword. When used inside the body of a method, it will allow you to call that method with a block and pass, or "yield", to that block. It says "stop executing the code in this method and instead execute the code in the block. Then, return to the code in the method."
@@ -1094,7 +1094,7 @@ yielding {puts "the method has yielded to the block!"}
 # > "the method has yielded to the block!"
 # > "now we are back in the method"
 ```
-You can yield values/parameters to a block (they will get in the |i| "pipe" placeholder of the block).
+You can **yield values/parameters** to a block (they will get in the |i| "pipe" placeholder of the block).
 ```ruby
 def yielding_with_arguments(num)
   puts "the program is executing the code inside the method"
@@ -1139,7 +1139,7 @@ end
 ```
 More about [blocks, proces, lambdas](http://www.reactive.io/tips/2008/12/21/understanding-ruby-blocks-procs-and-lambdas)
 
-### other useful methods working with blocks
+### Other useful methods working with blocks
 `.delete_if` can be used to iterate through a hash or array and delete the key/value pair if the block returns `true`. 
 
 ```ruby
@@ -1205,8 +1205,8 @@ Regex | Function
 ^abc | string starts with abc
 abc$ | ends with abc
 /^...$/ | leading ^ and trailing $ match the beginning and the ending of the input string, respectively. That is, the entire input string shall match with this regex, instead of a part of the input string.
-\. | escape .
-\\ | escapted \
+\\. | escape .
+\\\ | escapted \
 \t \n \r | tab, linefeed, carriage return
 \b | word boundary
 a* | 0 or more "a"
@@ -1222,8 +1222,8 @@ a? | 0 or 1 "a"
 a{5} | exactly five "a"
 a{2,} | 2 or more "a" 
 a{1,3} | between one & three
-\.\w{2,3} | matches a . followed by two or three word characters, e.g., ".com", ".edu", ".us"
-(gif|png|jpg|jpeg) | or operator
+\.\w{2,3} | matches a . followed by two or three characters word, e.g., ".com", ".edu", ".us"
+(gif\|png\|jpg\|jpeg) | or operator
 [aeiou]{2} | instances of two consecutive vowels (ie, 'ae', 'ie', 'oo', etc)
 /.../i | modifier i after the regex specifies case-insensitive matching
 
@@ -1233,7 +1233,7 @@ The `.scan` method returns an array of all items in your string that match a giv
 => ["rain", "Spain", "main", "plain"]
 ```
 
-The `.match` method returns the first item in your string that matches a given Regular Expression as a MatchData object. 
+The `.match` method returns the *first item* in your string that matches a given Regular Expression as a MatchData object. 
 ```ruby
 "The rain in Spain lies mainly in the plain".match(/\w+ain/)
 => #<MatchData "rain"> 
@@ -1242,7 +1242,7 @@ The `.match` method returns the first item in your string that matches a given R
 => nil
 ```
 
-`.grep` is an enumerable method for pattern searching in arrays and hashes.
+`.grep` is an enumerable method for pattern **searching in arrays and hashes**.
 ```ruby
 names = ["Jeri Faria", "Althea Voth", "Audry Donoho", "Scotty Chaves", "Lance Barrio", "Zachary Newhall", "Stefany Janey", "Tressie Kinsel", "Raven Grimsley", "Marketta Gaylor", "Leota Crowe", "Mazie Norman", "Damien Loffredo"]
  
