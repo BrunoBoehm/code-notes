@@ -668,5 +668,164 @@ end
 ```
 For more about [Object Models](https://www.youtube.com/watch?v=vENMFapLonA) or [Object Orientation](https://www.youtube.com/watch?v=Z_IoQCVNWtM).
 
+**TO BE CONTINUED**
 
+## Scraping
+### Gems and Bundler
+
+
+
+
+
+
+## Twitter API 
+Taken from [codeacademy](https://www.codecademy.com/en/courses/ruby-beginner-en-pEdhY/0/3?curriculum_id=5122d5f811fbdb5456005922)
+We can use HTTP to grab just about any web page on the Internet.
+The Internet is full of clients (like you!) who ask for various resources (web pages, files, and so on), and servers, who store that information (or know where to get it). When you make an HTTP request, it zips through the Internet until it finds the server that knows how to fulfill that request. 
+
+```ruby
+require 'open-uri'
+
+kittens = open('http://placekitten.com/')
+response_status = kittens.status
+response_body = kittens.read[559, 441]
+
+puts response_status
+puts response_body
+```
+The `open-uri` module is the Ruby way of bringing in additional methods and constants we'll need to make our HTTP request. More about [open URI](https://ruby-doc.org/stdlib-2.1.0/libdoc/open-uri/rdoc/OpenURI.html)
+
+We use `open` on placekitten.com in preparation for our `GET` request, which we make when we `read`. (We use those specific character numbers to control the input we get back—this is what gives us our cat image.)
+
+```ruby
+open("http://www.ruby-lang.org/") {|f|
+  f.each_line {|line| p line}
+}
+```
+
+### REST and HTTP verbs
+In fact, this client/server relationship is a prerequisite of a set of principles called `REST` (or **Re**presentational **S**tate **T**ransfer). HTTP involves sending hypertext (text with links). Whenever you navigate through a site by clicking links, you're making a state transition, which brings you to the next page (representing the next state of the application). When something follows REST principles, we say that thing is RESTful.
+
+An `API`, or application programming interface, is kind of like a coding contract: it specifies the ways a program can interact with an application. The Twitter API specifies the process for authentication, important URLs, classes, methods, and so on.
+
+For an API or web service to be RESTful, it must do the following:
+1. Separate the client from the server
+2. Not hold state between requests (meaning that all the information necessary to respond to a request is available in each individual request; no data, or state, is held by the server from request to request)
+3. Use HTTP and HTTP methods
+
+The HTTP verbs are only four:
+1. GET: retrieves information from the specified source.
+2. POST: sends new information to the specified source.
+3. PUT: updates existing information of the specified source.
+4. DELETE: removes existing information from the specified source.
+
+So when we sent our `GET` request to placekitten.com, we retrieved information. When you add to or update your blog, you're sending `POST` or `PUT` requests; when you delete a tweet, there goes a `DELETE` request.
+
+An HTTP request is made up of three parts:
+1. The request line, which tells the server what kind of request is being sent (GET, POST, etc.) and what resource it's looking for;
+2. The header, which sends the server additional information (such as which client is making the request)
+3. The body, which can be empty (as in a GET request) or contain data (if you're POSTing or PUTing information, that information is contained here).
+
+### Talking with the API: endpoints, API key and responses
+Endpoints are API-defined locations where particular data are stored.
+For instance the `/1.1/statuses/show.json` endpoint returns data for a Tweet, given its ID number.
+
+Many APIs require an API key. Just as a real-world key allows you to access something, an API key grants you access to a particular API. Moreover, an API key identifies you to the API, which helps the API provider keep track of how their service is used and prevent unauthorized or malicious activity. Some APIs require authentication using a protocol called OAuth.
+
+A successful request to the server results in a response, which is the message the server sends back to you, the client. The response from the server will contain a three-digit status code:
+- 1xx: You won't see these a lot. The server is saying, "Got it! I'm working on your request."
+- 2xx: These mean "okay!" The server sends these when it's successfully responding to your request.
+- 3xx: These mean "I can do what you want, but I have to do something else first." You might see this if a website has changed addresses and you're using the old one; the server might have to reroute the request before it can get you the resource you asked for.
+- 4xx: These mean you probably made a mistake. The most famous is "404," meaning "file not found": you asked for a resource or web page that doesn't exist.
+- 5xx: These mean the server goofed up and can't successfully respond to your request.
+
+The HTTP response structure mirrors that of the HTTP request. It contains:
+1. A response line, which includes the three-digit HTTP status code;
+2. A header, which includes further information about the server and its response;
+3. The body, which contains the text of the response.
+
+#### Response: XML
+XML (which stands for E xtensible Markup Language) is very similar to HTML—it uses tags between angle brackets. The difference is that XML allows you to use tags that you make up, rather than tags that the W3C decided on.
+```xml
+<pet>
+  <name>Jeffrey</name>
+  <species>Giraffe</species>
+</pet>
+```
+We've required in the `rexml/document` module for parsing XML, and we're just using File.open to read from pets.txt
+```ruby
+require "rexml/document"
+
+file = File.open("pets.txt")
+doc = REXML::Document.new file
+file.close
+
+doc.elements.each("pets/pet/name") do |element|
+  puts element
+end
+```
+
+Some APIs will send you JSON or XML.
+
+#### Response: JSON
+JSON (which stands for **J**ava**S**cript **O**bject **N**otation) is an alternative to XML. It gets its name from the fact that its data format resembles JavaScript objects, and it is often more succinct than the equivalent XML.
+```json
+{
+  "pets": {
+    "name": "Jeffrey",
+    "species": "Giraffe"
+  }
+}
+```
+We require the `json` module for parsing JSON, and we're using File.open as before to read from pets.txt
+```ruby
+require 'json'
+
+pets = File.open("pets.txt", "r")
+
+doc = ""
+pets.each do |line|
+  doc << line
+end
+pets.close
+
+puts JSON.parse(doc)
+```
+
+### Making the twitter request
+```ruby
+require 'rubygems'
+require 'oauth'
+
+consumer_key = OAuth::Consumer.new(
+    "P8kWGvhEaQVLdecCSMTR5PF3j",
+    "PpI6QTaLVgE0yFfrEortwhZMwCeuTsQEYVdkiZZ0mafD7n8l28")
+access_token = OAuth::Token.new(
+    "68970499-VaB8ZjHnKr0T8qCZpuip3fA3fYBy7QZ2dX37OCSh2",
+    "ScoXGZvC9BDhAZuEc6dawtQY2SJcLxWPRiCtBkKHyCUCL")
+
+# All requests will be sent to this server.
+baseurl = "https://api.twitter.com"
+
+# The verify credentials endpoint returns a 200 status if
+# the request is signed correctly.
+address = URI("#{baseurl}/1.1/account/verify_credentials.json")
+
+# Set up Net::HTTP to use SSL, which is required by Twitter.
+http = Net::HTTP.new address.host, address.port
+http.use_ssl = true
+http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+
+# Build the request and authorize it with OAuth.
+request = Net::HTTP::Get.new address.request_uri
+request.oauth! http, consumer_key, access_token
+
+# Issue the request and return the response.
+http.start
+response = http.request request
+puts "The response status was #{response.code}"
+```
+
+### Parsing a user object
+Continue from [codeacademy](https://www.codecademy.com/en/courses/ruby-intermediate-en-rUwFe/0/2?curriculum_id=5122d5f811fbdb5456005922)
 
