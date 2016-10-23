@@ -53,6 +53,10 @@ a[1]="X"                #=> "X"
 
 "this is a string".slice!(3..6)     #=> " is "
 " now's  the time".split            #=> ["now's", "the", "time"]
+.split(/\.|\?|\!/)
+
+"hello".gsub(/[aeiou]/, '*')                  #=> "h*ll*"
+song_name = filename.split(" - ").first.gsub(".mp3", "")
 
 "hello\n".chomp              #=> "hello"
 ```
@@ -544,14 +548,8 @@ puts lil_bub
 # > lil' bub
 ```
 
-To delete an element at a particular index in a destructive way:
-```ruby
-arr =  [1, 2, 3, 4, 5, 6]
-arr.delete_at(2) #=> 4
-arr #=> [2, 3, 5]
-```
 
-To delete a particular element anywhere in an array, use delete:
+To delete a particular element everywhere it appears in an array, use delete:
 ```ruby
 arr = [1, 2, 2, 3]
 arr.delete(2) #=> [1, 3]
@@ -568,6 +566,12 @@ a
 
 a.delete_at(99)   
 #=> nil
+```
+
+You can also delete the whole array and return an empty array by using `.clear`
+```ruby
+a = [ "a", "b", "c", "d", "e" ]
+a.clear    #=> [ ]
 ```
 
 ### Accessing the elements of an array
@@ -815,6 +819,9 @@ dishes.sort
 
 # => ["apple pie", "steak", "vegetable soup"]
 ```
+
+You can also call `.uniq` to remove all duplicate elements and retain only unique elements in the array.
+
 
 ## Hashes
 
@@ -1161,6 +1168,9 @@ end
 "Hello World".swapcase
 #=> "hELLO wORLD" 
 name.start_with?("T")
+
+"HI!".end_with?("!")
+  => true
 ```
 
 To pause a program for some time you can use [sleep](http://stackoverflow.com/questions/1329967/tell-ruby-program-to-wait-some-amount-of-time)
