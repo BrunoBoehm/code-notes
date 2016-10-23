@@ -1224,8 +1224,12 @@ a{2,} | 2 or more "a"
 a{1,3} | between one & three
 \.\w{2,3} | matches a . followed by two or three characters word, e.g., ".com", ".edu", ".us"
 (gif\|png\|jpg\|jpeg) | or operator
+\s | whitespace characters in a string (space, tab, carriage return, new line, vertical tab)
+\s\|'\s | " " or ", "
 [aeiou]{2} | instances of two consecutive vowels (ie, 'ae', 'ie', 'oo', etc)
 /.../i | modifier i after the regex specifies case-insensitive matching
+
+`%r{}` is equivalent to the `/.../` notation, but allows you to have '/' in your regexp without having to escape them. `%r{/home/user}` is equivalent to `/\\/home\\/user/`.
 
 The `.scan` method returns an array of all items in your string that match a given Regular Expression.
 ```ruby
