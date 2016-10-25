@@ -792,11 +792,72 @@ crazy_in_love.artist_name
 # => "Jay-Z"
 ```
 
+### Collaborating objects
+Video available online on [youtube](https://www.youtube.com/watch?v=iYcQ693LXck)
+```ruby
+class Author
+  attr_accessor :name
 
+  def initialize
+    @stories = [] # has_many stories interface
+  end
 
+  def stories # has_many stories interface
+    @stories.dup.freeze
+    # through .dup.freeze we return a duplicate frozen
+    # meaning you can't push author.stories << "blabla" 
+    # because we force users to add_story through our own interface
+  end
 
+  def add_story(story) # has_many stories interface
+    raise AssociationTypeMismatchError, "#{story.class} received, Story expected." if !story.is_a?(Story)
+    @stories << story
+    story.author = self unless story.author == self
+  end
 
+  def bibliography
+    self.stories.collect{|s| s.name} # You need all stories to be instances of Story because they must respond to #name to work
+    # @stories.collect(&:name) #=> Symbol to Proc, less liked by rubyist because "magical" 
+  end
 
+  def categories # has_many categories through stories
+    self.stories.collect{|s| s.category}.uniq
+  end
+end
+```
+And on the Story side
+```ruby
+class Story
+  attr_accessor :name
+  attr_reader :author # Belongs to author
+
+  def author=(author) # Belongs to author
+    raise AssociationTypeMismatchError, "#{author.class} received, Author expected." if !author.is_a?(Author)
+    @author = author
+    author.add_story(self) unless author.stories.include?(self)
+  end
+
+  attr_reader :category # Belongs to category
+
+  def category=(category) # Belongs to category
+    raise AssociationTypeMismatchError, "#{category.class} received, Category expected." if !category.is_a?(Category)
+    @category = category
+    category.add_story(self) unless category.stories.include?(self)
+  end
+
+end
+```
+As a side note, the `AssociationTypeMismatchError` is defined in `config/environment.rb` and is a `TypeError`
+```ruby
+require 'pry'
+
+require_relative '../lib/author'
+require_relative '../lib/category'
+require_relative '../lib/story'
+
+class AssociationTypeMismatchError < TypeError; end
+```
+And also include `require_relative '../config/environment'` on top of the `spec/spec_helper.rb`
 
 
 
