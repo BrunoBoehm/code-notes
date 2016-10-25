@@ -212,14 +212,45 @@ end
 There is one other way to return a value from a method and that is to use the `return` keyword.
 
 ## Debugging with Pry
-You've already been introduced to REPLs through using IRB (Interactive Ruby). REPL stands for Read, Evaluate, Print, Loop. It is an interactive programming environment that takes a user's input, evaluates it and returns the result to the user.
+You've already been introduced to REPLs through using IRB (Interactive Ruby). REPL stands for Read, Evaluate, Print, Loop. It is an interactive programming environment that **takes a user's input, evaluates it and returns the result to the user**.
+
+Ruby installs with its own REPL, which is IRB. Every time you type irb into your terminal, you're entering into a REPL. Any code you want to play with in IRB, you have to write in IRB or copy and paste into IRB. Pry, on the other hand, is like a REPL that you can inject into your program.
+
 Pry is another Ruby REPL with some added functionality. Once you install the Pry library you can use the following line `binding.pry` anywhere in your code.
 
 *Binding is a built-in ruby class whose objects can encapsulate the context of your current scope (variables, methods etc.), and retain them for use outside of that context.*
 
 Calling binding.pry is essentially 'prying' into the current binding or context of the code, from outside your file. So when you place the line binding.pry in your code, that line will get interpreted at runtime (as your program is executed). When the interpreter hits that line, your program will actually freeze and your terminal will turn into a REPL that exists right in the middle of your program, wherever you added the binding.pry line.
 
+More about [Pry](https://learn.co/tracks/full-stack-web-development/procedural-ruby/variables-and-methods/debugging-with-pry) and on their [website](http://pryrepl.org/)
 
+To play with Pry you can in a Rakefile put
+```ruby
+require_relative './config/environment'
+
+puts "Welcome to Pry"
+
+def reload!
+    # enables you to reload your pry session and start fresh
+    load './lib/author.rb'
+    load './lib/post.rb'
+end
+
+desc 'A console'
+task :console do
+    Pry.start
+end
+```
+
+With in `config/environment.rb` the lines
+```ruby
+require 'Pry'
+
+require_relative '../lib/author.rb'
+require_relative '../lib/post.rb'
+```
+
+And then you can start the console by typing `rake console` and test your code with pry, with your whole code loaded, without needing to copy past in irb anymore.
 
 ## Method scope
 Methods in ruby create their own scope. "Scope" refers to the areas of your program in which certain data is available to you. Any local variable created outside of a method will be unavailable inside of a method. In addition, local variables created inside of a method (i.e. in between the `def` and `end` keywords of a method) 'fall out of scope' once you're outside the method.
