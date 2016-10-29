@@ -319,6 +319,23 @@ end
 ```
 If `self` refers to the object on which the method is being called, and if that object is an instance of the `Dog` class, then we can call any of our other instance methods on self. Read more about [metaprogramming](http://yehudakatz.com/2009/11/15/metaprogramming-in-ruby-its-all-about-the-self/).
 
+### 3 golden rules of Self
+3 cases for the use of `self` ([read more](https://hackhands.com/three-golden-rules-understand-self-ruby/))
+1. Use `self` when setting/getting instance attributes inside a class definition.
+2. Use `self` to denote a method within the class definition as a class method.
+3. Use `self` to reference the calling object within an instance method definition.
+
+```ruby
+def valid?
+    self.status == "open" && self.balance > 0 ? true : false
+end
+
+#is equivalent to
+def valid?
+    self.status == "open" && balance > 0
+end
+```
+
 ## CLASS variables and Methods
 The `Album` class can have its own variables and methods. We call these class variables and class methods. Let's say you wanted to keep a counter for how many albums you had in your music collection. The current code in our Album class has no way to keep such a count. Looks like we will have to write some code to accommodate this new feature of our program.
 
@@ -793,6 +810,7 @@ crazy_in_love.artist_name
 ```
 
 ### Collaborating objects
+Objects can be related to one another directly, when one object contains a reference to another: a bank account and transactions for instance.
 Video available online on [youtube](https://www.youtube.com/watch?v=iYcQ693LXck)
 ```ruby
 class Author
@@ -847,6 +865,7 @@ class Story
 
 end
 ```
+
 As a side note, the `AssociationTypeMismatchError` is defined in `config/environment.rb` and is a `TypeError`
 ```ruby
 require 'pry'
@@ -859,11 +878,253 @@ class AssociationTypeMismatchError < TypeError; end
 ```
 And also include `require_relative '../config/environment'` on top of the `spec/spec_helper.rb`
 
+### Has Many Through
+We now know the has_many / belongs_to relationship. A song belongs to an artist and an artist has many songs.
+```ruby
+class Song
+  attr_accessor :name, :artist
+end
 
+class Artist
+  attr_accessor :name
+ 
+  def initialize(name)
+    @name = name
+    @songs = []
+  end
+ 
+  def add_song(song)
+    @songs << song
+    song.artist = self
+  end
+end
+```
 
+However, in the real-world, different entities can be connected to one another indirectly as well as directly. For example, in the real world, individual songs belong to a genre.
 
+Let's give the ability for our `Song` instances to belong to a genre. 
+```ruby
+class Song
+  attr_accessor :name, :artist, :genre 
+end
+```
+We also need to build a `Genre` class, so that we can associate individual songs to complex genre objects that can contain other information pertinent to a given genre.
+```ruby
+class Genre
+  attr_accessor :name
+ 
+  def initialize(name)
+    @name = name
+  end
+end
+```
+Now we can associate a `Song` to a `Genre` by typing `song.genre=` thanks to the `attr_accessor`. Now let's also make it possible to set the `Genre` at initialization.
+```ruby
+class Song
+  attr_accessor :name, :artist, :genre
+ 
+  def initialize(name, genre)
+    @name = name
+    @genre = genre
+  end
+end
+```
+We have an Artist class that produces individual artists that have many songs. We have a Song class that produces individual songs that belong to an artist and belong to a genre.
+![has many](http://readme-pics.s3.amazonaws.com/Screen%20Shot%202015-11-03%20at%2012.23.17%20PM.png)
 
+Here we can see that an artist has many songs and that each song belongs to one artist and one genre. This diagram makes it clear to us that an artist does have a connection to genres. That connection exists through the many songs that an artist owns. This is the "has many through" relationship. A given object has many of another type of object. That second object belongs to (or has many) of a third type of object. Therefore, the first object has many of the third object as well.
 
+An artist has a genre through the songs that it has created, so in order to ask an artist about its genre, we have to go through that artist's songs. We'll need to collect all of the songs of a given artist and then collect the genre associated to each of those songs.
+
+```ruby
+class Artist
+  attr_accessor :name
+ 
+  def initialize(name)
+    @name = name
+    @songs = []
+  end
+ 
+  def add_song(song)
+    @songs << song
+    song.artist = self
+  end
+ 
+  def songs
+    @songs
+  end
+ 
+  # we add this instance method
+  def genres
+    self.songs.collect do |song|
+      song.genre
+    end
+  end
+end
+```
+The return value of the #genres method should be an array of genre objects.
+
+Right now, an artist can tell us about its songs and about its genres. But, a genre can't tell us about its songs and its artists. Let's fix that now.
+```ruby
+class Genre
+  attr_accessor :name
+ 
+  def initialize(name)
+    @name = name
+    @songs = []
+  end
+ 
+  def songs
+    @songs
+  end
+ 
+  # to add a song to the genre
+  def add_song(song)
+    @songs << song
+  end
+  
+  # to list artists
+  def artists
+    @songs.collect do |song|
+      song.artist
+    end
+  end  
+end
+```
+And we just need to to refactor the `Song` class.
+```ruby
+class Song
+  attr_accessor :name, :artist, :genre
+ 
+  def initialize(name, genre)
+    @name = name
+    @genre = genre
+    genre.add_song(self)
+  end
+end
+```
+
+## Object Architecture
+In the real-world, different entities (people, animals, cars, you name it) are related in various ways. You are writing a web application in which users are either admins, instructors or students. All of these entities are "users" and have common features, but they all have some unique traits as well.
+
+Well, we could write separate admin, instructor and student class that each contain repetitious code to lend each of these classes shared attributes and behaviors.
+
+Instead, we can use inheritance. The use of inheritance allows us to create a family of classes with shared behavior, while still differentiating those classes. With inheritance, we could inherit the admin, instructor and student classes from a user class. Then, any changes made to the user class would apply to the other class.
+
+While you may not write your own classes that use inheritance very frequently, you will encounter it frequently as a Ruby on Rails web developer.
+
+In Ruby, classes can inherit from one another. This means that they adopt all of the attributes and behaviors (i.e. all of the methods) of the parent, also called the `super` class.
+
+In this domain model, we have class `Vehicle` that will act as the parent, or **super**, class. We will create child classes, also known as **subclasses** for different types of Vehicles, such as `Car`.
+
+```ruby
+class Vehicle
+  attr_accessor :wheel_size, :wheel_number
+ 
+  def initialize(wheel_size, wheel_number)
+    @wheel_size = wheel_size
+    @wheel_number = wheel_number
+  end
+ 
+  def go
+    "vrrrrrrrooom!"
+  end
+end
+
+class Car < Vehicle
+  def go
+    "VRRROOOOOOOOOOOOOOOOOOOOOOOM!!!!!"
+  end
+end
+```
+
+### Modules and Mixins
+Inheriting one class from another makes sense. The subclass can be understood as a child or subordinate of the super class. For example, a car is a type of vehicle, so it makes sense for the `Car` class to inherit from the `Vehicle` class.
+
+Modules allow us to collect and bundle a group of methods and make those methods available to any number of classes. For example, we'll be defining a `Dance` module and making it available to both the `Dancer` and `Kid` class.
+
+```ruby
+module Dance
+  def twirl
+    "I'm twirling!"
+  end
+ 
+  def jump
+    "Look how high I'm jumping!"
+  end
+end
+```
+If we use `include` keyword, we allow our classes to use all of the methods of the included module **as instance methods**. 
+```ruby
+class Kid
+  include Dance
+ 
+  attr_accessor :name
+ 
+  def initialize(name)
+    @name = name
+  end
+end
+
+# it enables us to call module's methods as instance methods
+angelina = Dancer.new
+angelina.twirl
+// returns "I'm twirling!"
+```
+In order to lend a module's methods to a class **as class methods**, we use the `extend` keyword.
+
+```ruby
+module MetaDancing
+  def metadata
+    "This class produces objects that love to dance."
+  end
+end
+````
+And now in the Dancer class file
+```ruby
+require_relative './dance_module.rb'
+
+class Dancer
+  extend MetaDancing
+end
+
+# this enables us to call a class method from the module
+puts Dancer.metadata
+```
+There are two drawbacks to this approach. 
+- First, if another developer looks at your modules, there is absolutely no way to determine how those methods are intended to be used. Are they class methods? Are they instance methods? Nobody knows!
+- Secondly, we had to build two separate modules that contained methods that were all related to the same functionality (dancing). But because there was no way to designate class methods versus instance methods, we were forced to define two separate modules, which violates the single responsibility principle. 
+
+We're going to refactor the two modules into one, and use nested module namespacing to clarify our code.
+```ruby
+module FancyDance
+  module InstanceMethods
+    def twirl
+      "I'm twirling!"
+    end
+  end
+ 
+  module ClassMethods
+    def metadata
+      "This class produces objects that love to dance."
+    end
+  end
+end
+```
+Then to use these nested modules
+```ruby
+require_relative './dance_module.rb'
+
+class Dancer
+  extend FancyDance::ClassMethods
+  include FancyDance::InstanceMethods
+end
+```
+We refer to the name-spaced modules or classes with `::`. This syntax references the parent and child relationship of the nested modules.
+
+Inheritance using the `<` syntax, implies that a class is a type of something. A `BMW` class should inherit from a `Car` class because a `BMW` is **a type of** car: class BMW < Car.
+
+The `::` syntax just denotes a name-space. Doing `BMW::Car` just gives the `BMW` class access to all constants, instance methods, etc, without stating that a BMW is a type of `Car`. The `::` syntax carries all public items over to the inheriting class or module.
 
 
 
