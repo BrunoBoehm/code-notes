@@ -199,6 +199,8 @@ We already know that any Ruby class can produce new instances of itself, via the
 
 >An #initialize method is a method that is called automatically whenever `#new` is used.
 
+A best practice is to say that initialize is "closed to modification, but open to extension". Initialize should be the smallest peace of code, but we can extent its functionalities through other constructor class methods.
+
 The initialize method is what's called a callback method, because it is automatically invoked every time the `#new` method is used to create a new instance of the class. You can also think of the initialize method as a constructor method. A constructor method is invoked upon the creation of an instance of a class and used to help define the instance of that class.
 
 ```ruby
@@ -1262,7 +1264,12 @@ class User
   end
 end
 ```
-The `.send` method calls the method name corresponding to the key's name, with an argument of the value. `self.send(key=, value)` is the same as `instance_of_user.key = value`. The .send method is just another way of calling a method on an object. `sophie.name = "Sophie"` is the same as `sophie.send("name=", "Sophie")`.
+The `.send` method calls the method name corresponding to the key's name, with an argument of the value. `self.send(key=, value)` is the same as `instance_of_user.key = value`. The .send method is just another way of calling a method on an object. `sophie.name = "Sophie"` is the same as `sophie.send("name=", "Sophie")`, which is the same as `.sophie.name=("Sophie")`.
+
+```ruby
+"Hello".send("reverse")
+=> "olleH"
+```
 
 With this pattern, we have made our code much more flexible. We can easily alter the number of attributes in the class and change the hash that we initialize the class with, without editing our initialize method. Now, we're programming for the future. If and when that data with which we want to initialize our class changes, we only have to change our attr_accessors.
 
@@ -1540,7 +1547,43 @@ end
 ```
 When we use Nokogiri methods, we get a return value of XML elements, collected into an array. Even though the Nokogiri gem returns a Nokogiri::XML::Element (which looks like an array in ruby), we can use Ruby methods, such as .each and .collect, to iterate over it. The main thing to understand, however, is that Nokogiri collects these objects into hierarchical data structures. So, we could iterate over an array of Nokogiri objects, use enumerators, grab the values of attributes that act as hash keys, etc.
 
+## Single responsibility principle SRP
+Each method, piece of code shouldn't ne doing more than one thing!
 
+## Explaining .tap
+```ruby
+# Inside of the Animal class, with attr_accessors and initialize method
 
+def self.new_from_wikipedia(url)
+    animal = Animal.new
+    
+    properties = AnimalScraper.wikipedia(url)
+    
+    properties.each do |k, v|
+        animal.send("#{k}=", v) #mass assignment
+    end
+    
+    animal
+end
 
-
+# We can refactor using .tap that returns the Animal object that you tapped, and also eliminates the local variable
+def self.new_from_wikipedia(url)
+    Animal.new.tap do |animal|
+        AnimalScraper.wikipedia(url).each do |k, v|
+            animal.send("#{k}=", v)
+        end
+    end
+end
+```
+And of course we have in another file the `AnimalScraper` class
+```ruby
+class AnimalScraper
+    def wikipedia(url)
+        doc = Nokogiri::HTML(open-uri(url))
+        animal = {}
+        
+        animal[:name] = doc.search("h1#firstHeading").text
+        animal[:family] = doc.search("span.family").text
+    end
+end
+```
