@@ -1474,6 +1474,73 @@ require_relative '../config/environment'
 - `require_relative` takes a **relative path** that is relative to the file in which the require statement is called (so it's relative to the file being run, not to the directory from which the code is being called).
 
 
+## Scraping, Open URI & Nokogiri
+ Web scraping is the act of parsing a web page's HTML and pulling, or "scraping" pertinent data from that HTML.
+Scraping can be difficult to accomplish––in order to get the data we want, we need to closely examine the HTML and identify exactly which elements contain the information we're interested in. It requires a high degree of precision.
+
+So, if scraping is so tricky, why do we use it? Well, not all of the data we might be interested in using to program is available to use through APIs.
+
+### Open URI
+Open-URI is a module in Ruby that allows us to programmatically make HTTP requests. It gives us a bunch of useful methods to make different types of requests, but for this guide, we're interested in only one: open. This method takes one argument, a URL, and will return to us the HTML content of that URL.
+```ruby
+html = open('http://www.google.com')
+```
+This stores the HTML of Google into a variable called html. (More specifically, it actually stores the HTML in a temporary file that we can then call read on to get the raw HTML.). 
+Note that 'open-uri' is part of the ruby standard library, we don't need to add it as a gem, only to require it.
+
+### NOKOGIRI
+Nokogiri is a Ruby gem that helps us to parse HTML and collect data from it. Essentially, Nokogiri allows us to treat a huge string of HTML as if it were a bunch of nested nodes. Nokogiri offers you, the programmer, a series of methods that you can use to extract the desired information from these nested nodes. Nokogiri makes the level of precision required to extract the necessary data much easier to attain.
+
+Let's set up a small CLI program.
+Let's start by creating a directory `mkdir Nogokiri` and inside create the following architecture, creating files with `touch file_name`.
+Note the Gemfile is created by typing `bundler init` so that it gets filled with preformated info.
+```ruby
+Nokogiri/
+    bin/
+        run.rb
+    config/
+        environment.rb
+    Gemfile
+    
+# In the Gemfile
+    source "https://rubygems.org"
+    gem 'nokogiri'
+
+# In environment.rb
+    require 'open-uri'
+    # OpenUri is part of the Ruby standard library, that's why we only need to require it 
+    
+    require 'bundler/setup'
+    Bundler.require(:default)
+    #no need to require 'nokogiri' because it is in the default
+    
+# In run.rb
+    require_relative '../config/environment'
+
+    html = open("https://flatironschool.com/")
+    doc = Nokogiri::HTML(html)
+    
+    selected = doc.css(".site-hero__headline").text
+    
+    puts selected
+```
+Nokogiri's `.css` method can be called on the doc variable that we set equal to that giant string of HTML that Nokogiri retrieved for us. The .css method takes in an argument of the CSS selector you want to retrieve. 
+### Iterating over scraped elements
+```ruby
+require 'nokogiri'
+require 'open-uri'
+ 
+html = open("http://flatironschool.com/team")
+doc = Nokogiri::HTML(html)
+ 
+instructors = doc.css("#instructors .team-holder .person-box")
+instructors.each do |instructor| 
+  puts "Flatiron School <3 " + instructor.css("h2").text
+end
+```
+When we use Nokogiri methods, we get a return value of XML elements, collected into an array. Even though the Nokogiri gem returns a Nokogiri::XML::Element (which looks like an array in ruby), we can use Ruby methods, such as .each and .collect, to iterate over it. The main thing to understand, however, is that Nokogiri collects these objects into hierarchical data structures. So, we could iterate over an array of Nokogiri objects, use enumerators, grab the values of attributes that act as hash keys, etc.
+
+
 
 
 
