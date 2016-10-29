@@ -1120,172 +1120,272 @@ class Dancer
   include FancyDance::InstanceMethods
 end
 ```
-We refer to the name-spaced modules or classes with `::`. This syntax references the parent and child relationship of the nested modules.
+We refer to the name-spaced modules or classes with `::`. The Parent::Child syntax is called namespacing, and references the parent and child relationship of the nested modules.
 
 Inheritance using the `<` syntax, implies that a class is a type of something. A `BMW` class should inherit from a `Car` class because a `BMW` is **a type of** car: class BMW < Car.
 
 The `::` syntax just denotes a name-space. Doing `BMW::Car` just gives the `BMW` class access to all constants, instance methods, etc, without stating that a BMW is a type of `Car`. The `::` syntax carries all public items over to the inheriting class or module.
 
+It is a common practice to create a folder called `concerns` that holds modules that will be used across classes in an object oriented Ruby project.
 
+It is often useful to use `self.class.all` to refactor an `.initialize` (instance method) method. When we include a module in a class, we are really telling that class to inherit methods from that module.
 
-**TO BE CONTINUED**
+So, we can use the super keyword to tell our Artist's .initialize method to use the code in the Memorable::InstanceMethods module's .initialize method and also to use any additional code in the Artist's .initialize method. The super keyword, placed inside a method, will tell that method to look up its behavior in the method of the same name that lives in the parent, or super, class.
 
-## Scraping
-### Gems and Bundler
-
-
-
-
-
-
-## Twitter API 
-Taken from [codeacademy](https://www.codecademy.com/en/courses/ruby-beginner-en-pEdhY/0/3?curriculum_id=5122d5f811fbdb5456005922)
-We can use HTTP to grab just about any web page on the Internet.
-The Internet is full of clients (like you!) who ask for various resources (web pages, files, and so on), and servers, who store that information (or know where to get it). When you make an HTTP request, it zips through the Internet until it finds the server that knows how to fulfill that request. 
-
+So, we can use the super keyword to tell our Artist's .initialize method to use the code in the Memorable::InstanceMethods module's .initialize method and also to use any additional code in the Artist's .initialize method.
 ```ruby
-require 'open-uri'
-
-kittens = open('http://placekitten.com/')
-response_status = kittens.status
-response_body = kittens.read[559, 441]
-
-puts response_status
-puts response_body
+class Artist
+  include Memorable::InstanceMethods
+  ...
+ 
+  def initialize
+    super
+    @songs = []
+  end
 ```
-The `open-uri` module is the Ruby way of bringing in additional methods and constants we'll need to make our HTTP request. More about [open URI](https://ruby-doc.org/stdlib-2.1.0/libdoc/open-uri/rdoc/OpenURI.html)
-
-We use `open` on placekitten.com in preparation for our `GET` request, which we make when we `read`. (We use those specific character numbers to control the input we get back—this is what gives us our cat image.)
-
+This code `super` keyword will look into the `Memorable::InstanceMethods` to find and add the original code
 ```ruby
-open("http://www.ruby-lang.org/") {|f|
-  f.each_line {|line| p line}
-}
-```
-
-### REST and HTTP verbs
-In fact, this client/server relationship is a prerequisite of a set of principles called `REST` (or **Re**presentational **S**tate **T**ransfer). HTTP involves sending hypertext (text with links). Whenever you navigate through a site by clicking links, you're making a state transition, which brings you to the next page (representing the next state of the application). When something follows REST principles, we say that thing is RESTful.
-
-An `API`, or application programming interface, is kind of like a coding contract: it specifies the ways a program can interact with an application. The Twitter API specifies the process for authentication, important URLs, classes, methods, and so on.
-
-For an API or web service to be RESTful, it must do the following:
-1. Separate the client from the server
-2. Not hold state between requests (meaning that all the information necessary to respond to a request is available in each individual request; no data, or state, is held by the server from request to request)
-3. Use HTTP and HTTP methods
-
-The HTTP verbs are only four:
-1. GET: retrieves information from the specified source.
-2. POST: sends new information to the specified source.
-3. PUT: updates existing information of the specified source.
-4. DELETE: removes existing information from the specified source.
-
-So when we sent our `GET` request to placekitten.com, we retrieved information. When you add to or update your blog, you're sending `POST` or `PUT` requests; when you delete a tweet, there goes a `DELETE` request.
-
-An HTTP request is made up of three parts:
-1. The request line, which tells the server what kind of request is being sent (GET, POST, etc.) and what resource it's looking for;
-2. The header, which sends the server additional information (such as which client is making the request)
-3. The body, which can be empty (as in a GET request) or contain data (if you're POSTing or PUTing information, that information is contained here).
-
-### Talking with the API: endpoints, API key and responses
-Endpoints are API-defined locations where particular data are stored.
-For instance the `/1.1/statuses/show.json` endpoint returns data for a Tweet, given its ID number.
-
-Many APIs require an API key. Just as a real-world key allows you to access something, an API key grants you access to a particular API. Moreover, an API key identifies you to the API, which helps the API provider keep track of how their service is used and prevent unauthorized or malicious activity. Some APIs require authentication using a protocol called OAuth.
-
-A successful request to the server results in a response, which is the message the server sends back to you, the client. The response from the server will contain a three-digit status code:
-- 1xx: You won't see these a lot. The server is saying, "Got it! I'm working on your request."
-- 2xx: These mean "okay!" The server sends these when it's successfully responding to your request.
-- 3xx: These mean "I can do what you want, but I have to do something else first." You might see this if a website has changed addresses and you're using the old one; the server might have to reroute the request before it can get you the resource you asked for.
-- 4xx: These mean you probably made a mistake. The most famous is "404," meaning "file not found": you asked for a resource or web page that doesn't exist.
-- 5xx: These mean the server goofed up and can't successfully respond to your request.
-
-The HTTP response structure mirrors that of the HTTP request. It contains:
-1. A response line, which includes the three-digit HTTP status code;
-2. A header, which includes further information about the server and its response;
-3. The body, which contains the text of the response.
-
-#### Response: XML
-XML (which stands for E xtensible Markup Language) is very similar to HTML—it uses tags between angle brackets. The difference is that XML allows you to use tags that you make up, rather than tags that the W3C decided on.
-```xml
-<pet>
-  <name>Jeffrey</name>
-  <species>Giraffe</species>
-</pet>
-```
-We've required in the `rexml/document` module for parsing XML, and we're just using File.open to read from pets.txt
-```ruby
-require "rexml/document"
-
-file = File.open("pets.txt")
-doc = REXML::Document.new file
-file.close
-
-doc.elements.each("pets/pet/name") do |element|
-  puts element
+module Memorable
+  module InstanceMethods
+    def initialize
+      self.class.all << self
+    end
+  end
 end
 ```
 
-Some APIs will send you JSON or XML.
-
-#### Response: JSON
-JSON (which stands for **J**ava**S**cript **O**bject **N**otation) is an alternative to XML. It gets its name from the fact that its data format resembles JavaScript objects, and it is often more succinct than the equivalent XML.
-```json
-{
-  "pets": {
-    "name": "Jeffrey",
-    "species": "Giraffe"
-  }
-}
-```
-We require the `json` module for parsing JSON, and we're using File.open as before to read from pets.txt
+#### Note about the environment
+Instead of requiring individual files within one another, we created an environment file to handle those requirements for us. Any additional files we make should be required by this environment.rb file.
 ```ruby
-require 'json'
+require 'pry'
 
-pets = File.open("pets.txt", "r")
+require_relative '../lib/concerns/findable'
+require_relative '../lib/concerns/memorable'
+require_relative '../lib/concerns/paramable'
 
-doc = ""
-pets.each do |line|
-  doc << line
+require_relative '../lib/artist.rb'
+require_relative '../lib/song.rb'
+
+```
+Our spec_helper file, which is required by each individual spec file, required only this config/environment.rb file, instead of each and every file from the lib directory. As we start to build larger and more complex programs, it begins to make sense to handle all of our requirements in one place.
+
+#### About tests
+We use TDD (test-driven development) for a reason. We write tests to define the desired behavior of our program so that we can write clean, beautiful code. We can first write code that passes those tests and then break our code, fail our tests, write better code and pass our tests again.
+
+This is called the **red, green, refactor** pattern. First tests fail, then you write bad code to get them to pass, then you refactor that bad code into good code. Remember, don't be afraid of broken code! Broken code is the status quo in programming. Your job is often to break something to make it better. Embrace broken code.
+
+### Super
+So far, we've seen the benefits of using inheritance to create a group of classes that share certain characteristics and behaviors. However, up until now, the implementation of shared characteristics has been somewhat rigid.
+But what if there is a method in the parent class that we want our child to share some of the functionality of? Or what if we want our child class to inherit a method from the parent and then augment it in some way? We can achieve this with the use of the `super` keyword.
+
+Let's say we are working on an education app in which users are either students or teachers. We have a parent, User class, that both our Student and Teacher classes inherit from.
+
+```ruby
+class User
+  def log_in
+    @logged_in = true
+  end
 end
-pets.close
-
-puts JSON.parse(doc)
 ```
-
-### Making the twitter request
+However, when a student logs into our app, we need to not only set their logged in attribute to true, we need to set their "in class" attribute to true. We can augment/supercharge, the `#log_in` method inside of the Student class.
 ```ruby
-require 'rubygems'
-require 'oauth'
-
-consumer_key = OAuth::Consumer.new(
-    "P8kWGvhEaQVLdecCSMTR5PF3j",
-    "PpI6QTaLVgE0yFfrEortwhZMwCeuTsQEYVdkiZZ0mafD7n8l28")
-access_token = OAuth::Token.new(
-    "68970499-VaB8ZjHnKr0T8qCZpuip3fA3fYBy7QZ2dX37OCSh2",
-    "ScoXGZvC9BDhAZuEc6dawtQY2SJcLxWPRiCtBkKHyCUCL")
-
-# All requests will be sent to this server.
-baseurl = "https://api.twitter.com"
-
-# The verify credentials endpoint returns a 200 status if
-# the request is signed correctly.
-address = URI("#{baseurl}/1.1/account/verify_credentials.json")
-
-# Set up Net::HTTP to use SSL, which is required by Twitter.
-http = Net::HTTP.new address.host, address.port
-http.use_ssl = true
-http.verify_mode = OpenSSL::SSL::VERIFY_PEER
-
-# Build the request and authorize it with OAuth.
-request = Net::HTTP::Get.new address.request_uri
-request.oauth! http, consumer_key, access_token
-
-# Issue the request and return the response.
-http.start
-response = http.request request
-puts "The response status was #{response.code}"
+class Student < User
+  def log_in
+    super
+    @in_class = true
+  end
+end
 ```
 
-### Parsing a user object
-Continue from [codeacademy](https://www.codecademy.com/en/courses/ruby-intermediate-en-rUwFe/0/2?curriculum_id=5122d5f811fbdb5456005922)
+## Mass Assignment
+At this point, we're very familiar with the fact that methods can be defined to take in arguments. We also know that methods can be defined to take in multiple arguments: `method(argument1, argument2)`. As it currently stands, whoever uses our method needs to remember exactly what order to pass in the arguments. Clearly, we have a need to regulate the passing in of multiple arguments, otherwise we risk to break our methods if one argument is used as the other.
+
+Keyword arguments are a special way of passing arguments into a method. They behave like hashes, pairing a key that functions as the argument name, with its value.
+```ruby
+# with default argument
+def happy_birthday(name: "Beyonce", current_age: 31)
+  puts "Happy Birthday, #{name}"
+  current_age += 1
+  puts "You are now #{current_age} years old"
+end
+
+# without default arguments
+def happy_birthday(name:, current_age:)
+  puts "Happy Birthday, #{name}"
+  current_age += 1
+  puts "You are now #{current_age} years old"
+end
+```
+Our keyword arguments consist of two key/value pairs, `:name` and `:current_age`. Even if we change the order of our key/value pairs, our method won't break.
+
+Another benefit of using keyword arguments is the ability to "mass assign" attributes to an object. If a method is defined to accept keyword arguments, we can create the hash that the method is expecting to accept as an argument, set that hash equal to a variable, and simply pass that variable in to the method as an argument.
+
+```ruby
+person_attributes = {name: "Sophie", age: 26}
+sophie = Person.new(person_attributes)
+=> #<Person:0x007f9bd5814ae8 @name="Sophie", @age=26>
+```
+
+### Mass assignment and metaprogramming
+Let's say we want to use the Twitter API to create users for our own application. The scenario is that we are developing a web application and we want our users to be able to sign in via Twitter. Thus, our own users are pulled from Twitter and we need to take the data we get from Twitter––for example a user's name, age and location, and use them to make instances of our own User class. 
+```ruby
+class User
+  attr_accessor :name, :age, :location, :user_name
+ 
+  def initialize(user_name:, name:, age:, location:)
+    @user_name = user_name
+    @name = name
+    @location = location
+    @age = age
+  end
+end
+```
+For the purposes of this example, we won't get into the specifics of how we request and receive data from the Twitter API. Suffice to say that we send a request to the Twitter API and get a return value of a hash full of user attributes.
+```ruby
+twitter_user = {name: "Sophie", user_name: "sm_debenedetto", age: 26, location: "NY, NY"}
+```
+we can use the twitter_user hash to instantiate a new instance of our own User class:
+```ruby
+sophie = User.new(twitter_user)
+ => #<User:0x007fa1293e68f0 @name="Sophie", @age=26, @user_name="sm_debenedetto", @location="NY, NY">
+```
+But, what if Twitter changes their API without telling us? What if they don't send the age anymore, or add parameters? Our program would break as it is.
+We can improve the `User` class, by asking our initialize method to take in some unspecified `attributes` object. The name of the key becomes the name of a setter method and the value associated with the key is the name of the value you want to pass to that method.
+```ruby
+class User
+  attr_accessor :name, :user_name, :age, :location, :bio
+ 
+  def initialize(attributes)
+    attributes.each do |key, value| 
+        self.send("#{key}=", value)
+    end
+  end
+end
+```
+The `.send` method calls the method name corresponding to the key's name, with an argument of the value. `self.send(key=, value)` is the same as `instance_of_user.key = value`. The .send method is just another way of calling a method on an object. `sophie.name = "Sophie"` is the same as `sophie.send("name=", "Sophie")`.
+
+With this pattern, we have made our code much more flexible. We can easily alter the number of attributes in the class and change the hash that we initialize the class with, without editing our initialize method. Now, we're programming for the future. If and when that data with which we want to initialize our class changes, we only have to change our attr_accessors.
+
+### Custom Errors
+We already know that Ruby has a hierarchy of error, or `Exception`, classes, all of which inherit from the Exception class, like `NoMethodError`, `ArgumentError`, `SyntaxError`...
+```ruby
+Exception
+ NoMemoryError
+ ScriptError
+   LoadError
+   NotImplementedError
+   SyntaxError
+ SignalException
+   Interrupt
+ StandardError
+   ArgumentError
+   IOError
+     EOFError
+   IndexError
+   LocalJumpError
+   NameError
+     NoMethodError
+   RangeError
+     FloatDomainError
+   RegexpError
+   RuntimeError
+   SecurityError
+   SystemCallError
+   SystemStackError
+   ThreadError
+   TypeError
+   ZeroDivisionError
+ SystemExit
+ fatal
+```
+Let's say, however, that we are working on a web application in which users can sign in and post pictures to Instagram. But wait! Instagram has been hacked and their entire site is currently down! Since our app relies on sending data to and getting a response from the Instagram site, our app will break and our users won't know why. We can use custom error messages and custom error handling. By handling these custom errors in a particular way, we can soothe our users by redirecting them somewhere useful, showing them some kind of clear and apologetic notice.
+
+To build a custom error, we define an error class that inherits from the `Exception` class. Which class your custom error inherits from will likely depend on the situation in which you want to raise it. However, it is usually a pretty safe bet to inherit your custom error class from the `StandardError` class.
+
+```ruby
+class Person
+  attr_accessor :name, :partner
+ 
+  def initialize(name)
+    @name = name
+  end
+ 
+  def get_married(person)
+    self.partner = person
+    person.partner = self
+  end
+end
+```
+Imagine we're trying to tell Beyonce to get_married to "Jay-Z". The problem is that "Jay-Z" is a string, not an instance of the Person class. We would get an error: 
+```ruby
+custom_errors.rb:10:in `get_married': undefined method `partner=' for "Jay-Z":String (NoMethodError)
+```
+Let's define a custom error class, `PartnerError`
+```ruby
+class PartnerError < StandardError
+end
+```
+We have a couple of options. We can simply place the above code inside of the Person class. We could define it outside of our Person class. Or, we can create a module and include that module inside the Person class. 
+
+```ruby
+class Person
+  attr_accessor :partner, :name
+ 
+  def initialize(name)
+    @name = name
+  end
+ 
+  def get_married(person)
+    self.partner = person
+    if person.class != Person 
+      raise PartnerError 
+    else
+      person.partner = self
+    end
+  end
+ 
+  class PartnerError < StandardError
+  end
+end
+```
+This time the error we'd get would be
+```ruby
+custom_errors.rb:11:in `get_married': Person::PartnerError (Person::PartnerError)
+```
+We raised our very own custom error. However, our program is still broken. Notice that the puts beyonce.name line at the bottom of our file won't run because it follows the get_married method call, and we called that method in such a way as to raise an error. If only there was a way for us to `rescue` our program when such an error is raised and allow it to keep running...
+
+```ruby
+class Person
+  attr_accessor :partner, :name
+ 
+  def initialize(name)
+    @name = name
+  end
+ 
+  def get_married(person)
+    self.partner = person
+    if person.class != Person
+          begin
+            raise PartnerError
+          rescue PartnerError => error
+              puts error.message
+          end
+    else
+      person.partner = self
+    end
+  end
+ 
+  class PartnerError < StandardError
+    def message 
+      "you must give the get_married method an argument of an instance of the person class!"
+    end
+  end
+end
+ 
+beyonce = Person.new("Beyonce")
+beyonce.get_married("Jay-Z")
+puts beyonce.name
+```
+Now, not only is our custom error message put out, but the program continues to run and will execute the puts beyonce.name line.
+
 
