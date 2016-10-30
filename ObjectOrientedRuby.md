@@ -813,6 +813,41 @@ crazy_in_love.artist_name
 
 ### Collaborating objects
 Objects can be related to one another directly, when one object contains a reference to another: a bank account and transactions for instance.
+
+Domain modeling is the description of what you want the app to do 
+1. Identify your objects
+I want to build and app that can load artists, songs and genres, for each of them it can generate an index.html that lists all of the items in the collection and then it can also generate a "show.html" (kanye-west.html) for each individual in the collection.
+
+2. Identify single responsibilities for each model
+I need different machines that just do one thing, have encapsulated responsibilities
+- Artist, that is responsible for 
+-   name
+-   songs
+-   genres
+- Song, responsible for
+-   name
+-   genre
+-   artist
+- Genre responsible for 
+-   name
+-   songs
+-   artists
+- Site generator is responsible for
+-   template like index.html
+-   items in the collection
+
+3. Design the interface
+Design what you should be able to do (even if you don't know yet how you'll get there)
+SiteGenerator.new(Artist.all, "views/artists/index.html", "_site/artists/index.html")
+Here we pass in the collection, the template, and where I want the template to be generated
+
+4. Write the code and refactor
+class SiteGenerator
+    def initialize(collection, template, destination)
+    end
+end
+
+
 Video available online on [youtube](https://www.youtube.com/watch?v=iYcQ693LXck)
 ```ruby
 class Author
@@ -1405,6 +1440,8 @@ Nothing you ever write will be 100% your code. As a developer there is a new set
 gem 'mail', '~> 2.6', '>= 2.6.3'
 ```
 
+If you type `gem env` you see your gems and INSTALLATION DIRECTORY tells you where they are located. They are managed by rvm and are shared resources between the projects of your machine.
+
 Let's take the first part of the versioning `'~> 2.6'`. A major version change is reflected by the first number (reading from left to right). Major version changes don't have to be backwards compatible. This means that if your app is built using version 1, and the gem updates to version 2, the new version can potentially break your app. A minor version change is reflected by the number after the first decimal point. All minor version changes have to be backwards compatible. The number after the second decimal point reflects a patch, which is a change to a gem to fix a bug but not introduce new functionality. 
 
 `1.2.3` means major version 1, minor version 2, and a patch version 3.
@@ -1415,6 +1452,8 @@ The mail gem has a second specification `'>= 2.6.3'`. This means any version gre
 
 ### Gemfile
 The Gemfile is a list of gems your app uses. The Gemfile lets you setup groups, so gems are only loaded under specific circumstances. For example, you might have a gem like Pry in your `development` group because you only need to use Pry to debug when you are in the development phase. Your code in `production`, i.e. when your app is being used by a user, doesn't need to use the Pry gem.
+
+To create the gemfile you just have to type in your directory `bundle init`
 
 **GROUP SYNTAX**
 The group syntax uses the keyword `group`, followed by the app environment as a symbol (`:development`, `:test`, and `:production` are the standard environments), followed by the keyword `do`. Inside the block, we list all the gems specific to that group.
@@ -1457,23 +1496,32 @@ Getting started with Bundler is super easy. To create a `Gemfile`, type `bundle 
 Gemfile already exists at /home/brunoboehm-26262/code/labs
 /using-bundler-v-000/Gemfile 
 ```
+
+When you run `bundle` it will also create the `Gemfile.lock` file
+
 There's only one file Bundler requires you have (Gemfile), the other files are conventional for a typical Ruby application, but not required by the use of Bundler for gem management.
 - Gemfile - This file is required by Bundler and contains a source, and a list of file requirements. That's all.
-- config/environment.rb - The environment file is where we'll be loading all of our app's dependencies, from gems to database connections.
+- config/environment.rb - The environment file is where we'll be loading all of our app's dependencies, from gems, data, other classes... to database connections. In other files you don't have to say `require`.
 - bin/run.rb - This file will start our application. This file will require the environment file we created earlier to provide our app with access to our gems.
 
 **CONFIG ENVIRONMENT**
 This means we'd want the gems to be loaded in our app before our own code. If we loaded our code first, we'd get uninitialized constant errors or undefined variable or method errors. Load order matters. We can specify load information in config/environment.rb to configure our load path (or load order) so that nothing breaks.
 ```ruby
 require 'bundler/setup'
-Bundler.require(:default, :development)
+Bundler.require
+# this line requires/loads the gems into memory, not just on the computer
+# you can also be more specific and add Bundler.require(:default, :development)
 ```
 In the example above, we're first requiring 'bundler/setup'. If we don't do this, our app won't know to use bundler to install our gems. Without that line, our Gemfile becomes pointless.
 
 **BIN/RUN.RB**
-This is where the action is. This is where our app logic goes, and where we make our millions. To take advantage of all of the work we did in the environment file, let's require it here.
+This is where the action is. This is where our app logic goes, and where we make our millions. To take advantage of all of the work we did in the `environment` file, let's require it here (and environment will require all other necessary files).
 ```ruby
+# !/usr/bin/env ruby
 require_relative '../config/environment'
+
+# whatever method should be called next to run the program
+MusicLibraryController.new.call
 ```
 
 `require` and `require_relative` methods might look similiar they do different things. Both load a file based on the filename passed in as a parameter and return true if the file was found and loaded successfully and they will raise a LoadError if it returns false. However...
@@ -1501,7 +1549,7 @@ Nokogiri is a Ruby gem that helps us to parse HTML and collect data from it. Ess
 
 Let's set up a small CLI program.
 Let's start by creating a directory `mkdir Nogokiri` and inside create the following architecture, creating files with `touch file_name`.
-Note the Gemfile is created by typing `bundler init` so that it gets filled with preformated info.
+Note the Gemfile is created by typing `bundle init` so that it gets filled with preformated info.
 ```ruby
 Nokogiri/
     bin/
@@ -1521,6 +1569,7 @@ Nokogiri/
     require 'bundler/setup'
     Bundler.require(:default)
     #no need to require 'nokogiri' because it is in the default
+    # if we had a /lib/ folder we could require all by `require_all 'lib'` if you have the require_all gem
     
 # In run.rb
     require_relative '../config/environment'
