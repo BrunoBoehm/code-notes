@@ -222,6 +222,15 @@ Pry is another Ruby REPL with some added functionality. Once you install the Pry
 
 Calling binding.pry is essentially 'prying' into the current binding or context of the code, from outside your file. So when you place the line binding.pry in your code, that line will get interpreted at runtime (as your program is executed). When the interpreter hits that line, your program will actually freeze and your terminal will turn into a REPL that exists right in the middle of your program, wherever you added the binding.pry line.
 
+Top-Tip: The `variable_name = _` syntax used in Pry will assign the variable name to the return value of whatever was executed above.
+```ruby
+$ pry > 1 + 1
+  => 2
+$ pry > two = _
+$ pry > two
+  => 2
+```
+
 More about [Pry](https://learn.co/tracks/full-stack-web-development/procedural-ruby/variables-and-methods/debugging-with-pry) and on their [website](http://pryrepl.org/)
 
 To play with Pry you can in a Rakefile put
