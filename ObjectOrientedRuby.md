@@ -1482,7 +1482,8 @@ require_relative '../config/environment'
 
 
 ## Scraping, Open URI & Nokogiri
- Web scraping is the act of parsing a web page's HTML and pulling, or "scraping" pertinent data from that HTML.
+Web scraping is the act of parsing a web page's HTML and pulling, or "scraping" pertinent data from that HTML. One of the most common use-cases for web scraping involves you, the programmer, scraping data that you will then use to instantiate your own Ruby objects.
+
 Scraping can be difficult to accomplish––in order to get the data we want, we need to closely examine the HTML and identify exactly which elements contain the information we're interested in. It requires a high degree of precision.
 
 So, if scraping is so tricky, why do we use it? Well, not all of the data we might be interested in using to program is available to use through APIs.
@@ -1532,6 +1533,7 @@ Nokogiri/
     puts selected
 ```
 Nokogiri's `.css` method can be called on the doc variable that we set equal to that giant string of HTML that Nokogiri retrieved for us. The .css method takes in an argument of the CSS selector you want to retrieve. 
+
 ### Iterating over scraped elements
 ```ruby
 require 'nokogiri'
@@ -1547,10 +1549,10 @@ end
 ```
 When we use Nokogiri methods, we get a return value of XML elements, collected into an array. Even though the Nokogiri gem returns a Nokogiri::XML::Element (which looks like an array in ruby), we can use Ruby methods, such as .each and .collect, to iterate over it. The main thing to understand, however, is that Nokogiri collects these objects into hierarchical data structures. So, we could iterate over an array of Nokogiri objects, use enumerators, grab the values of attributes that act as hash keys, etc.
 
-## Single responsibility principle SRP
-Each method, piece of code shouldn't ne doing more than one thing!
+#### Single responsibility principle SRP
+Each method, piece of code shouldn't be doing more than one thing!
 
-## Explaining .tap
+#### Explaining .tap
 ```ruby
 # Inside of the Animal class, with attr_accessors and initialize method
 
@@ -1579,11 +1581,80 @@ And of course we have in another file the `AnimalScraper` class
 ```ruby
 class AnimalScraper
     def wikipedia(url)
-        doc = Nokogiri::HTML(open-uri(url))
+        doc = Nokogiri::HTML(open(url))
         animal = {}
         
         animal[:name] = doc.search("h1#firstHeading").text
         animal[:family] = doc.search("span.family").text
     end
 end
+```
+
+#### Example with Flatiron School website
+Let's first define a Course class
+
+```ruby
+class Course
+  attr_accessor :title, :schedule, :description
+  @@all = []
+ 
+  def initialize
+    @@all << self
+  end
+ 
+  def self.all
+    @@all
+  end
+ 
+  def self.reset_all
+    @@all.clear
+  end
+end
+```
+
+And now let's create our Scraper class
+```ruby
+require 'nokogiri'
+require 'open-uri'
+# require 'pry'
+ 
+require_relative './course.rb'
+ 
+class Scraper
+ 
+  def get_page
+    Nokogiri::HTML(open("http://learn-co-curriculum.github.io/site-for-scraping/courses"))
+    # binding.pry
+    # we can do scraper = Scraper.new.get_page
+  end
+ 
+  def get_courses
+    self.get_page.css(".post")
+    # we can do scraper.get_courses ==> scraper.get_page.css(".post")
+  end
+ 
+  def make_courses
+    # scraper.make_courses ==> scraper.get_courses.each...
+    self.get_courses.each do |post|
+      course = Course.new
+      course.title = post.css("h2").text
+      course.schedule = post.css(".date").text
+      course.description = post.css("p").text
+    end
+  end
+ 
+  def print_courses
+    self.make_courses
+    Course.all.each do |course|
+      if course.title
+        puts "Title: #{course.title}"
+        puts "  Schedule: #{course.schedule}"
+        puts "  Description: #{course.description}"
+      end
+    end
+  end
+ 
+end
+ 
+Scraper.new.print_courses
 ```
