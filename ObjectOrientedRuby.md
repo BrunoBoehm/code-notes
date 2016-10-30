@@ -1658,3 +1658,39 @@ end
  
 Scraper.new.print_courses
 ```
+
+#### Scraping images
+An image tag in HTML is considered to have a source attribute. In the following example `<img src="http://www.example.com/pic.jpg">`
+the source attribute would be "http://www.example.com/pic.jpg". You can use the `.attribute` method on a Nokogiri element to grab the value of that attribute.
+```ruby
+html = File.read('./fixtures/kickstarter.html')
+kickstarter = Nokogiri::HTML(html)
+image = kickstarter.css(".project-card").first.css("div.project-thumbnail a img").attribute("src").value
+```
+Example in the full exercise
+```ruby
+require 'nokogiri'
+require 'pry'
+
+def create_project_hash
+  html = File.read('./fixtures/kickstarter.html')
+  kickstarter = Nokogiri::HTML(html)
+
+  projects = {}
+
+  kickstarter.css(".project-card").each do |project|
+    title = project.css("h2.bbcard_name strong a").text
+    projects[title.to_sym] = {
+      image_link: project.css("div.project-thumbnail a img").attribute("src").value,
+      description: project.css("p.bbcard_blurb").text,
+      location: project.css("span.location-name").text,
+      percent_funded: project.css("ul.project-stats li.first.funded strong").text.gsub("%", "").to_i 
+    }
+  end
+
+  projects
+end
+```
+Note we're converting the title into a symbol using the `.to_sym` method. Remember that symbols make better hash keys than strings.
+
+
