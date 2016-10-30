@@ -231,6 +231,18 @@ SELECT id, name, age, breed FROM cats;
 
 SELECT * FROM cats WHERE age < 2;
 
+SELECT * FROM cats ORDER BY age DESC;
+
+SELECT * FROM cats ORDER BY age DESC LIMIT 1;
+
+SELECT name FROM cats WHERE age BETWEEN 1 AND 3;
+
+SELECT * FROM cats WHERE name IS NULL;
+
+SELECT COUNT(owner_id) FROM cats WHERE owner_id = 1;
+
+SELECT breed, owner_id, COUNT(breed) FROM cats GROUP BY breed, owner_id;
+
 UPDATE cats SET name = "Hana" WHERE name = "Hannah";
 
 DELETE FROM cats WHERE id = 3;
@@ -306,6 +318,8 @@ The `UPDATE` statement uses a `WHERE` clause to grab the row you want to update.
 UPDATE [table name] SET [column name] = [new value] WHERE [column name] = [value];
 
 sqlite> UPDATE cats SET name = "Hana" WHERE name = "Hannah";
+
+UPDATE cats SET owner_id = 1 WHERE name = "Maru";
 ```
 
 #### DELETING
@@ -371,6 +385,7 @@ SELECT breed, COUNT(breed) FROM cats GROUP BY breed;
 
 SELECT breed, owner_id, COUNT(breed) FROM cats GROUP BY breed, owner_id;
 ```
+
 ### SQL Aggregate functions
 Imagine writing 
 - an application for a restaurant owner to track her customers and transactions
@@ -378,4 +393,380 @@ Imagine writing
 - a social networking application whose administrators want to keep track of the number of times a user logs on and identify who their most frequent users are. 
 - a program to discover who clients biggest spenders are or what they make on average over a busy weekend. 
 - a feature to know who their most frequent buyers are and how much they spend on average on a given item, and so on.
+
+Storing or persisting information in an application or program is about more than just keeping track of static data, we want to operate on or analyze the data we store.
+
+We can do so using the aggregate functions that SQL makes available to us. With these functions we can `COUNT`, `SUM` and average `AVG` column data, request `MIN` and `MAX` values, and more. SQL also makes available to use keywords that allow us to group aggregated data by various categories and narrow our search criteria based on various conditions.
+
+```
+SELECT AVG(column_name) FROM table_name;
+SELECT AVG(net_worth) FROM cats;
+
+AVG(net_worth) 
+---------------
+800850.0 
+
+SELECT AVG(net_worth) AS average_net_worth FROM cats;
+average_net_worth   
+--------------------
+800850.0 
+
+SELECT SUM(column_name) FROM table_name;
+SELECT SUM(net_worth) FROM cats;
+
+SELECT MIN(column_name) FROM table_name;
+SELECT MIN(net_worth) FROM cats;
+
+SELECT MAX(column_name) FROM table_name;
+
+SELECT COUNT(column_name) FROM table_name;
+SELECT COUNT(name) FROM cats;
+```
+We can use the `COUNT()` function to calculate the total number of rows in a table that are not NULL. `NULL` means empty.
+```
+SELECT COUNT(*) FROM cats WHERE net_worth > 1000000;
+```
+`*` means everything. Sometimes it's called the "wildcard." This COUNT(*) will count the rows where at least one column has data in it.
+
+## Relational Databases
+It's hard to imagine an application that saves data but doesn't relate it. For example––a Facebook user is associated to other users via "friendships", an Amazon user has a shopping cart full of items, a blog's author has many posts and posts might in turn have many tags. All of these examples require different datasets to be related or associated to one another.
+
+A relational database, simply put, is **a database structured to recognize relations among stored items of information**. A relational database will allow us to store representations of our Ruby objects and preserve the relationships between those objects when we store them.
+
+In a relational database, every row has a number, called a `primary key`. Relationships between tables can be established by using a `foreign key` column, that uses that primary key of another table to refer to a member of that table. Primary keys are numbers, and as opposed to names for instance, are always unique!
+
+Edgar Codd invented the concept of the relational database, in other words, he came up with the idea that storing data in tables, indexed by primary key and related by foreign keys would normalize that data.
+
+Continuing the posts and authors examples, you could say that an author has many posts. The reciprocal of this would be that a post belongs to an author. Let's say the Post "10 Ways to Pet Your Cat" is written by "Joe Burgess", and Joe's id is 5. We just need to add a new column to our Posts table with the id of the Author that it's related to. Let's call this column author_id. This `author_id` column is called a "foreign key".
+
+Why didn't we do the reverse? Why didn't we add a list of Post IDs to a single Author row? The answer is pretty straight forward. Is there an array data type? Is there really any way to store multiple items in a single column? Nope! So we just set up the relation in one direction. 
+
+A user can write many posts, but each post was written by, and therefore belongs to, only one user. The thing that "has many" is considered to be the parent. The thing that "belongs to" we'll call the child. The child table gets the foreign key column, the value of which is the primary key of that data's/row's parent.
+
+To associate one table to another, give one table a column called "foreign key" with a type of `INTEGER` and insert the primary key of another table row into that column.
+
+Bonus: practice [SQL queries](https://sqlbolt.com/lesson/select_queries_review)
+
+## SQL JOINS
+A SQL JOIN clause is a way to combine rows from two or more tables, based on a common column between them. The great thing about relational databases is that they are just that––relational. 
+
+Relational databases allow us not only to store data that is interconnected, but to retrieve that data in ways that reflect that interconnectivity.
+
+We know how to write a SELECT statement that gets us all of the cats with a particular owner_id. For example:
+```
+SELECT * FROM cats WHERE owner_id = 2;
+```
+This would return us the appropriate list of cats. But what if we wanted to query both the Cats and the Owners tables and return information about both cats and owners? This is where JOIN statements come in.
+
+type | declaration
+------ | ------
+INNER JOIN | Returns all rows when there is at least one match in BOTH tables
+LEFT JOIN | Returns all rows from the left table, and the matched rows from the right table
+RIGHT JOIN | Returns all rows from the right table, and the matched rows from the left table
+FULL JOIN | Returns all rows when there is a match in ONE of the tables
+
+### Inner JOIN
+```
+SELECT column_name(s)
+FROM first_table
+INNER JOIN second_table
+ON first_table.column_name=second_table.column_name;
+# ON ... is the JOIN condition that needs to be fulfilled
+
+SELECT Cats.name, Cats.breed, Owners.name
+FROM Cats 
+INNER JOIN Owners
+ON Cats.owner_id = Owners.id;
+
+# this will output
+name             breed            name
+---------------  ---------------  ----------
+Maru             Scottish Fold    mugumogu  
+Hana             Tabby            mugumogu  
+Nona             Tortoiseshell    Sophie  
+
+# we can even improve the last column's name
+SELECT Cats.name, Cats.breed, Owners.name AS "owner_name"
+FROM Cats 
+INNER JOIN Owners
+ON Cats.owner_id = Owners.id;
+
+# this will output
+name             breed            owner_name
+---------------  ---------------  ----------
+Maru             Scottish Fold    mugumogu  
+Hana             Tabby            mugumogu  
+Nona             Tortoiseshell    Sophie  
+```
+
+### Left Outer JOIN
+```
+# boilerplate
+SELECT column_name(s)
+FROM first_table
+LEFT JOIN second_table
+ON first_table.column_name=second_table.column_name;
+
+# example 
+SELECT Cats.name, Cats.breed, Owners.name 
+FROM Cats 
+LEFT OUTER JOIN Owners 
+ON Cats.owner_id = Owners.id;
+
+# would return...
+name             breed            name      
+---------------  ---------------  ----------
+Maru             Scottish Fold    mugumogu  
+Hana             Tabby            mugumogu  
+Nona             Tortoiseshell    Sophie 
+Lil' Bub         perma-kitten                
+```
+
+### Complex/Outer JOINS
+Inner join example
+>Imagine you want to get a list of all the students with an "A" in the class. We only want those students in the class with top grades, ignoring the other students in the class.
+
+Outer/complex join example
+>Imagine you want to get a list of all the students with an "A" in the class. We only want those students in the class with top grades, ignoring the other students in the class.
+
+It is referred to as "complex" simply because SQL is conducting an inner join in addition to gathering a little more information from one or more tables.
+
+
+
+## ORMs and Active Record
+Object Relational Mapping (ORM) is the technique of accessing a relational database using an object-oriented programming language.
+
+Object Relational Mapping is a way for our Ruby programs to manage database data by "mapping" database tables to classes and instances of classes to rows in those tables.
+
+```ruby
+database_connection = SQLite3::Database.new('db/my_database.db')
+database_connection.execute("Some SQL statement")
+```
+
+An ORM is really just a concept. It is a design pattern, a conventional way for us to organize our programs when we want those programs to connect to a database. The convention is this:
+**When "mapping" our program to a database, we equate classes with database tables and instances of those classes with table rows.**
+
+You may also see this referred to as "wrapping" a database, because we are writing Ruby code that "wraps" or handles SQL.
+
+Let's say we have a program that helps a veterinary office keep track of the pets it treats and those pets' owners. Such a program would have an Owners class and Cats class.
+```ruby
+database_connection = SQLite3::Database.new('db/pets.db')
+database_connection.execute("CREATE TABLE IF NOT EXISTS cats(
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    breed TEXT,
+    age INTEGER)
+    ")
+database_connection.execute("CREATE TABLE IF NOT EXISTS owners(
+    id INTEGER PRIMARY KEY, 
+    name TEXT)
+    ")
+
+database_connection.execute("INSERT INTO cats (name, breed, age) 
+    VALUES ('Maru', 'scottish fold', 3)
+    ")
+database_connection.execute("INSERT INTO cats (name, breed, age) 
+    VALUES ('Hana', 'tortoiseshell', 1)
+    ")    
+```
+Notice that in the lines of code above, there is a lot of repetition. In fact, the only difference between the two lines in which we insert data into the database are the actual values. The repetition would also occur for other SQL statements we might want to execute against our database. Any `SELECT` queries, for example, would repeat the call to the `database_connection.execute` method and differ only in the specifics of what data we are selecting from which table.
+
+Instead of repeating the same, or similar, code any time we want to perform common actions against our database, we can write a series of methods to abstract that behavior. We can write a `.save` method on our `Cats` class that handles the common action of `INSERT`ing data into the database.
+
+```ruby
+class Cat
+ 
+  @@all = []
+ 
+  def initialize(name, breed, age)
+    @name = name
+    @breed = breed
+    @age = age
+    @@all << self
+  end
+ 
+  def self.all
+    @@all
+  end
+ 
+  def self.save(name, breed, age, database_connection)
+    database_connection.execute(
+        "INSERT INTO cats (name, breed, age) VALUES (?, ?, ?)", name, breed, age
+        )
+  end
+end
+
+# Now we can create some cats and save them
+database_connection = SQLite3::Database.new('db/pets.db')
+
+Cat.new("Maru", "scottish fold", 3)
+Cat.new("Hana", "tortoiseshell", 1)
+
+Cat.all.each do |cat|
+    Cat.save(cat.name, cat.breed, cat.age, database_connection)
+end
+```
+We follow the convention: classes are mapped to or equated with tables and instances of a class are equated to table rows. If we have a `Cat` class, we have a cats **table**. `Cat` instances get stored as **rows** in the cats table.
+
+Just like the .save method we previewed above, we will learn to build a series of common, conventional methods that our programs can rely on again and again to communicate with our database.
+
+### Mapping Ruby Classes to Database Tables
+Let's say we are building a music player app that allows users to store their music and browse their songs by song.
+
+```ruby
+class Song
+  attr_accessor :name, :album
+ 
+  def initialize(name, album)
+    @name = name
+    @album = album
+  end
+end
+```
+
+ In order to "map" this Song class to a songs database table, we need to create our database, then we need to create our songs table. 
+ 
+In building an ORM, **it is conventional to pluralize the name of the class to create the name of the table**. Therefore, the `Song` class equals the `songs` table.
+ 
+**CREATING THE DB**
+Before we can create a songs table we need to create our music database. This is not the responsibility of the `Song` class since it will be mapped to a *table* inside of the database, but not to the database as a whole. It is the responsibility of our program as a whole to create and establish the database.
+
+We will do our setup in the `config` directory that contains the `environment.rb` file.
+```ruby
+# config/environment.rb
+require 'sqlite3'
+require_relative '../lib/song.rb'
+ 
+DB = {:conn => SQLite3::Database.new("db/music.db")} 
+```
+We set up a constant: `DB`, that is equal to a hash that contains our connection to the database. In our lib/song.rb file, we can therefore access the DB constant and the database connection it holds like this `DB[:conn]`.
+
+**CREATING THE TABLE**
+According to the ORM convention in which a class is mapped to or equated with a database table, we need to create a songs table. We will accomplish this by writing a class method in our `Song` class that creates this table.
+
+To "map" our class to a database table, we will create a table with the **same name as our class** and give that **table column names that match the `attr_accessor`s of our class**.
+ 
+```ruby
+class Song
+  attr_accessor :name, :album, :id
+ 
+  def initialize(name, album, id=nil)
+    @id = id
+    @name = name
+    @album = album
+  end
+ 
+  def self.create_table
+    sql =  <<-SQL 
+      CREATE TABLE IF NOT EXISTS songs (
+        id INTEGER PRIMARY KEY, 
+        name TEXT, 
+        album TEXT
+        )
+        SQL
+    DB[:conn].execute(sql) 
+  end
+end
+```
+We therefore set the default value of the id argument that the `#initialize` method takes equal to nil, so that we can create new song instances that do not have an id value. We'll leave that up to the database to handle later on. Only the database itself, through the magic of SQL, can ensure that the id of each record is unique.
+
+Why is the `.create_table` method a class method? Well, it is not the responsibility of an individual song to create the table it will eventually be saved into. It is the job of the class as a whole to create the table that it is mapped to.
+Top-Tip: For strings that will take up multiple lines in your text editor, use a heredoc to create a string that runs on to multiple lines. To create a heredoc, we use: `<<- + name of language contained in our multiline statement + the string, on multiple lines + name of language.`
+
+**MAPPING CLASS INSTANCES TO TABLE ROWS**
+If individual instances of a class are "mapped" to rows in a table, does that mean that the instances themselves, these individual Ruby objects, are saved into the database? Actually, **we are not saving Ruby objects in our database. We are going to take the individual attributes of a given instance**, in this case a song's name and album, and save those attributes that describe an individual song to the database as one, single row.
+
+```ruby
+hello = Song.new("Hello", "25")
+ 
+hello.name 
+# => "Hello"
+ 
+hello.album
+# => "25"
+
+INSERT INTO songs (name, album) VALUES ("Hello", "25")
+```
+We can see that the operation of saving the attributes of a particular song into a database table is common enough. Let's abstract this functionality into an instance method, `#save`.
+
+```ruby
+class Song
+...
+  def save
+    sql = <<-SQL
+      INSERT INTO songs (name, album) 
+      VALUES (?, ?)
+    SQL
+ 
+    DB[:conn].execute(sql, self.name, self.album)
+  end
+end
+```
+Above, we used the heredoc to craft our multi-line SQL statement. How are we going to pass in, or interpolate, the name and album of a given song into our heredoc? We use something called bound parameters. 
+
+Instead of interpolating variables into a string of SQL, we are using the ? characters as placeholders. Then, the special magic provided to us by the SQLite3-Ruby gem's `#execute` method will take the values we pass in as an argument and apply them as the values of the question marks.
+
+So, our #save method inserts a record into our database that has the name and album values of the song instance we are trying to save. We are not saving the Ruby object itself. We are creating a new row in our songs table that has the values that characterize that song instance. Notice that **we didn't insert an ID number into the table** with the above statement. Remember that the `INTEGER PRIMARY KEY` datatype will assign and auto-increment the id attribute of each record that gets saved.
+
+**CREATING INSTANCES VS TABLE ROWS**
+The moment in which we create a new Song instance with the #new method is different than the moment in which we save a representation of that song to our database.
+
+The #new method creates a new instance of the song class, a new Ruby object. The #save method takes the attributes that characterize a given song and saves them in a new row of the songs table in our database.
+
+At what point in time should we actually save a new record?
+We don't want to force our objects to be saved every time they are created, or make the creation of an object dependent upon/always coupled with saving a record to the database. So, we'll keep our #initialize and #save methods separate.
+```ruby
+Song.create_table
+hello = Song.new("Hello", "25")
+ninety_nine_problems = Song.new("99 Problems", "The Black Album")
+ 
+hello.save
+ninety_nine_problems.save
+```
+
+**PRIMARY KEY ID**
+The database table's row has a column for Name, Album and also ID. As each record gets inserted into the database, it is given an ID number automatically.
+In this way, our `hello` instance is stored in the database with the name and album that we gave it, plus an ID number that the database assigns to it.
+
+We want our `hello` instance to completely reflect the database row it is associated with so that we can retrieve it from the table later on with ease. So, once the new row with hello's data is inserted into the table, let's grab the ID of that newly inserted row and assign it to be the value of hello's id attribute.
+
+```ruby
+...
+  def save
+    sql = <<- SQL
+      INSERT INTO songs (name, album) 
+      VALUES (?, ?)
+    SQL
+ 
+    DB[:conn].execute(sql, self.name, self.album)
+ 
+    @id = DB[:conn].execute("SELECT last_insert_rowid() FROM songs")[0][0]
+  end
+```
+This approach still leaves a little to be desired, however. Here, we have to first create the new song and then save it, every time we want to create and save a song. This is repetitive and tedious. Any time we see the same code being used again and again, we think about abstracting that code into a method...
+
+**THE CREATE METHOD**
+This method will wrap the code we used above to create a new Song instance and save it. We use `keyword arguments` to pass a name and album into our #create method. 
+```ruby
+class Song
+...
+  def self.create(name:, album:)
+    song = Song.new(name, album)
+    song.save
+    song
+  end
+end
+```
+Notice that at the end of the method, we are returning the song instance that we instantiated. The return value of #create should always be the object that we created.
+```ruby
+song = Song.create(name: "Hello", album: "25")
+# => #<Song:0x007f94f2c28ee8 @id=1, @name="Hello", @album="25">
+ 
+song.name
+# => "Hello"
+ 
+song.album
+# => "25"
+```
+
 
