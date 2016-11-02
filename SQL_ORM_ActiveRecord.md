@@ -1385,5 +1385,137 @@ We can now drop into our console typing the terminal command `rake console` whic
 [1] pry(main)>
 ```
 
+### Mechanics of migrations
+Migrations are a convenient way for you to alter your database in a structured and organized manner.
+
+You could edit fragments of SQL by hand but you would then be responsible for telling other developers that they need to go and run them. You’d also have to keep track of which changes need to be run against the production machines next time you deploy.
+
+Migrations also allow you to describe these transformations using Ruby. The great thing about this is that it is database independent, you don't have to worry about a specific syntax for talking with the DB. For example, you could use SQLite3 during development, but Postgres in production.
+
+Another way to think of migrations is like version control for your database. By adding a new migration for each change you make to the database, you won't lose any data you don't want to, and you can easily revert changes.
+
+Executed migrations are tracked by ActiveRecord in your database, so they aren't used twice. Using the migrations system to apply the schema changes is easier than keeping track of the changes manually and executing them manually at the appropriate time.
+
+#### ActiveRecord migration methods: up, down, change
+Here we're creating a class called CreateArtists which inherits from ActiveRecord's `ActiveRecord::Migration` module.
+
+Within the class we have an up method to define what code to execute when the migration is run, and in the down method we define what code to execute when the migration is rolled back. Think of it like "do" and "undo."
+
+```
+# db/migrate/01_create_artists.rb
+ 
+class CreateArtists < ActiveRecord::Migration
+  def up
+  end
+ 
+  def down
+  end
+end
+```
+
+Another method is available to use besides up and down: change, which is more common for basic migrations. Which is just short for "do this", and then "undo it" on rollback.
+```ruby
+# db/migrate/01_create_artists.rb
+ 
+class CreateArtists < ActiveRecord::Migration
+  def change
+  end
+end
+```
+
+##### Creating a table
+Using SQL with ActiveRecord this is how we'd create a table
+```ruby
+# in config/environment.rb we connect to a database
+connection = ActiveRecord::Base.establish_connection(
+  :adapter => "sqlite3",
+  :database => "db/songs.sqlite"
+)
+
+# in artist.rb we create our table using SQL
+sql = <<-SQL
+  CREATE TABLE IF NOT EXISTS songs (
+  id INTEGER PRIMARY KEY,
+  title TEXT,
+  length INTEGER
+  )
+SQL
+
+ActiveRecord::Base.connection.execute(sql)
+```
+
+Now that we have access to `ActiveRecord::Migration`, we can create tables using only Ruby. Here we've added the `create_table` method, and passed the name of the table we want to create as a symbol. Pretty simple, right? Other methods we can use here are things like `remove_table`, `rename_table`, `remove_column`, `add_column` and others. See this [list](http://edgeguides.rubyonrails.org/active_record_migrations.html#writing-a-migration) for more.
+```ruby
+# db/migrate/01_create_artists.rb
+def change
+  create_table :artists do |t|
+    t.string :title
+    t.integer :length
+  end
+end
+```
+On the left we've given the data type we'd like to cast the column as, and on the right we've given the name we'd like to give the column. The only thing that we're missing is the primary key. `ActiveRecord` will generate that column for us, and for each row added, a key will be autoincremented.
+
+To run the migrations, the simplest way is to use a `raketask` given by the `activerecord gem`. Run `rake -T` to see the list of commands we have. The way in which we get these commands as raketasks is through `require 'sinatra/activerecord/rake'`.
+Let's run `rake db:migrate`.
+
+Note our `Artist` class needs to inherit from the `ActiveRecord::Base`. Then we can use the following methods.
+```
+Artist.column_names
+#=> [:id, :name, :genre, :age, :hometown]
+
+a = Artist.new(name: 'Jon')
+#=> #<Artist id: nil, name: "Jon", genre: nil, age: nil, hometown: nil>
+
+a.age = 30
+#=> 30
+
+a.save
+#=> true
+
+a.destroy
+=> #<Artist id: 1, name: "Jon", genre: nil, age: nil, hometown: nil>
+
+Artist.create(name: 'Kelly')
+#=> #<Artist id: 2, name: "Kelly", genre: nil, age: nil, hometown: nil>
+
+Artist.all
+#=> [#<Artist id: 1, name: "Jon", genre: nil, age: 30, hometown: nil>,
+ #<Artist id: 2, name: "Kelly", genre: nil, age: nil, hometown: nil>]
+ 
+Artist.find_by(name: 'Jon')
+#=> #<Artist id: 1, name: "Jon", genre: nil, age: 30, hometown: nil>
+```
+The list of [CRUD](http://guides.rubyonrails.org/active_record_basics.html#crud-reading-and-writing-data) methods is longer than that!
+
+##### Manipulating existing tables
+Let's add a gender column to our artists table. Remember that ActiveRecord keeps track of what migrations we've already run, so adding it to our 01_create_artists.rb won't work because it won't get executed when we run our migrations again, unless we drop our entire table before rerunning the migration. But that isn't best practices, especially with a production database.
+
+To make this change we're going to need a new migration, which we'll call `02_add_gender_to_artists.rb`.
+```
+# db/migrate/02_add_gender_to_artists.rb
+ 
+class AddGenderToArtists < ActiveRecord::Migration
+  def change
+    add_column :artists, :gender, :string
+  end
+end
+```
+We basically just told ActiveRecord to add a column to the artists table, call it gender, and it's going to be a string.
+
+Notice how we incremented the number in the file name there? Imagine for a minute that you deleted your original database and wanted to execute the migrations again. ActiveRecord is going to execute each file, but it has to do so in some order and it happens to do that in alpha-numerical order. If we didn't have the numbers, our add_column migration would have tried to run first ('a' comes before 'c') and our artists table wouldn't have even been created yet!
+
+In reality our two-digit system is very rudimentary. As you'll see later on, frameworks like rails have generators that create migrations with very accurate timestamps so you'll never have that problem.
+
+
+We can run the migration with rake `db:migrate` and check everything is fine in the console by typing `rake console`. 
+
+In case we need to rollback the migration we can use `rake db:rollback`.
+
+
+
+
+
+
 
 
