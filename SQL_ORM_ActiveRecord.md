@@ -1401,7 +1401,7 @@ Here we're creating a class called CreateArtists which inherits from ActiveRecor
 
 Within the class we have an up method to define what code to execute when the migration is run, and in the down method we define what code to execute when the migration is rolled back. Think of it like "do" and "undo."
 
-```
+```ruby
 # db/migrate/01_create_artists.rb
  
 class CreateArtists < ActiveRecord::Migration
@@ -1460,7 +1460,7 @@ To run the migrations, the simplest way is to use a `raketask` given by the `act
 Let's run `rake db:migrate`.
 
 Note our `Artist` class needs to inherit from the `ActiveRecord::Base`. Then we can use the following methods.
-```
+```ruby
 Artist.column_names
 #=> [:id, :name, :genre, :age, :hometown]
 
@@ -1492,7 +1492,7 @@ The list of [CRUD](http://guides.rubyonrails.org/active_record_basics.html#crud-
 Let's add a gender column to our artists table. Remember that ActiveRecord keeps track of what migrations we've already run, so adding it to our 01_create_artists.rb won't work because it won't get executed when we run our migrations again, unless we drop our entire table before rerunning the migration. But that isn't best practices, especially with a production database.
 
 To make this change we're going to need a new migration, which we'll call `02_add_gender_to_artists.rb`.
-```
+```ruby
 # db/migrate/02_add_gender_to_artists.rb
  
 class AddGenderToArtists < ActiveRecord::Migration
@@ -1506,7 +1506,6 @@ We basically just told ActiveRecord to add a column to the artists table, call i
 Notice how we incremented the number in the file name there? Imagine for a minute that you deleted your original database and wanted to execute the migrations again. ActiveRecord is going to execute each file, but it has to do so in some order and it happens to do that in alpha-numerical order. If we didn't have the numbers, our add_column migration would have tried to run first ('a' comes before 'c') and our artists table wouldn't have even been created yet!
 
 In reality our two-digit system is very rudimentary. As you'll see later on, frameworks like rails have generators that create migrations with very accurate timestamps so you'll never have that problem.
-
 
 We can run the migration with rake `db:migrate` and check everything is fine in the console by typing `rake console`. 
 
