@@ -1259,13 +1259,131 @@ student.name = 'Steve'
 student.save
 ```
 
+## Rake
+Rake is a tool that is available to us in Ruby that allows us to automate certain jobs––anything from execute SQL to `puts`-ing out a friendly message to the terminal.
 
+### Intro to Rake
+Rake allows us to define something called "Rake tasks" that execute these jobs. Once we define a task, that task can be executed from the command line.
 
+Every program has some jobs that must be executed now and then. For example, the task of creating a database table, the task of making or maintaining certain files. Rake provides us a standard, conventional way to define and execute such tasks using Ruby: it is the task management tool for Ruby.
 
+Before Rake was invented, we would have to write scripts that accomplish these tasks in `BASH`, or we would have to make potentially confusing and arbitrary decisions about what segment of our Ruby program would be responsible for executing these tasks. Writing scripts in BASH is tough, and BASH just isn't as powerful as Ruby. On the other hand, for each developer to make his or her own decisions about where to define and execute certain common tasks related to databases or file maintenance is confusing.
 
+In fact, the `C` community was the first to implement the pattern of writing all their recurring system maintenance tasks in a separate file. They called this file the `MakeFile` because it was generally used to gather all of the source files and make it into one compiled executable file.
 
+Building a Rake task is easy, since Rake is already available to us as a part of Ruby. All we need to do is create a file in the top level of our directory called Rakefile. We define tasks with task + name of task as a symbol + a block that contains the code we want to execute.
+```ruby
+task :hello do
+  puts "hello from Rake!"
+end
+```
+Now we can type in our terminal `rake hello` and it will output in the terminal
+```
+hello from Rake!
+```
 
+Rake comes with a handy command, `rake -T`, that we can run in the terminal to view a list of available Rake tasks and their descriptions. In order for `rake -T` to work though, we need to give our Rake tasks descriptions.
+```ruby
+desc 'outputs hello to the terminal'
+task :hello do 
+  puts "hello from Rake!"
+end
+```
 
+Now, if we run rake -T in the terminal, we should see the following:
+```
+rake hello       # outputs hello to the terminal
+```
+
+A namespace is really just a way to group or contain something, in this case our Rake tasks. So, we might namespace a series of greeting Rake tasks, like `hello`, above, and `hola` under the greeting heading.
+```ruby
+namespace :greeting do 
+desc 'outputs hello to the terminal'
+  task :hello do 
+    puts "hello from Rake!"
+  end
+ 
+  desc 'outputs hola to the terminal'
+  task :hola do 
+    puts "hola de Rake!"
+  end
+end
+```
+
+Now to use either of our Rake tasks, we can type either
+```
+rake greeting:hello
+hello from Rake!
+ 
+# OR 
+rake greeting:hola
+hola de Rake!
+```
+
+### Common rake tasks
+As we move towards developing Sinatra and Rails web applications, you'll begin to use some common Rake tasks that handle the certain database-related jobs.
+
+#### Rake db:migrate
+One common pattern you'll soon become familiar with is the pattern of writing code that creates database tables and then "migrating" that code using a rake task.
+
+Our `Student` class currently has a `#create_table` method, so let's use that method to build out our own `migrate` Rake task. We'll namespace this task under the `db` heading. This namespace will contain a few common database-related tasks. We'll call this task migrate, because it is a convention to say we are "migrating" our database by applying SQL statements that alter that database.
+
+```ruby
+desc 'migrate changes to your database' 
+namespace :db do 
+  task :migrate => :environment do 
+    Student.create_table
+  end
+end
+```
+
+`:migrate => :environment` creates a *task dependency*. Since our `Student.create_table` code would require access to the `config/environment.rb` file (which is where the student class and database are loaded), we need to give our task access to this file. We can do so by defining yet another Rake task that we can tell to run before the migrate task is run.
+```ruby
+# in Rakefile
+ 
+task :environment do
+  require_relative './config/environment'
+end
+```
+
+#### Rake db:seed
+Another task you will become familiar with is the `seed` task. This task is responsible for "seeding" our database with some dummy data.
+```ruby
+desc 'seed the database with some dummy data'
+namespace :db do
+  ...
+  task :seed do 
+    require_relative './db/seeds.rb'
+  end
+end
+```
+The conventional way to seed your database is to have a file in the `db` directory, `db/seeds.rb`, that contains some code to create instances of your class.
+
+```ruby
+# in db/seeds.rb
+
+require_relative "../lib/student.rb"
+ 
+Student.create(name: "Melissa", grade: "10th")
+Student.create(name: "April", grade: "10th")
+Student.create(name: "Luke", grade: "9th")
+Student.create(name: "Devon", grade: "11th")
+Student.create(name: "Sarah", grade: "10th")
+```
+Now, if we run `rake db:seed` in our terminal (provided we have already run `rake db:migrate` to create the database table), we will insert five records into the database.
+
+#### Rake console
+We'll define a task that starts up the `Pry` console. We'll make this task dependent on our `environment` task so that the Student class and the database connection load first.
+```ruby
+desc 'drop into the Pry console'
+task :console => :environment do
+  Pry.start 
+end
+```
+We can now drop into our console typing the terminal command `rake console` which would bring up the following in the terminal
+```
+[1] pry(main)>
+```
 
 
 
