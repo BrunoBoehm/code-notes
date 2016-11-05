@@ -1216,6 +1216,7 @@ class Student < ActiveRecord::Base
 end
 ```
 Note that our `Student` class doesn't have any methods defined for `#name` either. Nor does it make use of Ruby's built-in `attr_accessor` method.
+Check out the complete list of [querying methods](http://guides.rubyonrails.org/active_record_querying.html#calculations)
 
 Retrieve a list of all the columns in the table
 ```ruby
@@ -1232,12 +1233,133 @@ Student.create(name: 'Jon')
 Retrieve a `Student` from the database by `id`
 ```ruby
 Student.find(1)
+# SELECT * FROM students WHERE (students.id = 1) LIMIT 1
+
+Student.find([1, 10])
+Student.find(1, 10)
+# SELECT * FROM clients WHERE (clients.id IN (1, 10))
+# will return id = 1 and id = 10
+```
+
+Take the first one
+```ruby
+client = Client.take
+# => #<Client id: 1, first_name: "Lifo">
+# SELECT * FROM clients LIMIT 1
+
+client = Client.take(2)
+# => [
+#   #<Client id: 1, first_name: "Lifo">,
+#   #<Client id: 220, first_name: "Sara">
+# ]
+# SELECT * FROM clients LIMIT 2
+```
+
+To find the first record ordered by primary key
+```ruby
+client = Client.first
+# => #<Client id: 1, first_name: "Lifo">
+# SELECT * FROM clients ORDER BY clients.id ASC LIMIT 1 
+
+client = Client.first(3)
+# => [
+#   #<Client id: 1, first_name: "Lifo">,
+#   #<Client id: 2, first_name: "Fifo">,
+#   #<Client id: 3, first_name: "Filo">
+# ]
+# SELECT * FROM clients ORDER BY clients.id ASC LIMIT 3
+
+client = Client.order(:first_name).first
+# => #<Client id: 2, first_name: "Fifo">
+# SELECT * FROM clients ORDER BY clients.first_name ASC LIMIT 1
+```
+
+Or to take the last element
+```ruby
+client = Client.last
+# => #<Client id: 221, first_name: "Russel">
+# SELECT * FROM clients ORDER BY clients.id DESC LIMIT 1
+
+client = Client.last(3)
+# => [
+#   #<Client id: 219, first_name: "James">,
+#   #<Client id: 220, first_name: "Sara">,
+#   #<Client id: 221, first_name: "Russel">
+# ]
+# SELECT * FROM clients ORDER BY id DESC LIMIT 3
+
+client = Client.order(:first_name).last
+# => #<Client id: 220, first_name: "Sara">
+# SELECT * FROM clients ORDER BY clients.first_name DESC LIMIT 1
+```
+
+Order the elements
+```ruby
+Client.order(:created_at)
+# OR
+Client.order("created_at")
+
+Client.order(created_at: :desc)
+# OR
+Client.order(created_at: :asc)
+# OR
+Client.order("created_at DESC")
+# OR
+Client.order("created_at ASC")
+
+Client.order(orders_count: :asc, created_at: :desc)
+# OR
+Client.order(:orders_count, created_at: :desc)
+# OR
+Client.order("orders_count ASC, created_at DESC")
+# OR
+Client.order("orders_count ASC", "created_at DESC")
+
+Client.order("orders_count ASC").order("created_at DESC")
+# SELECT * FROM clients ORDER BY orders_count ASC, created_at DESC
+```
+
+Selecting Specific fields
+```ruby
+Client.select("viewable_by, locked")
+# SELECT viewable_by, locked FROM clients
+```
+Be careful because this also means you're initializing a model object with only the fields that you've selected.
+
+To only return disting records/single record per unique value in a certain field:
+```ruby
+Client.select(:name).distinct
+# SELECT DISTINCT name FROM clients
+
+query = Client.select(:name).distinct
+# => Returns unique names
+ 
+query.distinct(false)
+# => Returns all names, even if there are duplicates
+```
+
+To put limits and offsets
+```ruby
+Client.limit(5)
+# SELECT * FROM clients LIMIT 5
+
+# will return instead a maximum of 5 clients beginning with the 31st
+Client.limit(5).offset(30)
+# SELECT * FROM clients LIMIT 5 OFFSET 30
 ```
 
 Find by any attribute, such as `name`
 ```ruby
 Student.find_by(name: 'Jon')
 # SELECT * FROM artists WHERE (name = 'Jon') LIMIT 1
+
+Client.find_by first_name: 'Lifo'
+# => #<Client id: 1, first_name: "Lifo">
+
+# is equivalent to
+Client.where(first_name: 'Lifo').take
+Client.where('first_name' => 'Lifo').take
+# SELECT * FROM clients WHERE (first_name = "Lifo") LIMIT 1
 ```
 
 You can get or set attributes of an instance of `Student` once you've retrieved it
@@ -1257,6 +1379,78 @@ And then save those changes to the database
 student = Student.find_by(name: 'Jon')
 student.name = 'Steve'
 student.save
+```
+
+Retrieving multiple objects in a large database can be very memory-consuming
+```ruby
+# This is very inefficient when the users table has thousands of rows.
+User.all.each do |user|
+  NewsMailer.weekly(user).deliver_now
+end
+```
+User.all.each instructs Active Record to fetch the entire table in a single pass, build a model object per row, and then keep the entire array of model objects in memory. Indeed, if we have a large number of records, the entire collection may exceed the amount of memory available.
+Rails provides two methods that address this problem by dividing records into memory-friendly batches for processing. The first method, find_each, retrieves a batch of records and then yields each record to the block individually as a model. The second method, find_in_batches, retrieves a batch of records and then yields the entire batch to the block as an array of models.
+The find_each and find_in_batches methods are intended for use in the batch processing of a large number of records that wouldn't fit in memory all at once. If you just need to loop over a thousand records the regular find methods are the preferred option.
+```ruby
+User.find_each do |user|
+  NewsMailer.weekly(user).deliver_now
+end
+
+# to add conditions
+User.where(weekly_subscriber: true).find_each do |user|
+  NewsMailer.weekly(user).deliver_now
+end
+
+User.find_each(batch_size: 5000) do |user|
+  NewsMailer.weekly(user).deliver_now
+end
+
+User.find_each(start: 2000, batch_size: 5000) do |user|
+  NewsMailer.weekly(user).deliver_now
+end
+
+User.find_each(start: 2000, finish: 10000, batch_size: 5000) do |user|
+  NewsMailer.weekly(user).deliver_now
+end
+
+# Give add_invoices an array of 1000 invoices at a time
+Invoice.find_in_batches do |invoices|
+  export.add_invoices(invoices)
+end
+```
+
+With conditions
+```ruby
+Client.where("orders_count = ? AND locked = ?", params[:orders], false)
+
+Client.where("orders_count = ?", params[:orders])
+# is preferable to
+Client.where("orders_count = #{params[:orders]}")
+```
+because of argument safety. Putting the variable directly into the conditions string will pass the variable to the database as-is. This means that it will be an unescaped variable directly from a user who may have malicious intent. If you do this, you put your entire database at risk because once a user finds out they can exploit your database they can do just about anything to it. Never ever put your arguments directly inside the conditions string.
+
+Similar to the (?) replacement style of params, you can also specify keys in your conditions string along with a corresponding keys/values hash. This makes for clearer readability if you have a large number of variable conditions.
+```ruby
+Client.where("created_at >= :start_date AND created_at <= :end_date",
+  {start_date: params[:start_date], end_date: params[:end_date]})
+```
+
+To group elements
+```ruby
+Order.select("date(created_at) as ordered_date, sum(price) as total_price").group("date(created_at)")
+
+# SELECT date(created_at) as ordered_date, sum(price) as total_price
+# FROM orders
+# GROUP BY date(created_at)
+```
+
+To get the total of grouped items
+```ruby
+Order.group(:status).count
+# => { 'awaiting_approval' => 7, 'paid' => 12 }
+# SELECT COUNT (*) AS count_all, status AS status
+# FROM "orders"
+# GROUP BY status
 ```
 
 ## Rake
@@ -1344,6 +1538,35 @@ end
 task :environment do
   require_relative './config/environment'
 end
+```
+
+Or you can use a more inclusive version without any dependency
+```ruby
+require_relative 'config/environment.rb'
+
+namespace :db do
+
+  desc "Migrate the db"
+  task :migrate do
+    connection_details = YAML::load(File.open('config/database.yml'))
+    ActiveRecord::Base.establish_connection(connection_details)
+    ActiveRecord::Migrator.migrate("db/migrate/")
+  end
+
+  desc "drop and recreate the db"
+  task :reset => [:drop, :migrate]
+
+  desc "drop the db"
+  task :drop do
+    connection_details = YAML::load(File.open('config/database.yml'))
+    File.delete(connection_details.fetch('database')) if File.exist?(connection_details.fetch('database'))
+  end
+end
+```
+Note that the yaml file in `config/database.yml` should be required in the `config/enviroment.rb` file with `require 'yaml'`, and the file just contains
+```ruby
+adapter: 'sqlite3'
+database: 'db/tvshows.db'
 ```
 
 #### Rake db:seed
@@ -1444,15 +1667,25 @@ SQL
 ActiveRecord::Base.connection.execute(sql)
 ```
 
-Now that we have access to `ActiveRecord::Migration`, we can create tables using only Ruby. Here we've added the `create_table` method, and passed the name of the table we want to create as a symbol. Pretty simple, right? Other methods we can use here are things like `remove_table`, `rename_table`, `remove_column`, `add_column` and others. See this [list](http://edgeguides.rubyonrails.org/active_record_migrations.html#writing-a-migration) for more.
+Now that we have access to `ActiveRecord::Migration`, we can create tables using only Ruby. 
+
+To create the migration file we can use the following command
+```ruby
+rake db:create_migration NAME=create_artists
+```
+
+Here we've added the `create_table` method, and passed the name of the table we want to create as a symbol. Pretty simple, right? Other methods we can use here are things like `remove_table`, `rename_table`, `remove_column`, `add_column` and others. See this [list](http://edgeguides.rubyonrails.org/active_record_migrations.html#writing-a-migration) for more.
 ```ruby
 # db/migrate/01_create_artists.rb
-def change
-  create_table :artists do |t|
-    t.string :title
-    t.integer :length
-  end
-end
+
+class CreateArtists < ActiveRecord::Migration
+    def change
+      create_table :artists do |t|
+        t.string :title
+        t.integer :length
+      end
+    end
+end    
 ```
 On the left we've given the data type we'd like to cast the column as, and on the right we've given the name we'd like to give the column. The only thing that we're missing is the primary key. `ActiveRecord` will generate that column for us, and for each row added, a key will be autoincremented.
 
@@ -1491,7 +1724,7 @@ The list of [CRUD](http://guides.rubyonrails.org/active_record_basics.html#crud-
 ##### Manipulating existing tables
 Let's add a gender column to our artists table. Remember that ActiveRecord keeps track of what migrations we've already run, so adding it to our 01_create_artists.rb won't work because it won't get executed when we run our migrations again, unless we drop our entire table before rerunning the migration. But that isn't best practices, especially with a production database.
 
-To make this change we're going to need a new migration, which we'll call `02_add_gender_to_artists.rb`.
+To make this change we're going to need a new migration, which we'll call `02_add_gender_to_artists.rb`. By convention, the `class` name should match the part of the file name after the number.
 ```ruby
 # db/migrate/02_add_gender_to_artists.rb
  
@@ -1502,6 +1735,7 @@ class AddGenderToArtists < ActiveRecord::Migration
 end
 ```
 We basically just told ActiveRecord to add a column to the artists table, call it gender, and it's going to be a string.
+Note that `add_column :artists, :gender, :string` is the same as `add_column(:artists, :gender, :string)`
 
 Notice how we incremented the number in the file name there? Imagine for a minute that you deleted your original database and wanted to execute the migrations again. ActiveRecord is going to execute each file, but it has to do so in some order and it happens to do that in alpha-numerical order. If we didn't have the numbers, our add_column migration would have tried to run first ('a' comes before 'c') and our artists table wouldn't have even been created yet!
 
@@ -1511,9 +1745,363 @@ We can run the migration with rake `db:migrate` and check everything is fine in 
 
 In case we need to rollback the migration we can use `rake db:rollback`.
 
+To change the type of a column we can also type:
+```ruby
+class ChangeDatatypeForGender < ActiveRecord::Migration
+  def change
+    change_column :artists, :gender, :integer
+  end
+end
+```
 
+##### ActiveRecord CRUD methods
+A few examples of [methods](http://guides.rubyonrails.org/active_record_querying.html)
+```ruby
+def can_be_instantiated_and_then_saved
+  movie = Movie.new
+  movie.title = "This is a title."
+  movie.save
+end
 
+def can_be_created_with_a_hash_of_attributes
+  attributes = {
+      title: "The Sting",
+      release_date: 1973,
+      director: "George Roy Hill",
+      lead: "Paul Newman",
+      in_theaters: false
+  }
+  movie = Movie.create(attributes)
+end
 
+def can_be_created_in_a_block
+  movie = Movie.create do |m|
+    m.title = "Home Alone"
+    m.release_date = 1990
+  end
+end
+
+def can_get_the_first_item_in_the_database
+  Movie.first.title
+end
+
+def can_get_the_last_item_in_the_database
+  Movie.last.title
+end
+
+def can_get_size_of_the_database
+  Movie.all.size
+end
+
+def can_find_the_first_item_from_the_database_using_id
+  Movie.find(1).title
+end
+
+def can_find_by_multiple_attributes
+  # title == "Title"
+  # release_date == 2000, 
+  # director == "Me"
+  Movie.find_by(title: "Title", release_date: 2000)
+end
+
+def can_find_using_where_clause
+  # For this test return all movies released after 2002 and ordered by 
+  # release date descending
+  Movie.where("release_date > 2002").order(release_date: :desc)
+end
+
+def can_be_found_updated_and_saved
+  # Updtate the title "Awesome Flick" to "Even Awesomer Flick"
+  Movie.create(title: "Awesome Flick")
+  movie = Movie.find_by(title: "Awesome Flick")
+  movie.title = "Even Awesomer Flick"
+  movie.save
+end
+
+def can_update_using_update_method
+  # Update movie title to "Wat, huh?"
+  Movie.create(title: "Wat?")
+  movie = Movie.find_by(title: "Wat?")
+  movie.update(title: "Wat, huh?")
+end
+
+def can_update_multiple_items_at_once
+  # Change title of all movies to "A Movie"
+  5.times do |i|
+    Movie.create(title: "Movie_#{i}", release_date: 2000+i)
+  end
+  Movie.update_all(title: "A Movie")
+end
+
+def can_destroy_a_single_item
+  Movie.create(title: "That One Where the Guy Kicks Another Guy Once")
+  movie = Movie.find_by(title: "That One Where the Guy Kicks Another Guy Once")
+  movie.destroy
+end
+
+def can_destroy_all_items_at_once
+  10.times do |i|
+    Movie.create(title: "Movie_#{i}")
+  end
+  Movie.destroy_all
+end
+```
+
+### Architecture
+ActiveRecord is magic. Well, not really. But it does build out a bunch of methods for you in only a few lines of code. For instance, when it's used properly it will give you access to methods such as `create`, `save`, and `find_by`. Rejoice! Never again will you have to manually build out these methods!
+
+You will only be altering code in six files, the three files in the `models` folder and the three files in the `db/migrations` folder.
+```ruby
+├── app
+│   └── models
+│       ├── costume.rb
+│       ├── costume_store.rb
+│       └── haunted_house.rb
+└──db
+    └── migrations
+        ├── 001_create_costumes.rb
+        ├── 002_create_costume_stores.rb
+        └── 003_create_haunted_houses.rb
+```
+
+ActiveRecord allows you to create a `database` that interacts with your `class` with only a few lines of code. These lines of code go to creating a `model`, which resides in the `app/models` folder, and a `migration`, which resides in the `db/migrations` folder.
+
+The model inherits from `ActiveRecord::Base` while the migration inherits from `ActiveRecord::Migration`. Many migrations these days have a change method, but you might also see migrations with an up and a down method instead. 
+
+#### Migrations
+To use ActiveRecord, you have to stick to some specific naming conventions: while the migrations are plural, the models are singular.
+The `class` names in the migration files must match their file names. For instance, a class in the migration file called `20141013204115_create_candies.rb` must be named `CreateCandies`.
+```ruby
+class CreateDogs < ActiveRecord::Migration
+  def change
+    create_table :dogs do |t|
+      t.string :name
+      t.string :breed
+      t.timestamps
+    end
+  end
+end
+```
+You might notice that in both the examples above, the numbers at the front of the file name were ignored. These numbers are in the form YYYYMMDDHHMMSS. Later on, these timestamps will become important as Rails uses them to determine which migration should be run and in what order.
+
+`t.timestamps` creates two new columns, created_at and updated_at. These are handy columns to have around as sometimes you want to query based on the time of creation or update-tion instead of querying using attributes or ids.
+
+Data types for migrations
+Data type | Examples
+----- | -----
+boolean | true, false
+integer | 2, -13, 485
+string | "Halloween", "Boo!", strings betweeen 1-255 characters
+datetime | DateTime.now, DateTime.new(2014,10,31)
+float | 	2.234, 32.2124, -6.342
+text | strings between 1 and 2 ^ 32 - 1 characters
+
+After the migration file is ready you can run `rake db:migrate`.
+
+#### Models
+Like migrations, models also inherit, but they inherit from `ActiveRecord::Base`. A simple model would look like this:
+```ruby
+class Dog < ActiveRecord::Base
+end
+```
+Notice that you had access to reader and writer methods that cooperated with the database that you never had to actually code. This Dog model would work with the created dogs table above and you would be able to call name, breed, and id on any new instance of the Dog class.
+
+### Advanced Finder Methods
+Active Record makes it easy to ask our database for certain information and datasets by providing a bunch of built-in methods for us.
+
+For example, we can request the sum of all of the values of a particular column with the #sum method:
+```ruby
+<class name>.sum(:<column_name>)
+
+Song.sum(:duration)
+```
+
+We can query our database based on certain conditions using the #where method. Let's say we have a Song class and table and each song has a number_of_stars rating attribute. We could query for songs with more than 3 stars like this:
+```ruby
+Song.where("number_of_stars > ?", 3)
+
+Song.where("number_of_stars > ?", 3).limit(4)
+
+Song.minimum(:number_of_stars)
+Song.minimum("number_of_stars")
+```
+Let's use a few other methods
+```ruby
+class Show < ActiveRecord::Base
+  def self.highest_rating
+    self.maximum(:rating)
+  end
+
+  def self.most_popular_show
+    self.where("rating = ?", self.highest_rating).first
+  end
+
+  def self.lowest_rating
+    self.minimum("rating")
+  end
+
+  def self.least_popular_show
+    self.where("rating = ?", self.lowest_rating).first
+    # self.where("rating = ?", lowest_rating).take
+    # self.where(rating: self.lowest_rating)[0]
+  end
+
+  def self.ratings_sum
+    self.sum(:rating)
+  end
+
+  def popular_shows
+    self.where("rating > ?", 5)
+    # self.where("rating > 5")
+  end
+
+  def shows_by_alphabetical_order
+    self.order(:name)
+    # self.all.order("name ASC")
+  end
+end
+```
+
+### ActiveRecord Associations
+We already know that we can build our classes such that they associate to one another. We also know that it takes a lot of code to do it. Active Record associations allow us to associate models and their analogous database tables without having to write tons of code.
+
+Active Record makes it easy to implement the following relationships between models:
+- belongs_to
+- has_one
+- has_many
+- has_many :through
+- has_one :through
+- has_and_belongs_to_many
+
+In order to implement these relationships we will need to do two things:
+1. Write a migration that creates tables with associations. For example, if a cat belongs to an owner, the cats table should have an owner_id column.
+2. Use Active Record macros in the models.
+
+##### Migrations
+The different models
+A `song` will belong to an artist and belong to a genre.
+id | name | artist_id | genre_id
+----- | ----- | ----- | -----
+2 | Shake It Off | 1 | 1
+These foreign keys, in conjunction with the ActiveRecord association macros will allow us query to get an artist's songs or genres, a song's artist or genre, and a genre's songs and artists entirely through ActiveRecord provided methods on our classes.
+```ruby
+class CreateSongs < ActiveRecord::Migration
+  def change
+    create_table :songs do |t|
+      t.string :name 
+      t.integer :artist_id
+      t.integer :genre_id
+    end
+  end
+end
+```
+`through` is the one table with the more elements, because `Genre` has many artists `through` songs, and `Artist`has many genre `through` songs. 
+
+An `artist` will have many songs and it will have many genres through songs. The table songs is the JOIN table. That means that songs has both an artist_id and a genre_id to combine those two tables together in a many to many relationship.
+id | name
+----- | -----
+1 | Taylor Swift
+Our artists table just needs a name column.
+```ruby
+class CreateArtists < ActiveRecord::Migration
+  def change
+    create_table :artists do |t|
+      t.string :name
+    end
+  end
+end
+```
+
+A `genre` will have many songs and it will have many artists through songs.
+id | name
+----- | -----
+1 | pop
+Our genre table just needs a name column.
+```ruby
+class CreateGenres < ActiveRecord::Migration
+  def change
+    create_table :genres do |t|
+      t.string :name 
+    end
+  end
+end
+```
+We can now run rake `db:migrate`.
+
+##### AR Macros
+A macro is a method that writes code for us (think metaprogramming). By invoking a few methods that come with Active Record, we can implement all of these associations.
+We'll be using the following AR macros (or methods):
+- [has_many](http://guides.rubyonrails.org/association_basics.html#the-has-many-association)
+- [has_many through](http://guides.rubyonrails.org/association_basics.html#the-has-many-through-association)
+- [belongs_to](http://guides.rubyonrails.org/association_basics.html#the-belongs-to-association)
+
+```ruby
+class Song < ActiveRecord::Base
+  belongs_to :artist
+  belongs_to :genre
+end
+
+class Artist < ActiveRecord::Base
+  has_many :songs
+  has_many :genres, through: :songs
+end
+
+class Genre < ActiveRecord::Base
+  has_many :songs
+  has_many :artists, through: :songs
+end
+```
+
+The model that `has_many` is considered the parent. The model that `belongs_to` is considered the child. If you tell the child that it belongs to the parent, the parent won't know about that relationship. If you tell the parent that a certain child object has been added to its collection, both the parent and the child will know about the association.
+```
+rake console
+
+[1]pry(main)> hello = Song.new(name: "Hello")
+=> #<Song:0x007fc75a8de3d8 id: nil, name: "Hello", artist_id: nil, genre_id: nil>
+
+[2] pry(main)> adele = Artist.new(name: "Adele")
+=> #<Artist:0x007fc75b8d9490 id: nil, name: "Adele">
+
+[3] pry(main)> hello.artist = adele
+=> #<Artist:0x007fc75b8d9490 id: nil, name: "Adele">
+
+[4] pry(main)> hello.artist
+=> #<Artist:0x007fc75b8d9490 id: nil, name: "Adele">
+
+[5] pry(main)> hello.artist.name
+=> "Adele"
+
+# our parent doesn't know about his child
+[6] pry(main)> adele.songs
+=> []
+
+[7] pry(main)> rolling_in_the_deep = Song.new(name: "Rolling in the Deep")
+=> #<Song:0x007fc75bb4d1e0 id: nil, name: "Rolling in the Deep", artist_id: nil, genre_id: nil>
+
+# adele.songs returns an array of songs
+[8] pry(main)> adele.songs << rolling_in_the_deep
+=> [ #<Song:0x007fc75bb4d1e0 id: nil, name: "Rolling in the Deep", artist_id: nil, genre_id: nil>]
+
+# adding the song to the parent, the child knows about the relationship
+[9] pry(main)> rolling_in_the_deep.artist
+=> #<Artist:0x007fc75b8d9490 id: nil, name: "Adele">
+
+[10] pry(main)> pop = Genre.create(name: "pop")
+=> #<Genre:0x007fa34338d270 id: 1, name: "pop">
+
+# otherwise the parent wouldn't know about the child
+[11] pry(main)> pop.songs << rolling_in_the_deep
+=> [#<Song:0x007fc75bb4d1e0 id: nil, name: "Rolling in the Deep", artist_id: nil, genre_id: nil>]
+
+[12] pry(main)> pop.songs
+=> [#<Song:0x007fc75bb4d1e0 id: nil, name: "Rolling in the Deep", artist_id: nil, genre_id: nil>]
+
+[13] pry(main)> rolling_in_the_deep.genre
+=> #<Genre:0x007fa34338d270 id: 1, name: "pop">
+
+[14] pry(main)> pop.artists
+=> [#<Artist:0x007fa342e34dc8 id: 1, name: "Adele">]
+```
 
 
 
