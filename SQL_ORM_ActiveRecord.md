@@ -1453,6 +1453,134 @@ Order.group(:status).count
 # GROUP BY status
 ```
 
+### Eager Loading
+Eager loading is the mechanism for loading the associated records of the objects returned by Model.find using as few queries as possible.
+```ruby
+clients = Client.limit(10)
+ 
+clients.each do |client|
+  puts client.address.postcode
+end
+```
+This code looks fine at the first sight. But the problem lies within the total number of queries executed. The above code executes 1 (to find 10 clients) + 10 (one per each client to load the address) = 11 queries in total.
+
+Active Record lets you specify in advance all the associations that are going to be loaded. This is possible by specifying the `includes` method of the `Model.find` call. With `includes`, Active Record ensures that all of the specified associations are loaded using the minimum possible number of queries.
+```ruby
+clients = Client.includes(:address).limit(10)
+ 
+clients.each do |client|
+  puts client.address.postcode
+end
+
+# SELECT * FROM clients LIMIT 10
+# SELECT addresses.* FROM addresses
+# WHERE (addresses.client_id IN (1,2,3,4,5,6,7,8,9,10))
+```
+
+Active Record lets you eager load any number of associations with a single `Model.find` call by using an array, hash, or a nested hash of array/hash with the `includes` method.
+```ruby
+Article.includes(:category, :comments)
+```
+This loads all the articles and the associated category and comments for each article.
+```ruby
+Category.includes(articles: [{ comments: :guest }, :tags]).find(1)
+```
+This will find the category with id 1 and eager load all of the associated articles, the associated articles' tags and comments, and every comment's guest association.
+
+### Scopes
+Scoping allows you to specify commonly-used queries which can be referenced as method calls on the association objects or models.
+```ruby
+class Article < ApplicationRecord
+  scope :published, -> { where(published: true) }
+end
+
+# the same as defining a class method
+class Article < ApplicationRecord
+  def self.published
+    where(published: true)
+  end
+end
+
+Article.published 
+# => [published articles]
+```
+
+Using a class method is the preferred way to accept arguments for scopes. These methods will still be accessible on the association objects:
+```ruby
+class Article < ApplicationRecord
+  def self.created_before(time)
+    where("created_at < ?", time)
+  end
+end
+
+# or if you really want a scope
+class Article < ApplicationRecord
+  scope :created_before, ->(time) { where("created_at < ?", time) }
+end
+
+Article.created_before(Time.zone.now)
+```
+
+`pluck` can be used to query single or multiple columns from the underlying table of a model. It accepts a list of column names as argument and returns an array of values of the specified columns with the corresponding data type.
+```ruby
+Client.where(active: true).pluck(:id)
+# SELECT id FROM clients WHERE active = 1
+# => [1, 2, 3]
+ 
+Client.distinct.pluck(:role)
+# SELECT DISTINCT role FROM clients
+# => ['admin', 'member', 'guest']
+ 
+Client.pluck(:id, :name)
+# SELECT clients.id, clients.name FROM clients
+# => [[1, 'David'], [2, 'Jeremy'], [3, 'Jose']]
+```
+It enables to replace code like
+```ruby
+Client.select(:id).map { |c| c.id }
+# or
+Client.select(:id).map(&:id)
+# or
+Client.select(:id, :name).map { |c| [c.id, c.name] }
+```
+Unlike `select`, `pluck` directly converts a database result into a Ruby Array, without constructing ActiveRecord objects.
+
+ids can be used to pluck all the IDs for the relation using the table's primary key.
+```ruby
+Person.ids
+# SELECT id FROM people
+```
+
+If you simply want to check for the existence of the object there's a method called exists?. This method will query the database using the same query as find, but instead of returning an object or collection of objects it will return either true or false.
+```ruby
+Client.exists?(1)
+
+Client.exists?(id: [1,2,3])
+# or
+Client.exists?(name: ['John', 'Sergei'])
+
+#or even without argument
+Client.where(first_name: 'Ryan').exists?
+Client.exists?
+
+# you can also use any? and many? to check for existence on a model or relation
+# via a model
+Article.any?
+Article.many?
+ 
+# via a named scope
+Article.recent.any?
+Article.recent.many?
+ 
+# via a relation
+Article.where(published: true).any?
+Article.where(published: true).many?
+ 
+# via an association
+Article.first.categories.any?
+Article.first.categories.many?
+```
+
 ## Rake
 Rake is a tool that is available to us in Ruby that allows us to automate certain jobs––anything from execute SQL to `puts`-ing out a friendly message to the terminal.
 
