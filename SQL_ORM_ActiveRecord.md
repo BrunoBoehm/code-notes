@@ -1859,6 +1859,7 @@ To make this change we're going to need a new migration, which we'll call `02_ad
 class AddGenderToArtists < ActiveRecord::Migration
   def change
     add_column :artists, :gender, :string
+    add_column :artists, :voice, :string
   end
 end
 ```
@@ -1878,6 +1879,15 @@ To change the type of a column we can also type:
 class ChangeDatatypeForGender < ActiveRecord::Migration
   def change
     change_column :artists, :gender, :integer
+  end
+end
+```
+
+To remove an existing column
+```ruby
+class RemoveGenderFromArtists < ActiveRecord::Migration
+  def change
+    remove_column :artists, :gender, :integer
   end
 end
 ```
@@ -2016,12 +2026,12 @@ You might notice that in both the examples above, the numbers at the front of th
 
 Data types for migrations
 Data type | Examples
------ | -----
+------- | ------
 boolean | true, false
 integer | 2, -13, 485
 string | "Halloween", "Boo!", strings betweeen 1-255 characters
 datetime | DateTime.now, DateTime.new(2014,10,31)
-float | 	2.234, 32.2124, -6.342
+float | 2.234, 32.2124, -6.342
 text | strings between 1 and 2 ^ 32 - 1 characters
 
 After the migration file is ready you can run `rake db:migrate`.
