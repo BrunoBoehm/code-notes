@@ -409,7 +409,7 @@ Here's a simple example
 </form>
 ```
 The `method` attribute tells the form what kind of request should be fired to the server when the submit button is clicked. In general, forms use `POST` request, because it is 'posting' data to the server.
-The `action` attribute tells the form what specific route the post request should be sent to. In this case, we're posting to a route called /food.
+The `action` attribute tells the form what **specific route the post request should be sent to**. In this case, we're posting to a route called /food.
 Each form field `<input>` also must define a `name` attribute. The name attribute of an <input> defines how our application will identify each <input> data.
 
 If you create a text field input with <input type="text" name="favorite_food">, whenever the user submits that form, you will be able to access the data entered into the Favorite Foods text box via `params[:favorite_food]`.
@@ -435,17 +435,335 @@ end
 ```
 Make sure to use `''` and not `""` in the routes definition.
 
+You can have several type of inputs 
+```html
+<label for="POST-name">Name:</label>
+<input id="POST-name" type="text" name="name">
+
+<label for="POST-email">Email:</label>
+<input id="POST-email" type="email" name="email">
+
+<label for="POST-newsletter">Sign Me Up for the Newsletter!</label>
+<input id="POST-newsletter" type="checkbox" name="newsletter">
+
+<label for="POST-item1">Item1:</label>
+<select id="POST-item1" name="item[0][name]">
+    <option value="bigfoot">Bigfoot the Holiday Yeti Holiday Ornament</option>
+    <option value="guineapig">Santa Guinea Pig Outfit</option>
+    <option value="beardski">Bearded Ski Masks</option>
+    <option value="inflatable">Inflatable Santa Suit</option>
+    <option value="uglyhan">Ugly Hanukkah Sweater</option>
+    <option value="donut">Donut Behind Glass</option>
+    <option value="pizza">Pizza Slice-Shaped Bean Bag Chair</option>
+</select>
+
+<label for="POST-item1_quant">Quantity:</label>
+<select id="POST-item1_quant" name="item[0][quant]">
+    <option value="0">0</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+</select>
+
+<label for="POST-item">I will bring:</label>
+<input type="radio" id="wine" name="item" value="Wine">Wine</input>
+<input type="radio" id="cheese" name="item" value="Cheese">Cheese</input>
+<input type="radio" id="crackers"  name="item"value="Crackers">Crackers</input>
+
+<button type="submit" value="RSVP">RSVP</button>
+```
+
 ## Passing Data between views and controllers
 Why is passing data back to views from your controller so important? It allows us to make your pages dynamic rather than static - that is, the data can change depending on the inputs provided by the user.
 
+Instance variables allow us to bypass scope between the various methods in a class. Creating an instance variable **in a controller method** (route) lets the contents become 'visible' to the erb file to which it renders. Instance variables are ONLY passed from the controller method where they are created to the view that is rendered, not between controller methods.
 
+```ruby
+post '/reverse' do
+    original_string = params["string"]
+    @reversed_string = original_string.reverse
+    erb :reversed
+end
+```
+In order to show the content of a Ruby string, we need to use erb tags.
+```html
+<!DOCTYPE html>
+<html>
+ <head>
+  <meta charset="UTF-8">
+  <title>title</title>
+  <link rel="stylesheet" href="stylesheets/style.css" type="text/css">
+ </head>
+ <body>
+  <h1> Your Reversed String!</h1>
+    <h2><%= @reversed_string %></h2>
+ </body>
+</html>
+```
 
+## Layouts and Yield
+If you look at pretty much every website, you'll notice that there are things that exist across all of the site's pages. Typically, the navigation bar and the footer content stay the same. There may also be menu options that stay consistent across all pages.
 
+You could copy and paste the HTML and ERB for nav bar and make sure that code is in every single erb file, but that isn't at all DRY.
 
+In order to not repeat ourselves, we can create a single file, `layout.erb`, that contains all of the code we want to exist on every single web page.
+In layout.erb, we need to add a yield wherever we want the other page content to be loaded:
+```html
+<!doctype html>
+<html>
+  <head>
+    <title>Cats</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+  </head>
+  <body>
+ 
+    <div class="container">
+      <h1>I love cats</h1>
+      <img src="https://s3.amazonaws.com/after-school-assets/cat-typing.gif">
+      <%= yield %>
+    </div>
+    
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+  </body>
+</html>
+```
+We have a controller action
+```ruby
+get '/' do
+    erb :index
+end
+```
+When the above controller action is triggered and the erb method is called, it looks to see if there is a view titled `layout.erb`. If that file exists, it loads that content around the desired erb file, in this case `index.erb`.
+```html
+<h2>This cat...<h2>
+<img src="https://s3.amazonaws.com/after-school-assets/cat.gif">
+```
 
+## Integrating models for a Full MVC
+So far, we've applied logic to data provided by the user directly in our application controller. While this works, it does not follow the principle of **'separation of concerns' - our files should do one thing and one thing only**. In this code-along lesson, we'll learn how to move the logic to a model in a Sinatra application.
 
+We're going to create a web application that analyzes a block of text from the user - showing the number of words, most common letters, and least common letters to us.
 
+We'll use input from a form to create an instance of a model, and then send that instance back to a view to be displayed to the user.
 
+We could analyze all of the data from `params[:user_text]` in our application controller, but our route would get messy very quickly. Instead, let's create a new `class` inside of our models directory that will take care of the analysis of the text. In your models directory, create a new file called `textanalyzer.rb`.
+```ruby
+class TextAnalyzer
+  attr_accessor :text
+ 
+  def initialize(text)
+    @text = text
+  end
+ 
+  def count_of_words
+    @text.split(" ").count
+  end
+ 
+  def count_of_vowels
+    @text.downcase.scan(/[aeoui]/).count
+  end
+ 
+  def count_of_consonants
+    @text.downcase.scan(/[bcdfghjklmnpqrstvwxyz]/).count
+  end
+ 
+def most_used_letter
+    all_letters_in_string = @text.downcase.gsub(/[^a-z]/, '').split('') #gets rid of spaces and turns it into an array
+    letters_to_compare = all_letters_in_string.uniq
+    most_used_letter = ""
+    letter_count = 0
+ 
+    letters_to_compare.map do |letter|
+      letter_repetitions = all_letters_in_string.count(letter)
+      if letter_repetitions > letter_count
+        letter_count = letter_repetitions
+        most_used_letter = letter
+      end
+    end
+    biggest = [most_used_letter, letter_count]
+  end
+ 
+end
+```
+The model above has an initializer which takes in a string text and saves it to an instance variable `@text`. This instance variable is then used in the four instance methods, which provide information on the block of text in question.
+
+In general our models are agnostic about the rest of our application - we could drop this class into a Command Line or Ruby on Rails app and it would function in the exact same way.
+
+```ruby
+# in app.rb
+
+post '/' do
+  @analyzed_text = TextAnalyzer.new(params[:user_text])
+  erb :results
+end
+```
+This responds to a form `<form method="post" action="/">`.
+
+In our `results.erb` file, use erb tags to display the data stored in the `@analyzed_text` variable.
+```html
+<h1> Your Text Analysis </h1>
+<h2>Number of Words: <%= @analyzed_text.count_of_words %></h2>
+<h2>Vowels: <%= @analyzed_text.count_of_vowels %></h2>
+<h2>Consonants: <%= @analyzed_text.count_of_consonants %></h2>
+<h2>Most Common Letter:<%= @analyzed_text.most_used_letter[0] %> used <%= @analyzed_text.most_used_letter[1] %> times</h2>
+```
+
+## Nested forms for Sinatra
+In web apps, **we use forms to create objects**. When you fill out a form for a dinner reservation on Open Table, you're creating a reservation object. When you upload a photo to Instagram, you're creating an image object.
+
+What if you wanted to use a form to create more than one object? This is where nested forms comes in.
+
+Imagine we need to create each student and their class schedule. It would be tedious to go through the steps to first create the student and then go through the same steps again and again to create each of that student's courses. Wouldn't it be nice to create the student and their courses in one go?
+
+To create these two different classes of objects, we need to create two models, `Student` and `Course`. It's important to **initialize the objects using hash arguments keys** (because this is how they will be passed).
+Note the `STUDENTS` variable can also be used as `@@students`.
+```ruby
+class Student
+  attr_reader :name, :grade
+  STUDENTS = []
+ 
+  def initialize(params)
+    @name = params[:name]
+    @grade = params[:grade]
+    STUDENTS << self
+  end
+ 
+  def self.all
+    STUDENTS
+  end
+end
+
+class Course
+  attr_reader :name, :topic
+  COURSES = []
+ 
+  def initialize(args)
+    @name = args[:name]
+    @topic = args[:topic]
+    COURSES << self
+  end
+ 
+  def self.all
+    COURSES
+  end
+end
+```
+Let's now create the form. Before we dive into the HTML, let's think about how we want to structure the data our controller action will receive. We need to think about structuring our params hash to have nested hashes.
+```ruby
+params = {
+  "student" => {
+        "name" => "Joe",
+        "grade" => "9",
+        "course" => {
+          "name" => "US History",
+          "topic" => "History"
+        }
+  }
+}
+```
+ERB handles that first level of nesting, so instead of having to do `my_hash["student"]={}` we can just go straight into the `student` hash. ERB assumes that the name of your top-level hash is the first key, so the code to call the value associated with the nested "name" key would be `student["name"]`.
+
+For the courses, we can use the ERB syntax to set up our form. We can ignore the first level of nesting, the `my_hash` portion, and just dive straight into student and course, turning `my_hash["student"]["course"]["name"]` (how we would normally build the hash in ruby) into `student[course][name]`.
+
+```html
+<form action="/student" method="post">
+  Student Name: <input type="text" name="student[name]">
+  Student Grade: <input type="text" name="student[grade]">
+  
+  Course Name: <input type="text" name="student[course][name]">
+  Course Topic: <input type="text" name="student[course][topic]">
+  
+  <input type="submit">
+</form>
+```
+
+But now, how do we handle two (or more!) courses? . To allow for multiple courses, the courses key should store an array of nested hashes:
+```ruby
+params = { 
+  "student" => {
+    "name" => "Vic",
+    "grade" => "12",
+    "courses" => [
+      {
+        "name" => "AP US History", 
+        "topic" => "History"
+      }, 
+      {
+        "name" => "AP Human Geography", 
+        "topic" => "History"
+      }
+    ]
+  }
+}
+```
+Let's now adapt the form
+```html
+<form action="/student" method="post">
+  Student Name: <input type="text" name="student[name]">
+  Student Grade: <input type="text" name="student[grade]">
+  
+  Course Name: <input type="text" name="student[courses][][name]">
+  Course Topic: <input type="text" name="student[courses][][topic]">
+  
+  Course Name: <input type="text" name="student[courses][][name]">
+  Course Topic: <input type="text" name="student[courses][][topic]">
+  
+  <input type="submit">
+</form>
+```
+The courses key will store an array of hashes, each containing course details.
+This is where ERB syntax differs from Ruby. To access the name of the first course in Ruby, you would do something like:
+```ruby
+my_hash["student"]["courses"][0]["name"]
+  => "AP US History"
+```
+ERB makes it even easier on us. Instead of manually indexing each entry, we can use an empty array ([]) in our form view, and ERB will automagically index the array for us. The [] is some ERB magic that we just need to accept and use.
+```ruby
+# in ruby
+my_hash["student"]["courses"][0]["name"]
+
+# in ERB
+student[courses][][name]
+```
+We need a way to display the objects back to the user (in this case the registrar) once the student and their courses have been created. For later use in the controller, we'll call this file student.erb.
+```html
+<h1>Student</h1>
+ 
+<div class="student">
+  <h3>Name: <%= @student.name %></h3><br>
+  <h4>Grade: <%= @student.grade %></h4>
+</div><br>
+ 
+<h1>Classes</h1>
+<% @classes.each do |class| %>
+  <div class="class">
+    <p>Name: <%= class.name %></p><br>
+    <p>Topic: <%= class.topic %></p><br>
+  </div><br>
+<% end %>
+```
+Let's write the controller actions – one to serve up the form, and one to process the data from the form.
+```ruby
+# app.rb
+
+get '/' do
+  erb :new
+end
+
+post '/student' do
+  @student = Student.new(params[:student])
+ 
+  params[:student][:courses].each do |details|
+    Course.new(details)
+  end
+ 
+  @classes = Course.all
+ 
+  erb :student
+end
+```
+`params[:student]` contains the student's `name`, `grade`, and `courses` as a hash.
 
 
 
