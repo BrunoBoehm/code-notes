@@ -617,7 +617,7 @@ What if you wanted to use a form to create more than one object? This is where n
 Imagine we need to create each student and their class schedule. It would be tedious to go through the steps to first create the student and then go through the same steps again and again to create each of that student's courses. Wouldn't it be nice to create the student and their courses in one go?
 
 To create these two different classes of objects, we need to create two models, `Student` and `Course`. It's important to **initialize the objects using hash arguments keys** (because this is how they will be passed).
-Note the `STUDENTS` variable can also be used as `@@students`.
+Note the `STUDENTS` class constant can also be used as `@@students` class variable.
 ```ruby
 class Student
   attr_reader :name, :grade
@@ -764,6 +764,95 @@ post '/student' do
 end
 ```
 `params[:student]` contains the student's `name`, `grade`, and `courses` as a hash.
+
+### Without a model
+We could the following 
+```ruby
+class App < Sinatra::Base
+
+    get '/' do
+      erb :super_hero
+    end
+
+    post '/teams' do
+      @team = params[:team]
+      @members = params[:team][:members]
+      erb :team
+    end
+end
+```
+The form would be
+```html
+<h1>Create a Team and Heroes!</h1>
+<form action="/teams" method="POST">
+  <p>Team Name: <input id="team_name" type="text" name="team[name]"></p>
+  <p>Team Motto: <input id="team_motto" type="text" name="team[motto]"></p>
+  <h2>Hero 1</h2>
+  <p>Hero's Name: <input id="member1_name" type="text" name="team[members][][name]"></p>
+  <p>Hero's Power: <input id="member1_power" type="text" name="team[members][][power]"></p>
+  <p>Hero's Biography: <input id="member1_bio" type="text" name="team[members][][bio]"></p>
+  <h2>Hero 2</h2>
+  <p>Hero's Name: <input id="member2_name" type="text" name="team[members][][name]"></p>
+  <p>Hero's Power: <input id="member2_power" type="text" name="team[members][][power]"></p>
+  <p>Hero's Biography: <input id="member2_bio" type="text" name="team[members][][bio]"></p>
+  <h2>Hero 3</h2>
+  <p>Hero's Name: <input id="member3_name" type="text" name="team[members][][name]"></p>
+  <p>Hero's Power: <input id="member3_power" type="text" name="team[members][][power]"></p>
+  <p>Hero's Biography: <input id="member3_bio" type="text" name="team[members][][bio]"></p>
+  <input type="submit" value="submit">
+</form>
+```
+When clicking the submit "post" action to 'teams', the params sent would be
+```ruby
+{"team"=>{"name"=>"Team Ruby", "motto"=>"We love Ruby!", "members"=>[{"name"=>"Amanda", "power"=>"Ruby", "bio"=>"I love Ruby!"}, {"name"=>"Arel", "power"=>"JavaScript", "bio"=>"I love JavaScript!"}, {"name"=>"Katie", "power"=>"Sinatra", "bio"=>"I love Sinatra!"}]}} 
+```
+And the view could be (with the use of a model instances)
+```html
+<h1><%= @team[:name] %></h1>
+<h2>Team Motto: <%= @team[:motto] %></h2>
+
+<h2>Hero Name: <%= @members[0][:name] %></h2>
+<p>Hero Power: <%= @members[0][:power] %></p>
+<p>Hero Biography: <%= @members[0][:bio] %></p>
+
+<h2>Hero Name: <%= @members[1][:name] %></h2>
+<p>Hero Power: <%= @members[1][:power] %></p>
+<p>Hero Biography: <%= @members[1][:bio] %></p>
+
+<h2>Hero Name: <%= @members[2][:name] %></h2>
+<p>Hero Power: <%= @members[2][:power] %></p>
+<p>Hero Biography: <%= @members[2][:bio] %></p>
+```
+
+## Sessions and cookies
+Let's talk about `sessions` and `cookies` and how they work together to store information about a particular user's interactions with a website at a given point in time.
+- If you don't explicitly log out every time you leave Facebook's site, you'll find that, upon returning, you're still logged in and will be taken directly to your timeline. 
+- If you check your Gmail account, you might see advertisements relating to search terms that you typed into Google earlier that day. 
+- When you shop on Amazon, your shopping cart tracks all of the items you place into it until you're ready to checkout.
+
+HTTP is a `stateless protocol`, treating each request as an independent transaction that is unable to use information from any previous requests. This means there is no way within the hypertext transfer protocol to remember a user’s identity from page to page...
+instead, web applications requiring user login must use a session, which is a semi-permanent connection between two computers (such as a client computer running a web browser and a server running Rails).
+
+Since HTTP is stateless, we must rely on the individual actors involved in an HTTP exchange –– the user's browser and the website's server(s) –– to persist any sort of simple state. On each HTTP request, the server sends information to the browser. Cookies were invented as a means to store that data. A cookie is a `hash` that gets **stored in the browser** and sent back to the server along with every subsequent request.
+
+There's also an important server-side use case for temporarily persisting data while a user browses the server's website. Enter sessions. Similarly to cookies, a session is an object, like a `hash`, that stores data describing a client's interactions with a website at a given point in time. The session hash **lives on the server**. Your application can access it via any of your controllers at any point in time.
+
+A cookie will usually contain a URL to the generating website, the date on which it was created (and the date on which it is set to expire, if applicable), and other pertinent information that the web application has requested to persist (such as remembered login information, user preferences, etc).
+
+Here's how `cookies` work:
+- You visit a webpage, such as facebook.com.
+- Facebook's web application receives the request and creates a cookie with some information about you as a user.
+- Facebook sends that cookie back to the browser, where it is stored. Cookies will last until they expire or are deleted.
+- Every subsequent request you make to facebook.com sends the cookies back to the server, where Facebook can access them, retrieve information, and alter the cookies.
+
+2 types of cookies
+- **Session cookies** allow a website to keep track of your movement from page to page for that specific session (from the time you log in to the time you log out/close the browser). They are **temporarily stored in your web browser**. Session cookies simply allow you to navigate through a site without repeatedly having to authenticate yourself on every new page you visit within the web application domain. Example: Without a session cookie, your Amazon shopping cart would remain empty despite your best efforts to fill it with items. There would be no persistent record of your activities for that session.
+- **Persistent cookies** allow a website to remember your user information and preferences for future visits. A persistent cookie is **stored on your computer**. Persistent cookies allow for faster page loading, automatic login and user authentication, and access to other potential web application features. This means you can skip the process of sending a web request to a site and waiting to receive data back from the server in order to login, for example. Persistent cookies are usually created on the first visit to a page after you have created an account on the site, and they typically persist unless either the web application has a protocol in place for cookie expiration or the user clears their browser's cache.
+
+You can think of **cookies as the client-side counterpart to sessions**. They store information locally and are visible only to the server that created them. Client browsers send cookies to remote servers along with each web request. The web application on the server reads the cookie, associates it with an existing session (if such a session exists), and decides how to respond. 
+
+For example, if there is no cookie received, the application might show the login page. If a cookie is received that doesn't match the data stored in the server-side session hash, the app might show the login page with the username filled out –– having retrieved that data from the cookie –– but request that the user reauthenticate. If a cookie is received that does match the data in the server-side session hash, the app would respond with that user's data.
+
 
 
 
