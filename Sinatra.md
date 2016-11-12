@@ -835,6 +835,8 @@ instead, web applications requiring user login must use a session, which is a se
 
 Since HTTP is stateless, we must rely on the individual actors involved in an HTTP exchange –– the user's browser and the website's server(s) –– to persist any sort of simple state. On each HTTP request, the server sends information to the browser. Cookies were invented as a means to store that data. A cookie is a `hash` that gets **stored in the browser** and sent back to the server along with every subsequent request.
 
+For example, when you log in to http://www.learn.co, you fill out a form with your Github username and password. Learn receives that information and, at that moment in time, knows who you are by matching up that log in information, submitted via a HTTP POST request, with data in its database. What about after you log in? After you log in and click a link for a particular lesson, you are sending another HTTP request to Learn. At this point in the process of your interaction with the Learn web application, Learn has no idea who you are! But wait, you might be thinking: "Didn't I just log in? How can Learn forget so easily?" That is what it means to be "stateless". Each web request you send is, from the point of view of the application that is receiving that request, totally independent.
+
 There's also an important server-side use case for temporarily persisting data while a user browses the server's website. Enter sessions. Similarly to cookies, a session is an object, like a `hash`, that stores data describing a client's interactions with a website at a given point in time. The session hash **lives on the server**. Your application can access it via any of your controllers at any point in time.
 
 A cookie will usually contain a URL to the generating website, the date on which it was created (and the date on which it is set to expire, if applicable), and other pertinent information that the web application has requested to persist (such as remembered login information, user preferences, etc).
@@ -853,7 +855,194 @@ You can think of **cookies as the client-side counterpart to sessions**. They st
 
 For example, if there is no cookie received, the application might show the login page. If a cookie is received that doesn't match the data stored in the server-side session hash, the app might show the login page with the username filled out –– having retrieved that data from the cookie –– but request that the user reauthenticate. If a cookie is received that does match the data in the server-side session hash, the app would respond with that user's data.
 
+### Mechanics of sessions
+A session is basically just a hash that stores data on the server and passes that data to the client as a cookie. You can access the data stored in the session in the same way you would any hash in Ruby.
 
+In Sinatra we enable sessions within the controller (e.g., `app.rb`) by adding two lines in the `configure` block:
+```ruby
+configure do
+  enable :sessions
+  set :session_secret, "secret"
+end
+```
+The `configure` block above is a part of built-in settings that control whether features are enabled or not. In this case, we're enabling the `sessions` feature.
+- The first line of the configure block, `enable :sessions`, turns sessions on. 
+- The next line, set `:session_secret, "secret"`, is an encryption key (anything that you want) that will be used to create a `session_id` (a string of letters and numbers that is unique to a given user's session and is stored in the browser cookie). 
+
+`session_secret` is a pretty minimal security feature, but the basic idea is that setting your `:session_secret` to a word that other people don't know makes it harder for someone to create a fake `session_id` and hack into your site without signing up or signing in.
+
+In order to keep track of a current user throughout a session, we need to set up the session hash to store the user_id in the hash during a controller action. Since we haven't covered how to set up logins and logouts, we can simply use the session hash to store the user's name
+```ruby
+get '/hey' do 
+  @session = session
+end
+```
+Because we enabled sessions in our app, every controller action has access to the `session` hash.
+
+We stored the session hash in the instance variable @session so that our views will have access to the session data. In this case, `@session` now looks like this:
+```ruby
+@session = {
+  "session_id"=>  
+    "dd32f512ee239ad74aa6f10c8cad37ce28d6c6922eff252ed641b1017130fe22", 
+  "csrf"=> "040e9777d4dfae03bb1e6498f2a75482", 
+  "tracking"=>{ 
+    "HTTP_USER_AGENT"=> "e193e9e937caa9a19ca483f046281aae77d2216b", 
+    "HTTP_ACCEPT_LANGUAGE"=> "66eae971492938c2dcc2fb1ddc8d7ec3196037da"
+  }
+}
+```
+You can access information from the hash just like you would any hash (e.g, `@session["session_id"]`). You can also modify and add data to the session hash by adding a key-value pair:
+```ruby
+get '/hey' do 
+  session["name"] = "Victoria"
+  @session = session
+end
+```
+
+## ActiveRecord and Sinatra
+Sinatra doesn't come with database support out of the box, but it's relatively easy to configure.
+
+First, we'll add three gems to allow us to use ActiveRecord: `activerecord` version 4.2.5, `sinatra-activerecord`, and `rake`. activerecord gives us access to the magical database mapping and association powers. rake, short for "ruby make", is a package that lets us quickly create files, folders, and automate tasks such as database creation, and sinatra-activerecord gives us access to some awesome Rake tasks. Make sure those three gems are in your Gemfile:
+```ruby
+gem 'sinatra'
+gem 'activerecord', '4.2.5'
+gem 'sinatra-activerecord'
+gem 'rake'
+gem 'thin'
+gem 'require_all'
+```
+Into our development group, we'll add two other gems: `sqlite3` and `tux`. sqlite3 is our database adapter gem - it's what allows our Ruby application to communicate with a SQL database. tux will give us an interactive console that pre-loads our database and ActiveRecord relationships for us. Since we won't use either of these in production, we put them in our :development group - this way, they won't get installed on our server when we deploy our application.
+```ruby
+group :development do
+    gem 'shotgun'
+    gem 'pry'
+    gem 'tux'
+    gem 'sqlite3'
+end
+```
+We now have access to all of the gems that we need, but we still need to setup a connection to our database.
+```ruby
+ENV['SINATRA_ENV'] ||= "development"
+
+require 'bundler/setup'
+Bundler.require(:default, ENV['SINATRA_ENV'])
+
+configure :development do
+  set :database, 'sqlite3:db/dogs.db'
+end
+
+require './app'
+```
+Notice that this didn't actually create those files or folders yet - that's how Rake will help us.
+
+Let's also make sure we have `rake` set up.
+```ruby
+# in Rakefile at the root
+
+require './config/environment'
+require 'sinatra/activerecord/rake'
+```
+We can now type `rake -T`
+```ruby
+rake db:create              # Creates the database from DATABASE_URL or config/database.yml for...
+rake db:create_migration    # Create a migration (parameters: NAME, VERSION)
+rake db:drop                # Drops the database from DATABASE_URL or config/database.yml for t...
+rake db:fixtures:load       # Load fixtures into the current environment's database
+rake db:migrate             # Migrate the database (options: VERSION=x, VERBOSE=false, SCOPE=blog)
+rake db:migrate:status      # Display status of migrations
+rake db:rollback            # Rolls the schema back to the previous version (specify steps w/ S...
+rake db:schema:cache:clear  # Clear a db/schema_cache.dump file
+rake db:schema:cache:dump   # Create a db/schema_cache.dump file
+rake db:schema:dump         # Create a db/schema.rb file that is portable against any DB suppor...
+rake db:schema:load         # Load a schema.rb file into the database
+rake db:seed                # Load the seed data from db/seeds.rb
+rake db:setup               # Create the database, load the schema, and initialize with the see...
+rake db:structure:dump      # Dump the database structure to db/structure.sql
+rake db:structure:load      # Recreate the databases from the structure.sql file
+rake db:version             # Retrieves the current schema version number
+```
+
+Let's now create a `dogs` table with two columns `name` and `breed`.
+```
+rake db:create_migration NAME=create_dogs
+=># db/migrate/20150914201353_create_dogs.rb
+```
+We can update this migration file
+```ruby
+class CreateDogs < ActiveRecord::Migration
+  def up
+    create_table :dogs do |t|
+      t.string :name
+      t.string :breed
+    end
+  end
+ 
+  def down
+    drop_table :dogs
+  end
+end
+```
+The change method is actually a shorter way of writing up and down methods. While the rollback (`down`) method is not included, it's implicit in the change method. Rolling back the database would work in exactly the same way as using the `down` method.
+
+We can now run our migration
+```
+rake db:migrate
+
+== 20150914201353 CreateDogs: migrating =======================================
+-- create_table(:dogs)
+   -> 0.0019s
+== 20150914201353 CreateDogs: migrated (0.0020s) ==============================
+```
+
+## CRUD actions in Sinatra
+Let's perform the basic CRUD (Create, Read, Update, Delete) actions using Active Record.
+For this example, we'll use the class name Model to stand in for whatever model your app is working with (Post, Student, Song, you name it).
+- Create: Model.create
+- Read: Model.all/Model.find(id_number)
+- Update: Model.update
+- Delete: Model.destroy
+
+The "**create**" part of CRUD is implemented in Sinatra by building a route, or controller action, to render the form for creating a new instance of your model.
+- The get '/model/new' route renders the view page with that form.
+- The new.erb is the view page that contains that form.
+- That form sends a POST request to another controller action, post '/models'. It is here that you place the code that extracts the form data from the params and uses it to create a new instance of your model class, something along the lines of Model.create(some_attribute: params[:some_attribute]).
+
+There are two ways in which we can **read** data. We may want to "read" or deliver to our user, all of the instances of a class, or a specific instance of a class.
+- The get '/models' controller action handles requests for all instances of a class. It should load up all of those instances and set them equal to an instance variable: @models = Model.all. Then, it renders the index.erb view page.
+- The index.erb view page will use erb to render all of the instances stored in the @models instance variable.
+- The get '/models/:id' controller action handles requests for a given instance of your model. For example, if a user types in www.yourwebsite.com/models/2, this route will catch that request and get the id number, in this case 2, from the params. It will then find the instance of the model with that id number and set it equal to an instance variable: @model = Model.find(params[:id]). Finally, it will render the show.erb view page.
+- The show.erb view page will use erb to render the @model object.
+
+To implement the **update** action, we need a controller action that renders an update form, and we need a controller action to catch the post request sent by that form.
+- The get 'models/:id/edit' controller action will render the edit.erb view page.
+- The edit.erb view page will contain the form for editing a given instance of a model. This form will send a PATCH request to patch '/models/:id'.
+- The patch '/models/:id' controller action will find the instance of the model to update, using the id from params, update and save that instance.
+
+We'll need to update config.ru to use the Sinatra Middleware that lets our app send patch requests.
+```ruby
+# in config.ru
+use Rack::MethodOverride
+```
+An we need to add a line in our `edit.rb` form
+```ruby
+<form action="/models/<%= @model.id %>" method="post">
+    <input id="hidden" type="hidden" name="_method" value="PATCH">
+    <input type="text" ...>
+</form>
+```
+The MethodOverride middleware will intercept every request sent and received by our application. If it finds a request with `name="_method"`, it will set the request type based on what is set in the value attribute, which in this case is patch.
+
+The **delete** part of CRUD is a little tricky. It doesn't get its own view page but instead is implemented via a "delete button" on the show page of a given instance. This "delete button", however, isn't really a button; it's a form! The form should send a DELETE request to delete '/models/:id/delete' and should contain only a "submit" button with a value of "delete". That way, it will appear as only a button to the user. Here's an example:
+```ruby
+<form method="post" action="/models/<%= @model.id %>/delete">
+  <input id="hidden" type="hidden" name="_method" value="DELETE">
+  <input type="submit" value="delete">
+</form>
+```
+The hidden input field is important to note here. This is how you can submit `PATCH` and `DELETE` requests via Sinatra. The form tag method attribute will be set to post, but the hidden input field sets it to DELETE.
+
+Remember, the purpose of this reading is to help you understand which controller actions render which views, and which views have forms that send requests to which controller actions, as we implement CRUD. Check out the diagram below for the big picture:
+![CRUD Sinatra Diagram](http://readme-pics.s3.amazonaws.com/Screen%20Shot%202015-12-28%20at%2010.49.31%20AM.png)
 
 
 
