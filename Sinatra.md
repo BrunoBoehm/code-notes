@@ -396,6 +396,8 @@ You can take a look at [this list](http://www.degraeve.com/reference/urlencoding
 
 Remember that values in params always come in as strings, and your return value for the route should also be a string (use `.to_i` and `.to_s`).
 
+Remark: In Sinatra, the order in which you define your routes in a controller matters. Routes are matched in the order they are defined. So, if we were to define the get `'/posts/:id'` route before the get `'posts/new'` route, Sinatra would feed all requests for `posts/new` to the `posts/:id` route and we should see an error telling us that your app is unable to find a Post instance with an id of "new". The takeaway is that you should define your `/new` route before your `/posts/:id` route.
+
 ## HTML forms
 Think about how many forms you fill out online every day. Credit card payments, logins, registration forms, and even Google searches are all examples of forms. That's because forms are the most common way for users to pass data to a web application.
 
