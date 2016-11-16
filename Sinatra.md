@@ -1041,10 +1041,636 @@ The **delete** part of CRUD is a little tricky. It doesn't get its own view page
   <input type="submit" value="delete">
 </form>
 ```
-The hidden input field is important to note here. This is how you can submit `PATCH` and `DELETE` requests via Sinatra. The form tag method attribute will be set to post, but the hidden input field sets it to DELETE.
+The hidden input field is important to note here. This is how you can submit `PATCH` and `DELETE` requests via Sinatra. The form tag method attribute will be set to post, but the hidden input field sets it to DELETE. In the controller action, we use the `.destroy` method.
 
 Remember, the purpose of this reading is to help you understand which controller actions render which views, and which views have forms that send requests to which controller actions, as we implement CRUD. Check out the diagram below for the big picture:
 ![CRUD Sinatra Diagram](http://readme-pics.s3.amazonaws.com/Screen%20Shot%202015-12-28%20at%2010.49.31%20AM.png)
+
+### Example with simple blog app
+Let's create the database
+```
+rake db:create_migration NAME=create_posts
+```
+And then we can write the migration file
+```ruby
+class CreatePosts < ActiveRecord::Migration
+  def up
+    create_table :posts do |t|
+      t.string :name
+      t.text :content
+    end
+  end
+
+  def down
+    drop_table :posts
+  end
+end
+```
+Then we can run `rake db:migrate`.
+
+In our application controller
+```ruby
+require_relative '../../config/environment'
+
+class ApplicationController < Sinatra::Base
+
+  configure do
+    set :public_folder, 'public'
+    set :views, 'app/views'
+  end
+
+  get '/' do
+    @posts = Post.all
+    erb :index
+  end
+
+  get '/posts/new' do
+    erb :new
+  end
+
+  post '/posts' do
+    Post.create(name: params[:name], content: params[:content])
+    # could also be Post.create(params)
+    redirect to '/posts'
+  end
+
+  get '/posts' do
+    @posts = Post.all
+    erb :index
+  end
+
+  get '/posts/:id' do
+    @post = Post.find_by(id: params[:id])
+    erb :show
+  end
+
+  get '/posts/:id/edit' do
+    @post = Post.find_by(id: params[:id])
+    erb :edit
+  end
+
+  patch '/posts/:id' do
+    @post = Post.find_by(id: params[:id])
+    @post.update(name: params[:name], content: params[:content])
+    erb :show
+  end
+
+  delete '/posts/:id/delete' do
+    @post = Post.find_by(id: params[:id])
+    @post.destroy
+    erb :deleted
+  end
+
+end
+```
+Corresponding to the model
+```ruby
+class Post < ActiveRecord::Base
+end
+```
+
+And we also have the following views
+```html
+<!-- layout.erb -->
+<!DOCTYPE html>
+<head>
+  <title>Page Title</title>
+</head>
+<body>
+  <%= yield %>
+</body>
+
+<!-- new.erb -->
+<form action="/posts" method="POST">
+  <p>Name: <input type="text" name="name" value="name"></p>
+  <p>Content: <input type="text" name="content" value="content"></p>
+  <input id="submit" type="submit" name="submit" value="Submit">
+</form>
+
+<!-- index.erb -->
+<% @posts.each do |post| %>
+  <h2><%= post.name %></h2>
+  <p><%= post.content %></p>
+<% end %>
+
+<!-- show.erb -->
+<h2><%= @post.name %></h2>
+<p><%= @post.content %></p>
+<form action="/posts/<%= @post.id %>/delete" method="POST">
+  <input id="hidden" type="hidden" name="_method" value="delete">
+  <input type="submit" value="delete">
+</form>
+
+<!-- edit.erb 
+name="content" is what is taken for the params
+value="<%= @post.content %>" is what is displayed in the form
+-->
+<form action="/posts/<%= @post.id %>" method="POST">
+  <input type="text" name="name" value="<%= @post.name %>">
+  <input type="text" name="content" value="<%= @post.content %>">
+  <input id="hidden" type="hidden" name="_method" value="patch">
+  <input id="submit" type="submit" name="submit" value="Submit">
+</form>
+
+<!-- deleted -->
+<p><%= @post.name %> was deleted</p>
+```
+
+## User authentication in Sinatra
+We'll build a Sinatra application that will will allow users to sign up for, log into, and then log out of your application.
+
+**LOG IN**
+The action of **logging in** is the simple action of storing a user's ID in the `session` hash. 
+1. User visits the login page and fills out a form with their `email` and `password`. They hit 'submit' to POST that data to a controller route.
+2. That controller route accesses the user's email and password from the params hash. That info is used to find the appropriate user from the database with a line such as `User.find_by(email: params[:email], password: params[:password])`. Then, that `user.id` is stored as the value of `session[:id]`.
+3. As a result, we can introspect on the session hash in any other controller route and grab the current user by matching up a user ID with the value in `session[:id]`. That means that, for the duration of the session (i.e., the time between when someone logs in to and logs out of your app), the app will know who the current user is on every page.
+
+For the time being, we will simply store a user's password in the database in its raw form. However, that is not safe! In an upcoming lesson, we'll learn about password encryption.
+
+**LOG OUT**
+The action of **logging out** is really just the action of clearing all of the data, including the user's ID, from the session hash. Luckily for us, there is already a Ruby method for emptying a hash: `#clear`.
+
+**SIGN UP**
+Before a user can sign in, they need to sign up! A new user submits their information (for example, their name, email, and password) via a form. When that form gets submitted, a POST request is sent to a route defined in the controller.
+1. That route will get the new user's name, email, and password from the `params` hash
+2. It will create and save a new instance of User. For example: `User.create(name: params[:name], email: params[:email], password: params[:password])`
+3. It signs in the user automatically (would be annoying if you had to create a new account on a site and then sign in immediately afterwards). So in the same controller route in which we create a new user, we set the `session[:id]` equal to the new user's ID, effectively logging them in.
+4. We redirect the user somewhere else, such as their personal homepage
+
+Let's use the following file structure
+```
+-app
+  |- controllers
+      |- application_controller.rb
+  |- models
+      |- user.rb
+  |- views
+      |- home.erb
+      |- registrations
+          |- signup.erb
+      |- sessions
+          |- login.erb
+      |- users
+          |- home.erb
+-config
+-db
+-spec
+...
+```
+
+Let's create the db `rake db:create_migration NAME=create_users`
+```ruby
+class CreateUsers < ActiveRecord::Migration
+  def up
+    create_table :users do |t|
+      t.string :name
+      t.string :email
+      t.string :password
+    end
+  end
+
+  def down
+    drop_table :users
+  end
+end
+```
+
+In our controller let's handle the different routes
+```ruby
+class ApplicationController < Sinatra::Base
+  register Sinatra::ActiveRecordExtension
+  set :views, Proc.new { File.join(root, "../views/") }
+
+  configure do
+    enable :sessions
+    set :session_secret, "secret"
+  end
+
+  get '/' do
+    erb :home
+  end
+
+  get '/registrations/signup' do
+    erb :'/registrations/signup'
+  end
+
+  post '/registrations' do
+    @user = User.create(params)
+    session[:id] = @user.id
+    redirect '/users/home'
+  end
+
+  get '/sessions/login' do
+    erb :'sessions/login'
+  end
+
+  post '/sessions' do
+    @user = User.find_by(email: params["email"], password: params["password"])
+    session[:id] = @user.id
+    redirect '/users/home'
+  end
+
+  get '/sessions/logout' do
+    session.clear
+    redirect '/'
+  end
+
+  get '/users/home' do
+    @user = User.find_by(id: session[:id])
+    erb :'/users/home'
+  end
+
+end
+```
+
+Our model is quite simple, with a validation for each necessary parameter:
+```ruby
+class User < ActiveRecord::Base
+  validates_presence_of :name, :email, :password
+end
+```
+
+And four our views, in their respective folders
+```ruby
+<!-- views/home.erb -->
+<DOCTYPE! html>
+<head>
+</head>
+
+<body>
+  <h1>Welcome to Hogwarts</h1>
+  <h4>Please sign up or log in to access your @hogwarts.edu email account</h4>
+  <a href="/registrations/signup">Sign Up</a>
+  <a href="/sessions/login">Log In</a>
+
+</body>
+</html>
+
+<!-- views/registrations/signup.erb -->
+<h1>Sign Up Below:</h1>
+<form action="/registrations" method="post">
+  <input type="text" name="name" value="your name">
+  <input type="text" name="email" value="your email">
+  <input type="password" name="password" value="choose a password">
+  <input type="submit" value="Sign Up">
+</form>
+
+<!-- views/sessions/login.erb -->
+<h1>Log In Below:</h1>
+<form action="/sessions" method="post">
+  <input type="text" name="email" value="your email">
+  <input type="password" name="password" value="">
+  <input type="submit" name="submit" value="Log In">
+</form>
+
+<!-- views/users/home.erb -->
+"Welcome, <%=@user.name%>!"
+<a href="/sessions/logout">Log Out</a>
+```
+
+Here are a few takeaways:
+- Separate out your views into sub-folders according to their different concerns / controller routes. 
+- **Signing up** for an app is nothing more than submitting a form, grabbing data from the params hash, and using it to create a new user.
+- **Logging in** is nothing more that locating the correct user and setting the :id key in the session hash equal to their user ID.
+- **Logging out** is accomplished by clearing all of the data from the session hash.
+
+### Using Helper Methods
+MVC architecture relies heavily on the principle of separation of concerns. We make sure that we have a different model for every class we build, that we only have one erb file per view, etc. This even extends to the purposes each of these files has. A model handles our Ruby logic, our controllers handle the HTTP requests and connect to our models, and our views either take in or display data to our users.
+
+This means that we want to minimize the amount of logic our views contain. Our views should never directly pull from the database (ie. `User.all`, etc). All of that should be taken care of in the controller actions, and the data should be passed to the view via a specific controller action.
+
+But if you think about most web applications you use, there is information on most pages that is dependent on being logged in. Instead of writing that type of logic directly into a view, we use helper methods. Helper methods are methods that are written in the controller, are accessible in the views, and provide some logical support. But a helper method is just a regular method, defined using `def` and `end` just like you've always done.
+
+In the `app/helpers` directory, we're going to define a separate class specifically designed to control logic in our views. This `Helpers` class will have two class methods, `current_user` and `is_logged_in?`. These two methods will only ever be called in views, particularly account.erb, in order to add double protection to this view so that only the current user, when they are logged in, can see their own info (e.g. bank account balance). **Helpers are methods that make it cleaner to add logic to our views**.
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>title</title>
+    <link rel="stylesheet" href="stylesheets/bootstrap.css" type="text/css">
+  </head>
+  <body id="page-top">
+
+  <% if Helpers.is_logged_in?(session) %>
+    <h1>Welcome <%= Helpers.current_user(session).username %></h1>
+    <h3>Your Balance: <%= Helpers.current_user(session).balance %>.0</h3>
+    <a href="/logout">Log Out</a>
+  <% end %>
+
+  </body>
+</html>
+
+```
+This uses helpers from `app/helpers/helpers.rb` 
+```ruby
+class Helpers
+  def self.current_user(session)
+    @user = User.find_by(id: session[:user_id])
+  end
+
+  def self.is_logged_in?(session)
+    session[:user_id] ? true : false
+    # can be re-written as !!session_info["user_id"]
+  end
+end
+```
+Note that this could also be written in our application_controller.rb as
+```ruby
+require "./config/environment"
+require "./app/models/user"
+class ApplicationController < Sinatra::Base
+    ...
+    helpers do
+    	def logged_in?
+    		!!session[:user_id]
+    		# when you chain two exclamation marks together, it converts the value to a boolean
+    		# remember, in Ruby, the only two things that evaluate to false are false (itself) and nil.
+    	end
+    
+    	def current_user
+    		User.find(session[:user_id])
+    	end
+    end
+end
+```
+The `Helper Methods` at the bottom of the controller are part of Sinatra's configurations for helper methods. These are methods that allow us to add logic to our views. Views automatically have access to all helper methods thanks to Sinatra.
+
+
+### Securing Passwords in Sinatra
+We'll cover `bcryp`, an open-source gem that works to encrypt passwords. Securing users' data is one of the most important jobs of a web developer. Despite frequent warnings against it, many of your users will use the same username and password combination across many different websites. This means that, in general, people will use the same password for our applications that they do for their bank.
+
+Because of this, we never want to store our users' passwords in plain text in our database. Instead, we'll run the passwords through a hashing algorithm. A hashing algorithm manipulates data in such a way that it cannot be un-manipulated. This is to say that if someone got a hold of the hashed version of a password, they would have no way to turn it back into the original. In addition to hashing the password, we'll also add a "salt". A salt is simply a random string of characters that gets added into the hash. That way, if two of our users use the password "fido", they will end up with different hashes in our database.
+
+BCrypt will store a salted, hashed version of our users password in our database in a column called `password_digest` (not password).
+```
+rake db:create_migration NAME=create_users
+
+# in the migration file make sure to pu password_digest and not password
+class CreateUsers < ActiveRecord::Migration
+  def up
+    create_table :users do |t|
+      t.string :username
+      t.string :password_digest
+    end
+  end
+
+  def down
+    drop_table
+  end
+end
+```
+In case you want to rename a column after a wrong migration, you can create another migration
+```
+# db/migrate/xxxxxxxxxx_fix_column_name.rb
+class FixColumnName < ActiveRecord::Migration
+  def self.up
+    rename_column :table_name, :old_column, :new_column
+  end
+
+  def self.down
+    # rename back if you need or do something else or do nothing
+  end
+end
+```
+
+Let's update our model so that it includes `has_secure_password`. This ActiveRecord macro gives us access to a few new methods, and gives us all of those abilities in a secure way that doesn't actually store the plain text password in the database.
+```ruby
+class User < ActiveRecord::Base
+	has_secure_password
+end
+```
+Because our user has `has_secure_password`, we won't be able to save this to the database unless our user filled out the password field.
+
+Now let's update the controller
+```ruby
+require "./config/environment"
+require "./app/models/user"
+class ApplicationController < Sinatra::Base
+
+	configure do
+		set :views, "app/views"
+		enable :sessions
+		set :session_secret, "password_security"
+	end
+
+	get "/" do
+		erb :index
+	end
+
+	get "/signup" do
+		erb :signup
+	end
+
+	post "/signup" do
+		user = User.new(username: params[:username], password: params[:password])
+		if user.save
+			redirect '/login'
+		else
+			redirect "/failure"
+		end
+	end
+
+	get "/login" do
+		erb :login
+	end
+
+	post "/login" do
+		user = User.find_by(username: params[:username])
+		if user && user.authenticate(params[:password])
+			session[:user_id] = user.id
+			redirect "/success"
+		else
+			redirect '/failure'
+		end
+	end
+
+	get "/success" do
+		if logged_in?
+			erb :success
+		else
+			redirect "/login"
+		end
+	end
+
+	get "/failure" do
+		erb :failure
+	end
+
+	get "/logout" do
+		session.clear
+		redirect "/"
+	end
+
+	helpers do
+		def logged_in?
+			!!session[:user_id]
+		end
+
+		def current_user
+			User.find(session[:user_id])
+		end
+	end
+
+end
+```
+Our `authenticate` method`, provided by the `bcrypt` gem, takes a string as an argument. If the string matches up against the password digest, it will return the user object, otherwise it will return false.
+
+Side note: in the view note we use the `placeholder` attribute, to put a default indication inside of the input field.
+```html
+<h3>Login</h3>
+<form action="/login" method="POST">
+	<input type="text" name="username" placeholder="Username:">
+	<input type="password" name="password" placeholder="Password:">
+	<input type="submit" value="Log In">
+</form>
+```
+
+## RESTful routes
+The internet would be a really confusing place without a convention for how to handle URLS - to delete a Facebook post might be `www.facebook.com/delete-this-wallpost`, but Twitter might be `www.twitter.com/remove-this-tweet`. Without a specific convention to follow, it would be hard to create new content, edit content, and delete it. RESTful routes provides a design pattern that allows for easy data manipulation. It's nicer for users and nicer for developers to have everything consistent.
+
+A RESTful route is a route that provides mapping between HTTP verbs (**get, post, put, delete, patch**) to controller CRUD actions (**create, read, update, delete**). Instead of relying solely on the URL to indicate what site to visit, a RESTful route also depends on the HTTP verb and the URL.
+
+It's important to note that much of the CRUD actions are different actions that occur on the same resource. Let's take the example of a blog post with the ID 4. If we wanted to view the post, we would make a GET request to `/posts/4`. But what about when I want to update that post? Am I hitting a different resource? Nope! Just doing a different action to that same resource. So instead of a `GET` against `post/4` we do a `PUT`. That's why separating what you're talking to (the resource/noun) from the action you're doing (the HTTP verb) is important! That's key to REST.
+
+Browsers behave a little strange as it relates to `PUT`, `PATCH` and `DELETE` requests, in that they don't know how to send those requests. They only handle well `GET` and `POST`. **Forms that delete and edit need to be submitted via POST requests.**
+
+In the config.ru file, you'll need the following line to be placed above the run ApplicationController line: `use Rack::MethodOverride`.
+This [middleware](https://github.com/rack/rack/blob/master/lib/rack/method_override.rb) will then run for every request sent by our application. It will interpret any requests with `name="_method"` by translating the request to whatever is set by the value attribute. In this example, the post gets translated to a patch request. The middleware handles put and delete in the same way.
+
+Here is an example of application controller routes
+```ruby
+class ApplicationController < Sinatra::Base
+  configure do
+    set :public_folder, 'public'
+    set :views, 'app/views'
+  end
+
+  get '/' do
+    @recipes = Recipe.all
+    erb :index
+  end
+
+  get '/recipes/new' do
+    erb :'/recipes/new'
+  end
+
+  get '/recipes' do
+    @recipes = Recipe.all
+    erb :index
+  end
+
+  get '/recipes/:id' do
+    @recipe = Recipe.find_by_id(params[:id])
+    erb :'/recipes/show'
+  end
+
+  get '/recipes/:id/edit' do
+    @recipe = Recipe.find_by_id(params[:id])
+    erb :'/recipes/edit'
+  end
+
+  patch '/recipes/:id' do
+    @recipe = Recipe.find_by_id(params[:id])
+    @recipe.name = params[:name]
+    @recipe.ingredients = params[:ingredients]
+    @recipe.cook_time = params[:cook_time]
+    @recipe.save
+    redirect to "/recipes/#{@recipe.id}"
+  end
+
+  post '/recipes' do
+    @recipe = Recipe.create(params)
+    redirect to "/recipes/#{@recipe.id}"
+    # need to use "" to be able to practice string interpolation
+  end
+
+  delete '/recipes/:id/delete' do
+    @recipe = Recipe.find_by_id(params[:id])
+    @recipe.delete
+    redirect '/recipes'
+  end
+
+end
+```
+Of course don't forget to add `use Rack::MethodOverride` to `config.ru`.
+And for the views
+```html
+<!-- app/views/recipes/show.erb -->
+<h1><%= @recipe.name %></h1>
+<p><%= @recipe.ingredients %></p>
+<p><%= @recipe.cook_time %></p>
+<form action="/recipes/<%= @recipe.id %>/delete" method="post">
+  <input id="hidden" type="hidden" name="_method" value="delete">
+  <input id="delete" type="submit" value="delete">
+</form>
+<a href="/recipes/<%= @recipe.id %>/edit">Edit the <%= @recipe.name %> recipe</a>
+
+<!-- app/views/recipes/new.erb -->
+<h1>Let's create a recipe:</h1>
+<form action="/recipes" method="post">
+  <input type="text" name="name" placeholder="Name of recipe">
+  <input type="text" name="ingredients" placeholder="Ingredients">
+  <input type="text" name="cook_time" placeholder="Cooking time">
+  <input type="submit" value="Submit">
+</form>
+
+<!-- app/views/recipes/edit.erb -->
+<h1>Edit the <%= @recipe.name %> recipe</h1>
+<form action="/recipes/<%= @recipe.id %>" method="post">
+  <input type="text" name="name" placeholder="<%= @recipe.name %>">
+  <input type="text" name="ingredients" placeholder="<%= @recipe.ingredients %>">
+  <input type="text" name="cook_time" placeholder="<%= @recipe.cook_time %>">
+  <input id="hidden" type="hidden" name="_method" value="patch">
+  <input type="submit" value="submit">
+</form>
+
+<!-- app/views/layout.erb -->
+<!DOCTYPE html>
+<head>
+</head>
+<body>
+  <%=yield%>
+</body>
+
+<!-- app/views/index.erb -->
+<p>Hello World! Here's a list of recipes:</p>
+<% if @recipes %>
+  <% @recipes.each do |recipe| %>
+    <h1><a href="/recipes/<%= recipe.id %>"><%= recipe.name %></a></h1>
+    <p><%= recipe.ingredients %></p>
+    <p><%= recipe.cook_time %></p>
+  <% end %>
+<% end %>
+
+<a href="/recipes/new">Create a new recipe</a>
+```
+
+## Active Record associations
+### Using Tux in Sinatra with ActiveRecord
+Tux is an incredible Ruby gem that lets you access your database and perform all CRUD operations on it through the terminal. It also loads a full environment in the console that allows you to see all routes and views. 
+
+Primarily, you'll use Tux to make sure your database is set up properly, play around with Ruby objects, and make sure your ActiveRecord associations are working properly.
+
+Trying to test our User model and methods in IRB is a big big mess, it doesn't recognize `ActiveRecord`. We keep running into issues.
+![tux](http://readme-pics.s3.amazonaws.com/sinatra-tux-irb-error.png)
+![tux2](http://readme-pics.s3.amazonaws.com/sinatra-tux-irb-error2.png)
+
+In Tux you can use all of our ActiveRecord methods to play with the database, for real!
+
+### ActiveRecord Associations
+Let's create a relationship in our app that mimics the real life cat-owner relationship: owners can `have many` cats and cats `belong to` an owner. Let's assume we have two tables in our database: `cats` and `owners`, which we created from the command line using rake.
+
+
+
+
+
+
+
+
+
+
 
 
 
