@@ -1662,16 +1662,267 @@ In Tux you can use all of our ActiveRecord methods to play with the database, fo
 ### ActiveRecord Associations
 Let's create a relationship in our app that mimics the real life cat-owner relationship: owners can `have many` cats and cats `belong to` an owner. Let's assume we have two tables in our database: `cats` and `owners`, which we created from the command line using rake.
 
+First, we create a cats table from the command line:
+`rake db:create_migration NAME="create_cats"`
 
+In the migration file let's put a foreign key `owner_id`:
+```ruby
+class CreateCats < ActiveRecord::Migration
+  def change
+    create_table :cats do |t|
+      t.string :name
+      t.integer :age
+      t.string :breed
+      t.integer :owner_id
+    end
+  end
+end
+```
 
+Our models are simple
+```ruby
+class Cat
+  belongs_to :owner
+end
 
+class Owner
+  has_many :cats
+end
+```
+The model with the `belongs_to` association has the foreign key.
 
+We can play around in Tux:
+```ruby
+sophie = Owner.create(name: "Sophie")
+maru = Cat.new(name: "Maru", age: 3, breed: "Scottish Fold")
 
+maru.owner = sophie
+maru.save
+```
 
+### Join tables in ActiveRecord
+How would you handle an e-commerce site? If you think about the models, there would be a `User` class and an `Item` class, which would contain all the items a user could buy.
 
+With an online store, many many users could select to buy the same item, so you would need to store more than one `user_id`. Basically, we're dealing with a many-to-many relationship. A user can have many items, and an item can belong to many users.
 
+This is where **Join Tables** come in to play, with the `has_many :through` association, which is used for object associations where more than one object can own many objects of the same class.
 
+A join table is a table that only has two columns. To keep up with the online store example, this table would contain a `user_id` and `item_id`. Each row in this table would contain a user's ID and an item's ID. 
+We call this join table `user_items`. The `has_many :through` is always **singular** and in the first part of the join table name, and the `belongs_to` portion of the relationship is **pluralized** in the second part of the table name.
 
+We need to create 3 migrations
+```ruby
+class CreateUsers < ActiveRecord::Migration
+  def change
+    create_table :users do |t|
+      t.string :name
+      t.timestamps null: false
+    end
+end
+ 
+class CreateItems < ActiveRecord::Migration
+  def change
+    create_table :items do |t|
+      t.string :name
+      t.integer :price
+      t.timestamps null: false
+    end
+  end
+end
+ 
+class CreateUserItems < ActiveRecord::Migration
+  def change 
+    create_table :user_items do |t|
+      t.integer :user_id
+      t.integer :item_id
+      t.timestamps null: false
+    end
+  end
+end
+```
 
+Next we need to define the appropriate relationships in our three models.
+```ruby
+class User < ActiveRecord::Base
+  has_many :user_items
+  has_many :items, through: :user_items
+end
+ 
+class Item < ActiveRecord::Base
+  has_many :user_items
+  has_many :users, through: :user_items
+end
+ 
+class UserItem < ActiveRecord::Base 
+  belongs_to :user
+  belongs_to :item
+end
+```
 
+This gives us access to the users who have purchased a particular item, as well as all the items purchased by a specific user.
 
+## Sinatra Multiple Controllers
+If you think about a typical e-commerce application, you would need at least two models: one for orders and one for products. The products model would require a series of routes all starting with `/products`, and the orders model routes would start with `/orders`. 
+`/products/1` would represent requesting information about the very first product, and `/orders/1` would represent requesting information about the first order.
+
+CRUD action | request | route
+--- | --- | ---
+Create | GET | '/products/new'
+Create | POST | '/products'
+Read | GET | '/products/:id'
+Read | GET | '/products'
+Update | GET | '/products/:id/edit'
+Update | POST | '/products/:id'
+Delete | POST | '/products/:id/delete'
+
+And the same for Orders. With GET and POST requests, you're looking at a really full and complex controller, with 7 controller actions for each model. That's 14 controller actions before you even add in users or shopping carts.
+
+Just like we separate out our different models into different files, we need to separate these domain concepts in our code into separate controllers. Every controller in our application should follow the Single Responsibility Principle, only encapsulating logic relating to a singular entity in our application domain. We need to separate out a `ProductsController` and an `OrdersController`.
+
+```ruby
+class ProductsController < Sinatra::Base
+ 
+  get '/products' do
+    "Product Index"
+  end
+ 
+  get '/products/:id' do
+    "Product #{params[:id]} Show"
+  end
+ 
+end
+```
+
+And we separate the Orders controller
+```ruby
+class OrdersController < Sinatra::Base
+ 
+  get '/orders' do
+    "Order Index"
+  end
+ 
+  get '/orders/:id' do
+    "Order #{params[:id]} Show"
+  end
+ 
+end
+```
+
+Now that our application logic spans more than one controller class, our `config.ru` that starts our application becomes a bit more complicated. We must mount both classes. Only one class can be specified to be run. The other class must be loaded as Middleware. We won't get into MiddleWare now, suffice to say, you simply `use` it instead of `run`.
+```ruby
+require 'sinatra'
+ 
+require_relative 'app/controllers/products_controller'
+require_relative 'app/controllers/orders_controller'
+
+use ProductsController
+run OrdersController
+```
+Which classes you `use` or `run` matter, but we won't worry about that now, just make sure you only ever run one class and the rest are loaded via use.
+
+## Sinatra complex forms associations
+As the relationships we build between our models grow and become more complex, we need to build ways for our users to interact with those models in all of their complexity.
+
+If a `song` has many `genres`, then a user should be able to create a new song and select from a list of existing genres and/or create a new genre to be associated to that song, all at the same time.
+
+In order to achieve this, we'll have to build forms that allow for a user to create and edit not just the given object but any and all objects that are associated to it.
+
+Here's our `OwnersController` controller 
+```ruby
+class OwnersController < ApplicationController
+
+  get '/owners' do
+    @owners = Owner.all
+    erb :'/owners/index'
+  end
+
+  get '/owners/new' do
+    erb :'/owners/new'
+  end
+
+  post '/owners' do
+    @owner = Owner.create(params[:owner])
+    @owner.pets << Pet.create(params[:pet]) unless params[:pet][:name].empty?
+    redirect "/owners/#{@owner.id}"
+  end
+
+  get '/owners/:id/edit' do
+    @owner = Owner.find(params[:id])
+    erb :'/owners/edit'
+  end
+
+  get '/owners/:id' do
+    @owner = Owner.find(params[:id])
+    erb :'/owners/show'
+  end
+
+  post '/owners/:id' do
+    @owner = Owner.find(params[:id])
+    @owner.update(params[:owner])
+    # for the case where no new pet is created
+    @owner.pets << Pet.create(params[:pet]) unless params[:pet][:name].empty?
+    redirect "owners/#{@owner.id}"
+  end
+end
+```
+
+And we have a `views/owners/new.erb` form, that enables us to create an owner, choose from the list of existing pets, or even create a new pet.
+```html
+<h1>Create a new Owner</h1>
+<form action="/owners" method="POST">
+  <label>Name:</label>
+  <input id="owner_name" type="text" name="owner[name]">
+  
+  <label>Choose an existing pet:</label>
+  <% Pet.all.each do |pet| %>
+    <input id="<%= pet.id %>" type="checkbox" name="owner[pet_ids][]" value="<%= pet.id %>"><%= pet.name %></input>
+  <% end %>
+
+  <label>And/or, create a new pet:</label>
+  <input type="text" name="pet[name]">
+  
+  <input type="submit" value="Create Owner">
+</form>
+```
+This results in a `params` hash like
+```
+{"owner"=>{"name"=>"Adele", "pet_ids"=>["1", "2"]}, "pet"=>{"name"=>"Fake Pet"}}
+```
+
+And for the edit form we have 
+```html
+<h1>Update Owner</h1>
+<form action="/owners/<%= @owner.id %>" method="post">
+  <label>Name:</label>
+  <input id="owner_name" type="text" name="owner[name]" value="<%= @owner.name %>">
+
+  <label>Choose an existing pet:</label>
+  <% Pet.all.each do |pet| %>
+    <input id="<%= pet.id %>" type="checkbox" name="owner[pet_ids][]" value="<%= pet.id %>" <%= 'checked' if @owner.pets.include?(pet) %> >
+      <%= pet.name %>
+    </input>
+  <% end %>
+
+  <label>and/or create a new pet:</label>
+  <input id="pet_name" type="text" name="pet[name]" ></input>
+
+  <input type="submit" value="Update Owner">
+</form>
+```
+This form results in a `params` hash like:
+```
+{"owner"=>{"name"=>"Adele", "pet_ids"=>["3", "4"]},
+ "pet"=>{"name"=>"Another New Pet"},
+ "splat"=>[],
+ "captures"=>["8"],
+ "id"=>"8"}
+```
+
+We are familiar with using mass assignment to create new instances of a class with Active Record. Our `params` hash contains this additional key of `pet_ids` pointing to an array of pet ID numbers. Active Record is smart enough to take that key of pet_ids, pointing to an array of numbers, find the pets that have those IDs, and associate them to the given owner, all because we set up our associations such that an owner has many pets.
+```ruby
+@owner = Owner.create(params["owner"])
+# => #<Owner:0x007fdfcc96e430 id: 2, name: "Adele">
+
+@owner.pets
+#=> [#<Pet:0x007fb371bc22b8 id: 1, name: "Maddy", owner_id: 5>, #<Pet:0x007fb371bc1f98 id: 2, name: "Nona", owner_id: 5>]
+```
