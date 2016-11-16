@@ -1358,6 +1358,18 @@ Using `Dir.glob` returns the filenames found by expanding the search pattern (wh
 Dir.glob("#{path}/*.mp3").collect{ |f| f.gsub("#{path}/", "") }
 ```
 
+`__FILE__` is a reference to the current file name, thus, `File.dirname(__FILE__)` will return the path to the file relative to where it's being executed from.
+```ruby
+def files
+data_path = File.join(File.dirname(__FILE__), '..', 'db', 'data')
+# goes up one directory level from current dir, and then to db/data
+
+Dir.entries(data_path)[2..-1]
+# Dir.entries(folder) get all file names from the folder, in an array [".", "..", "first file", "second file"...]
+# [2..-1] from the third item to the last, because we don't want ".", ".."
+end
+```
+
 ## Binding
 A binding is a is a way to pass around all of the scopes and local variables of one kind of session of ruby (a "universe"), into another sessions of ruby
 
