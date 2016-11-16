@@ -1827,6 +1827,8 @@ If a `song` has many `genres`, then a user should be able to create a new song a
 
 In order to achieve this, we'll have to build forms that allow for a user to create and edit not just the given object but any and all objects that are associated to it.
 
+Let's work on a domain model where a `Pet` `belongs_to` an `Owner`, and an `Owner` has_many `Pets`.
+
 Here's our `OwnersController` controller 
 ```ruby
 class OwnersController < ApplicationController
@@ -1918,7 +1920,7 @@ This form results in a `params` hash like:
  "id"=>"8"}
 ```
 
-We are familiar with using mass assignment to create new instances of a class with Active Record. Our `params` hash contains this additional key of `pet_ids` pointing to an array of pet ID numbers. Active Record is smart enough to take that key of pet_ids, pointing to an array of numbers, find the pets that have those IDs, and associate them to the given owner, all because we set up our associations such that an owner has many pets.
+We are familiar with using mass assignment to create new instances of a class with Active Record. Our `params` hash contains this additional key of `pet_ids` pointing to an array of pet ID numbers. Active Record is smart enough to take that key of `pet_ids`, pointing to an array of numbers, find the pets that have those IDs, and associate them to the given owner, all because we set up our associations such that an owner has many pets. Similarly, ActiveRecord knows the `owner_id` (singular this time).
 ```ruby
 @owner = Owner.create(params["owner"])
 # => #<Owner:0x007fdfcc96e430 id: 2, name: "Adele">
@@ -1926,3 +1928,90 @@ We are familiar with using mass assignment to create new instances of a class wi
 @owner.pets
 #=> [#<Pet:0x007fb371bc22b8 id: 1, name: "Maddy", owner_id: 5>, #<Pet:0x007fb371bc1f98 id: 2, name: "Nona", owner_id: 5>]
 ```
+
+And on the other side of the association for pets we have the following views
+```html
+# views/pets/new.erb
+<h1>Create a new Pet</h1>
+<form action="/pets" method="post">
+  <label>Create a new pet</label>
+  <input id="pet_name" type="text" name="pet[name]">
+  <br>
+  <label>Choose an existing owner</label>
+  <% Owner.all.each do |owner| %>
+    <input id="<%=owner.id%>" type="checkbox" name="pet[owner_id]" value="<%= owner.id %>"><%= owner.name %></input>
+  <% end %>
+  <br>
+  <label>or, create a new owner</label>
+  <input id="owner_name" type="text" name="owner[name]">
+  <br>
+  <input type="submit" value="Create Pet">
+</form>
+
+
+
+# views/pets/edit.erb
+<h1>Update Pet: <%= @pet.name %></h1>
+<form action="/pets/<%= @pet.id %>" method="post">
+  <label>Edit Name</label>
+  <input id="pet_name" type="text" name="pet[name]" value="<%=@pet.name%>">
+  <br>
+
+  <label>Edit Owner</label>
+  <% Owner.all.each do |owner| %>
+    <input type="checkbox" name="pet[owner_id]" value="<%= owner.id %>" <%= 'checked' if @pet.owner_id == owner.id %> >
+      <%= owner.name %>
+    </input>
+  <% end %>
+  <br>
+
+  <label>or, add a new owner:</label>
+  <input id="owner_name" type="text" name="owner[name]">
+  <br>
+
+  <input type="submit" value="Update Pet">
+</form>
+```
+
+And `PetsController`
+```ruby
+class PetsController < ApplicationController
+
+  get '/pets' do
+    @pets = Pet.all
+    erb :'/pets/index'
+  end
+
+  get '/pets/new' do
+    erb :'/pets/new'
+  end
+
+  post '/pets' do
+    @pet = Pet.create(params[:pet])
+    @pet.owner = Owner.create(params[:owner]) unless params[:owner][:name].empty?
+    @pet.save
+    redirect to "pets/#{@pet.id}"
+  end
+
+  get '/pets/:id' do
+    @pet = Pet.find(params[:id])
+    erb :'/pets/show'
+  end
+
+  get '/pets/:id/edit' do
+    @pet = Pet.find(params[:id])
+    erb :'/pets/edit'
+  end
+
+  post '/pets/:id' do
+    @pet = Pet.find(params[:id])
+    @pet.update(params[:pet])
+    @pet.owner = Owner.create(params[:owner]) unless params[:owner][:name].empty?
+    @pet.save
+    redirect to "pets/#{@pet.id}"
+  end
+end
+```
+
+
+
