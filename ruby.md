@@ -1310,4 +1310,57 @@ number_breakdown[0][1]
 => "555"
 ```
 
+## Working with Files
+
+To [write](http://ruby-doc.org/core-1.9.3/IO.html#method-c-write) content to a file you can use
+`File.write('/path/to/file', 'Some glorious content')`
+
+To read content from a file and load it in memory for use elsewhere
+```ruby
+class Site Generator
+    attr_reader :path
+    
+    def initialize(path)
+        @path = path
+        # create the path to the folder you will write into
+        FileUtils.mkdir_p(path)
+    end
+    
+    def generate_index
+        html = File.read(./lib/views/index.html)
+        # writes a new file into the path you created in the initialize method
+        File.write("#{path}/index.html", html)
+    end
+
+    def call
+        generate_index
+    end    
+```
+
+Note if we were to use ERB we would
+```ruby
+# require 'erb' in the environment.rb file
+
+    def generate_index
+        # load the template string
+        template_string = File.read(./lib/views/index.html.erb)
+        # instantiate the ERB template instance
+        template = ERB.new(template_string)
+        # result is like run
+        html = template.result
+        File.write("#{path}/index.html", html)
+    end
+
+```
+
+Using `Dir.glob` returns the filenames found by expanding the search pattern (which is an Array of the patterns or the pattern String), either as an array or as parameters to the block. Note that this pattern is not a regexp (it’s closer to a shell glob). 
+```ruby
+Dir.glob("#{path}/*.mp3").collect{ |f| f.gsub("#{path}/", "") }
+```
+
+## Binding
+A binding is a is a way to pass around all of the scopes and local variables of one kind of session of ruby (a "universe"), into another sessions of ruby
+
+
+
 
