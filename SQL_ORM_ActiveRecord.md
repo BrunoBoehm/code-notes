@@ -2241,6 +2241,61 @@ rake console
 => [#<Artist:0x007fa342e34dc8 id: 1, name: "Adele">]
 ```
 
+Note the methods ActiveRecord gives with `macros` and relations
 
+Methods added by `belongs_to`.
+```ruby
+class Book < ApplicationRecord
+    belongs_to :author
+end
 
+@book = Book.create(name: "The Old Man and the Sea")
 
+@book.author
+@book.author = @author
+@book.build_author(author_number: 123, author_name: "John Doe")  
+# for initializing a `has_one` or `belongs_to` 
+# instead of @book.build() that's used for `has_many` or `has_and_belongs_to_many`
+@book.create_author(author_name: "John Doe")
+@book.create_author!(author_name: "John Doe")
+```
+
+Methods added by `has_one`
+```ruby
+class Member < ApplicationRecord
+  has_one :profile
+end
+
+@member.profile
+@member.profile = @profile
+@member.build_profile(terms: "premium")
+@member.create_profile(terms: "premium")
+@member.create_profile!(terms: "premium")
+```
+
+Methods added by `has_many`
+```ruby
+class Author < ApplicationRecord
+  has_many :books
+end
+
+@author.books
+@author.books << (object, ...)
+@author.books = (objects)
+@author.book_ids
+@author.book_ids=(ids)
+
+@author.books.build(attributes = {}, ...)
+@author.books.create(attributes = {})
+@author.books.create!(attributes = {})
+
+@author.books.delete(object, ...)
+@author.books.destroy(object, ...)
+@author.books.clear
+
+@author.books.empty?
+@author.books.size
+@author.books.find(...)
+@author.books.where(...)
+@author.books.exists?(...)
+```
