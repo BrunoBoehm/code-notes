@@ -1808,7 +1808,7 @@ class OrdersController < Sinatra::Base
 end
 ```
 
-Now that our application logic spans more than one controller class, our `config.ru` that starts our application becomes a bit more complicated. We must mount both classes. Only one class can be specified to be run. The other class must be loaded as Middleware. We won't get into MiddleWare now, suffice to say, you simply `use` it instead of `run`.
+Now that our application logic spans more than one controller class, our `config.ru` that starts our application becomes a bit more complicated. **We must mount both classes. Only one class can be specified to be run. The other class must be loaded as Middleware**. We won't get into MiddleWare now, suffice to say, you simply `use` it instead of `run`.
 ```ruby
 require 'sinatra'
  
@@ -1818,7 +1818,7 @@ require_relative 'app/controllers/orders_controller'
 use ProductsController
 run OrdersController
 ```
-Which classes you `use` or `run` matter, but we won't worry about that now, just make sure you only ever run one class and the rest are loaded via use.
+Which classes you `use` or `run` matter, but we won't worry about that now, just make sure you only ever run one class and the rest are loaded via use. **DON'T FORGET TO DO IT OR YOUR CONTROLLERS WON'T WORK!**
 
 ## Sinatra complex forms associations
 As the relationships we build between our models grow and become more complex, we need to build ways for our users to interact with those models in all of their complexity.
@@ -1920,7 +1920,7 @@ This form results in a `params` hash like:
  "id"=>"8"}
 ```
 
-We are familiar with using mass assignment to create new instances of a class with Active Record. Our `params` hash contains this additional key of `pet_ids` pointing to an array of pet ID numbers. Active Record is smart enough to take that key of `pet_ids`, pointing to an array of numbers, find the pets that have those IDs, and associate them to the given owner, all because we set up our associations such that an owner has many pets. Similarly, ActiveRecord knows the `owner_id` (singular this time).
+We are familiar with using mass assignment to create new instances of a class with Active Record. Our `params` hash contains this additional key of `pet_ids` pointing to an array of pet ID numbers. Active Record is smart enough to take that key of `pet_ids`, pointing to an array of numbers (note the use of `name="owner[pet_ids][]"`), find the pets that have those IDs, and associate them to the given owner, all because we set up our associations such that an owner has many pets. Similarly, ActiveRecord knows the `owner_id` (singular this time).
 ```ruby
 @owner = Owner.create(params["owner"])
 # => #<Owner:0x007fdfcc96e430 id: 2, name: "Adele">
