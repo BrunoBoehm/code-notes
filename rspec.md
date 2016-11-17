@@ -1,1 +1,88 @@
-#RSPEC
+# RSPEC
+With TDD you descripe the **design and not the implementation/programming**. You think about "what should my code do if it works" you don't care about "how to make it work". We don't care about how it works, we care about the bahavior of the interface.
+
+Start by listing requirements 
+I want to be able to ....
+this page should list ...
+
+
+rspec --format=gtml > spec.html
+open spec.html
+
+rspec --format=documentation
+
+
+rspec --init
+=> create .rspec
+=> create spec/rspec_helper.rb
+
+Create a spec/file for each model in your domain
+
+```ruby
+describe Author do
+    it 'has a name' do
+        # setup
+        author = Author.new
+        author.name = "Hemingway"
+        
+        # expectation
+        expect(author.name).to eq("Hemingway")
+    end
+    
+    context 'with stories' do
+        describe '#stories' do
+            it 'has an empty array of stories when initialized/born' do
+                author = Author.new
+                
+                expect(author.stories).to match_array([])
+            end
+        end
+    end
+end
+```
+`context` and `describe` are interchangeable, it's more about the readability ("I'm describing Authors with stories, it has...").
+
+rspec --fail-fast
+
+Write the minimum code to make the test pass
+
+Make sure your `spec_helper` knows about the files it needs to test, it's best practice to require in `spec_helper` the environment `require_relative '../config/environment'`.
+
+```ruby
+expect(author.name).to eq("Hemingway")
+expect(@artist.songs.count).to eq(1)
+expect(@song.artist).to eq(@artist)
+
+expect(author.stories).to match_array([])
+
+expect(author.stories).to include(story)
+
+expect{author.add_story(story)}.to raise_error(InventedCustomError)
+
+expect(@artist).to be_an_instance_of(Artist)
+```
+
+
+## Capybara
+Capybara gives us a few methods to simulate how the user would interact with the page:
+- `visit` & `page` – Capybara methods for controlling the test user's browser and examining the current state of the page as they 'see' it.
+- `have_selector`, `have_field`, & `have_text` – Capybara matchers for ensuring that the page contains certain matching HTML or text.
+- `visit`, `fill_in` & `click_button` – Capybara methods for mimicking user activities, such as visiting a page, filling in form fields or clicking buttons.
+```ruby
+visit '/'
+fill_in(:user_name, with: "Avi")
+click_button "Submit"
+
+expect(page.body).to include("Welcome!")
+
+expect(page).to have_text("Hi Avi, nice to meet you!")
+expect(page).to have_selector("form")
+expect(page).to have_field(:user_name)
+```
+
+
+
+
+
+
+
