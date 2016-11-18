@@ -2299,3 +2299,165 @@ end
 @author.books.where(...)
 @author.books.exists?(...)
 ```
+
+Let's recap
+```
+=== Singular associations (one-to-one)
+                                  |            |  belongs_to  |
+generated methods                 | belongs_to | :polymorphic | has_one
+----------------------------------+------------+--------------+---------
+other(force_reload=false)         |     X      |      X       |    X
+other=(other)                     |     X      |      X       |    X
+build_other(attributes={})        |     X      |              |    X
+create_other(attributes={})       |     X      |              |    X
+create_other!(attributes={})      |     X      |              |    X
+
+=== Collection associations (one-to-many / many-to-many)
+                                  |       |          | has_many
+generated methods                 | habtm | has_many | :through
+----------------------------------+-------+----------+----------
+others(force_reload=false)        |   X   |    X     |    X
+others=(other,other,...)          |   X   |    X     |    X
+other_ids                         |   X   |    X     |    X
+other_ids=(id,id,...)             |   X   |    X     |    X
+others<<                          |   X   |    X     |    X
+others.push                       |   X   |    X     |    X
+others.concat                     |   X   |    X     |    X
+others.build(attributes={})       |   X   |    X     |    X
+others.create(attributes={})      |   X   |    X     |    X
+others.create!(attributes={})     |   X   |    X     |    X
+others.size                       |   X   |    X     |    X
+others.length                     |   X   |    X     |    X
+others.count                      |   X   |    X     |    X
+others.sum(*args)                 |   X   |    X     |    X
+others.empty?                     |   X   |    X     |    X
+others.clear                      |   X   |    X     |    X
+others.delete(other,other,...)    |   X   |    X     |    X
+others.delete_all                 |   X   |    X     |    X
+others.destroy(other,other,...)   |   X   |    X     |    X
+others.destroy_all                |   X   |    X     |    X
+others.find(*args)                |   X   |    X     |    X
+others.exists?                    |   X   |    X     |    X
+others.distinct                   |   X   |    X     |    X
+others.reset                      |   X   |    X     |    X
+
+
+=== Singular associations (one-to-one)
+                                          |            |  belongs_to  |
+        generated methods                 | belongs_to | :polymorphic | has_one
+                                          |   :book
+------------------------------------------+------------+--------------+---------
+@author.books(force_reload=false)         |     X      |      X       |    X
+@author.books=(other)                     |     X      |      X       |    X
+@author.build_books(attributes={})        |     X      |              |    X
+@author.create_books(attributes={})       |     X      |              |    X
+@author.create_books!(attributes={})      |     X      |              |    X
+
+=== Collection associations (one-to-many / many-to-many)
+                                  |       |          | has_many
+generated methods                 | habtm | has_many | :through
+----------------------------------+-------+----------+----------
+others(force_reload=false)        |   X   |    X     |    X
+others=(other,other,...)          |   X   |    X     |    X
+other_ids                         |   X   |    X     |    X
+other_ids=(id,id,...)             |   X   |    X     |    X
+others<<                          |   X   |    X     |    X
+others.push                       |   X   |    X     |    X
+others.concat                     |   X   |    X     |    X
+others.build(attributes={})       |   X   |    X     |    X
+others.create(attributes={})      |   X   |    X     |    X
+others.create!(attributes={})     |   X   |    X     |    X
+others.size                       |   X   |    X     |    X
+others.length                     |   X   |    X     |    X
+others.count                      |   X   |    X     |    X
+others.sum(*args)                 |   X   |    X     |    X
+others.empty?                     |   X   |    X     |    X
+others.clear                      |   X   |    X     |    X
+others.delete(other,other,...)    |   X   |    X     |    X
+others.delete_all                 |   X   |    X     |    X
+others.destroy(other,other,...)   |   X   |    X     |    X
+others.destroy_all                |   X   |    X     |    X
+others.find(*args)                |   X   |    X     |    X
+others.exists?                    |   X   |    X     |    X
+others.distinct                   |   X   |    X     |    X
+others.reset                      |   X   |    X     |    X
+```
+
+Note also the existence of the method `#find_or_create_by(params)`, that finds the first record with the given attributes, or creates a record with the attributes if one is not found. It runs first a SELECT, and if there are no results an INSERT is attempted.
+
+When designing the form `name=""` tags (that create the params based on the `value="""` tags) make sure to structure the `params` hash so that it will be interpreted nicely by the controller.
+
+A Song has a `name` as defined in its database
+If a Song `belongs_to` an :artist => then the song can have an `artist_id`.
+If a Song `has_many` :genres => then the song can have an `genre_ids`.
+// Thus it makes sense to structure part of the params like
+`{"song"=>{"name"=>"Video Games", "artist_id"=>"94", "genre_ids"=>["3", "4"]}, ...}`
+And this can be achieved through the `name=""` tags (provided you put the relevant values in them) - case of an edit form (values already populated):
+```ruby
+<input type="text"      name="song[name]"           value="<%= @song.name %>"   >
+<input type="checkbox"  name="song[artist_id]"      value="<%= artist.id %>"    >
+<input type="checkbox"  name="song[genre_ids][]"    value="<%= genre.id %>"     >
+```
+
+Then if we need to create a new `Artist` instance from scratch, this is out of the scope of an individual song (that can only go as far as `artist_id` and `genre_ids` because this describe the relationship, not the `Artist` object instance itself).
+
+We need to create another part in the `params` hash dedicated to creating the `Artist` instance, containing all informations necessary to initialization.
+`{..., "artist"=>{"name"=>"Lana Del Rey", "birthyear"=>"1985"}, ...}`.
+And of course the corresponding `form` inputs (in the case of an edit form):
+```ruby
+<input type="text"      name="artist[name]"         value="<%= @artist.name %>"   >
+<input type="checkbox"  name="artist[birthyear]"    value="<%= @artist.birthyear %>"    >
+```
+
+And in the controller
+```ruby
+# Create a song
+# params[:artist] = {name: ""}
+# params[:song] = {name: "", artist_id: "", genre_ids: []}
+post '/songs' do
+    @song = Song.create(params[:song])
+    @song.artist = Artist.find_or_create_by(params[:artist]) unless params[:artist][:name].empty?
+    @song.save
+    flash[:message] = "Successfully created song."
+    redirect("/songs/#{@song.slug}")
+end
+
+# and if we wanted to create the artist (that has many songs, and to whom the song belongs_to)
+# { "artist"=>{ "song_ids"=>[] }, "song"=>{ "name"=>"" }, ...}
+post '/artist' do 
+    @artist = Artist.create(params[:artist])
+    @artist.songs << Song.create(name: params["song"]["name"]) unless params["song"]["name"].empty?
+    @artist.save  # optional: no need to save it seems since called on AR collection
+    redirect to "artists/#{@artist.id}"
+end
+
+----------
+# Update a song
+post '/songs/:slug' do
+    # => {"song"=>{"name"=>"Video Games", "artist_id"=>"94", "genre_ids"=>["3", "4"]}, "artist"=>{"name"=>""} ...
+    # find by slug is a custom module method
+    song = Song.find_by_slug(params[:slug])
+    song.update(params[:song])
+    song.artist = Artist.find_or_create_by(name: params[:artist][:name]) unless params[:artist][:name].empty?
+    song.save
+    flash[:message] = "Successfully updated song."
+    redirect("/songs/#{song.slug}")
+end
+
+# Update an artist
+# { "song"=>{ "name"=>"", "artist_id"=>"" }, "artist"=>{ "name"=>"" }, ...}
+post '/artist/:id' do 
+    @artist = Artist.find(params[:id])
+    @artist.update(params[:artist])
+    if !params["song"]["name"].empty?
+      @artist.songs << Song.create(params["song"])
+    end
+    redirect to "artists/#{@artist.id}"
+end
+```  
+
+> As soon as you have something else than relational info (`artist_id`, `genre_ids`, `song_id`...), that is `name`, `birthdate`, you need to create another part to the `params` hash. This will enable you to pass methods like `.create(params[:artist])` using mass assignment instead of regular parameter per parameter assignment.
+
+
+
+
