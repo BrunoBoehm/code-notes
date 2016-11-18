@@ -2040,9 +2040,36 @@ After the migration file is ready you can run `rake db:migrate`.
 Like migrations, models also inherit, but they inherit from `ActiveRecord::Base`. A simple model would look like this:
 ```ruby
 class Dog < ActiveRecord::Base
+    ...
 end
 ```
-Notice that you had access to reader and writer methods that cooperated with the database that you never had to actually code. This Dog model would work with the created dogs table above and you would be able to call name, breed, and id on any new instance of the Dog class.
+Notice that you immediately get access to `reader` and `writer` methods that cooperated with the database that you never had to actually code: no need to put an `attribute_accesor`. 
+
+This `Dog` model would work as soon as you have a `dogs` table created (like above) and you would be able to call `name`, `name=`, `breed`, `breed=`, and `id` on any new instance of the `Dog` class. You can call `new`, `save` (will run `INSERT` or `UPDATE` SQL commands). 
+All that matters is the methods ActiveRecord give you. If you take a class `Song` that doesn't inherit from AR and call `Song.new.methods.size` it will return 105. If you take the Dog class that inherist from AR `Dog.new.methods.size` will return 388. And when you add in the model a `has_many` and `belongs_to` association, it will be even more etc. That's the difference between PORO (plain old ruby object) and an AR object. You inherit from all of the AR modules like `ActiveRecord::AttributeMethods`.
+
+> Don't override an ActiveRecord method!
+
+Let's add the `belongs_to` method to a `Song` class
+```ruby
+class Song < ActiveRecord::Based
+    belongs_to :artist
+end
+``` 
+Now in the terminal lets see the difference in methods, and identify the 7 methods that the `belongs_to` association gives us
+```
+$ s = Song.new
+$ songs_with_association = s.methods
+=> [array of all methods with association]
+# then we comment out the belongs_to and reload the console
+$ reload!
+=> true
+$ songs_without_association = s.methods
+=> [array of all methods without association]
+$ songs_with_association - songs_without_association
+=> [:belongs_to_counter_cache_after_update, :autosave_associated_records_for_artist, :artist, :build_artist, :create_artist, :create_artist!]
+```
+The first 2 are low level methods, but the 5 more are: `:artist`, `:build_artist`, `:create_artist`, `:create_artist!`
 
 ### Advanced Finder Methods
 Active Record makes it easy to ask our database for certain information and datasets by providing a bunch of built-in methods for us.
@@ -2118,10 +2145,14 @@ In order to implement these relationships we will need to do two things:
 ##### Migrations
 The different models
 A `song` will belong to an artist and belong to a genre.
-id | name | artist_id | genre_id
------ | ----- | ----- | -----
-2 | Shake It Off | 1 | 1
+| id | name | artist_id | genre_id |
+| ----- | ----- | ----- | ----- |
+| 2 | Shake It Off | 1 | 1 |
+
 These foreign keys, in conjunction with the ActiveRecord association macros will allow us query to get an artist's songs or genres, a song's artist or genre, and a genre's songs and artists entirely through ActiveRecord provided methods on our classes.
+
+> When an object belongs to another object, it ALWAYS has the foreign key
+
 ```ruby
 class CreateSongs < ActiveRecord::Migration
   def change
@@ -2133,12 +2164,13 @@ class CreateSongs < ActiveRecord::Migration
   end
 end
 ```
-`through` is the one table with the more elements, because `Genre` has many artists `through` songs, and `Artist`has many genre `through` songs. 
+`through` is the one table with the more elements, because `Genre` has-many artists `through` songs, and `Artist` has_many genre `through` songs. 
 
-An `artist` will have many songs and it will have many genres through songs. The table songs is the JOIN table. That means that songs has both an artist_id and a genre_id to combine those two tables together in a many to many relationship.
-id | name
------ | -----
-1 | Taylor Swift
+An `artist` will have many songs and it will have many genres through songs. The table songs is the JOIN table. That means that songs has both an `artist_id` and a `genre_id` to combine those two tables together in a many to many relationship.
+
+| id | name |
+| ----- | ----- |
+| 1 | Taylor Swift |
 Our artists table just needs a name column.
 ```ruby
 class CreateArtists < ActiveRecord::Migration
@@ -2151,9 +2183,9 @@ end
 ```
 
 A `genre` will have many songs and it will have many artists through songs.
-id | name
------ | -----
-1 | pop
+| id | name |
+| ----- | ----- |
+| 1 | pop |
 Our genre table just needs a name column.
 ```ruby
 class CreateGenres < ActiveRecord::Migration
@@ -2458,6 +2490,29 @@ end
 
 > As soon as you have something else than relational info (`artist_id`, `genre_ids`, `song_id`...), that is `name`, `birthdate`, you need to create another part to the `params` hash. This will enable you to pass methods like `.create(params[:artist])` using mass assignment instead of regular parameter per parameter assignment.
 
+### belongs_to: Create & New/Build
+There's a subtle difference between `create_association` (similar to create: instantiation and persistence in the DB) and `build_association` (similar to new: instantiation only).
+```ruby
+class Artist < ActiveRecord::Base
+    has_many :songs
+end
+
+class Song < ActiveRecord::Base
+    belongs_to :artist
+end
+
+-----
+
+s = Song.new(name: 'Thriller')
+s.artist = Artist.new(name: 'MJ')
+s.save # Will run 2 INSERTs
+
+s = Song.new(name: 'Runaway')
+s.build_artist(name: 'Kanye')
+s.save # Will run 2 INSERTs
+
+
+```
 
 
 
