@@ -2025,6 +2025,7 @@ You might notice that in both the examples above, the numbers at the front of th
 `t.timestamps` creates two new columns, created_at and updated_at. These are handy columns to have around as sometimes you want to query based on the time of creation or update-tion instead of querying using attributes or ids.
 
 Data types for migrations
+
 Data type | Examples
 ------- | ------
 boolean | true, false
@@ -2145,6 +2146,7 @@ In order to implement these relationships we will need to do two things:
 ##### Migrations
 The different models
 A `song` will belong to an artist and belong to a genre.
+
 | id | name | artist_id | genre_id |
 | ----- | ----- | ----- | ----- |
 | 2 | Shake It Off | 1 | 1 |
@@ -2234,10 +2236,8 @@ rake console
 
 [3] pry(main)> hello.artist = adele
 => #<Artist:0x007fc75b8d9490 id: nil, name: "Adele">
-
 [4] pry(main)> hello.artist
 => #<Artist:0x007fc75b8d9490 id: nil, name: "Adele">
-
 [5] pry(main)> hello.artist.name
 => "Adele"
 
@@ -2245,16 +2245,19 @@ rake console
 [6] pry(main)> adele.songs
 => []
 
+---
+
 [7] pry(main)> rolling_in_the_deep = Song.new(name: "Rolling in the Deep")
 => #<Song:0x007fc75bb4d1e0 id: nil, name: "Rolling in the Deep", artist_id: nil, genre_id: nil>
 
-# adele.songs returns an array of songs
 [8] pry(main)> adele.songs << rolling_in_the_deep
 => [ #<Song:0x007fc75bb4d1e0 id: nil, name: "Rolling in the Deep", artist_id: nil, genre_id: nil>]
 
 # adding the song to the parent, the child knows about the relationship
 [9] pry(main)> rolling_in_the_deep.artist
 => #<Artist:0x007fc75b8d9490 id: nil, name: "Adele">
+
+---
 
 [10] pry(main)> pop = Genre.create(name: "pop")
 => #<Genre:0x007fa34338d270 id: 1, name: "pop">
@@ -2266,6 +2269,7 @@ rake console
 [12] pry(main)> pop.songs
 => [#<Song:0x007fc75bb4d1e0 id: nil, name: "Rolling in the Deep", artist_id: nil, genre_id: nil>]
 
+# the child knows about its parent
 [13] pry(main)> rolling_in_the_deep.genre
 => #<Genre:0x007fa34338d270 id: 1, name: "pop">
 
@@ -2510,7 +2514,6 @@ s.save # Will run 2 INSERTs
 s = Song.new(name: 'Runaway')
 s.build_artist(name: 'Kanye')
 s.save # Will run 2 INSERTs
-
 
 ```
 
