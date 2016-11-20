@@ -2613,7 +2613,116 @@ s.save
 Anyway playing with the console and the SQL logger. You want to play in the smallest sandbox as possible.
 AR is one of the most important parts of the whole stach, and once it clicks it wont't never unclick!
 
-### Object life cycle
+### Aliasing AR associations
+3 models
+- posts (title, author_id, content)
+- users (name)
+- comments (post_id, user_id, content)
+
+We want a domain model that will allow us to express queries like
+- post has many comments
+- post has many commenters (users) through comments
+- post belongs to an author (user)
+- comment belongs to a post
+- comment belongs to a commentor (user)
+- user has many authored_posts
+- user has many comments
+- user has many commented_posts throught comments
+
+Users, commenters, authors are what we call *aliases*. We'll be able to do thinks like
+- create a new post for an author
+- query the author of a post
+- find all the posts a user has commented on
+
+The comments table is kind of like a join table between posts and users.
+Take a look at the diagram at thte beginning of the video below.
+<iframe width="560" height="315" src="https://www.youtube.com/embed/WVBWlnUghOI?rel=0&amp;showinfo=0" frameborder="0" allowfullscreen></iframe>
+
+Let's start with the model that's the most decoupled/has the less dependencies (foreign key). Then we'll generate the post model because it only has one dependency.
+
+```ruby
+class User < ActiveRecord::Base
+    has_many :posts
+end
+
+class Post < ActiveRecord::Base
+    belongs_to :user
+end
+
+---
+
+> h = user.create(name: "Hemingway")
+[commits to DB]
+> sea = post.create(title: "Old man and the sea")
+[commits to DB with author_id: nil]
+> sea.user = h
+=> ActiveModel::MissingAttributeError: can't write unknown attribute 'user_id'
+```
+
+The right way using an aliased association would be 
+```ruby
+class User < ActiveRecord::Base
+    has_many :authored_posts,   
+            class_name: "Post", 
+            foreign_key: "author_id"
+end
+
+class Post < ActiveRecord::Base
+    belongs_to :author, class_name: "User"
+end
+```
+We need a foreign key for the `has_many` because otherwise it assumes that the `foreign_key` in the other model is named after this class (and would look for `user_id`). The more you alias things the more you need to tell AR about the details.
+
+It enables us to do things like
+```ruby
+h = User.first
+p.author = h
+p.save
+
+p.author
+=> #<User id:1 ...>
+# we're querying for an author but receiving a User! 
+# We're not introducing a new class that inherits from User, we're using an alias: it's the same as p.user
+
+h.authored_posts
+=> Post load... SELECT "posts".* FROM "posts WHERE "posts"."author_id" = ? [["author_id", 1 ]]
+```
+
+Note: for posts we could also have used a foreign key
+```ruby
+class Post < ActiveRecord::Base
+    belongs_to:user, foreign_key: "author_id"
+end
+```
+
+Let's now do the `Comment` model
+```ruby
+class Comment < ActiveRecord::Base
+    ...
+    belongs_to :commentor, 
+            class_name: "User", 
+            foreign_key: "user_id"
+    belongs_to :post        
+end
+
+class User < ActiveRecord::Base
+    ...
+    has_many :comments
+    # SELECT * FROM posts WHERE user_id = X
+    
+    has_many :commented_posts, through: :comments, source: :post
+    # i'm looking for the only 2 possibilities :post or :commentor in the Comment model
+end
+
+class Post < ActiveRecord::Base
+    ...
+    has_many :comments
+    has_many :commentors, through: :comments, source: :commentor
+    # it's looking into the (through) Comment model and has to choose (source) from :commentor and :post
+end
+```
+
+## AR Object life cycle
 An object is born at initialization, and then has a lifecycle.
 You cannot overid initialize.
 ActiveRecord gives you callbacks, hooks to connect to moments of the object lifecycle (Create, Update, Destroyed).
