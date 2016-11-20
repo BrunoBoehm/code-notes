@@ -2201,6 +2201,8 @@ end
 We can now run rake `db:migrate`.
 
 ##### AR Macros
+Active Record and Routings are the most important things in a Rails App. Spend time plaing around!
+
 A macro is a method that writes code for us (think metaprogramming). By invoking a few methods that come with Active Record, we can implement all of these associations.
 We'll be using the following AR macros (or methods):
 - [has_many](http://guides.rubyonrails.org/association_basics.html#the-has-many-association)
@@ -2224,7 +2226,7 @@ class Genre < ActiveRecord::Base
 end
 ```
 
-The model that `has_many` is considered the parent. The model that `belongs_to` is considered the child. If you tell the child that it belongs to the parent, the parent won't know about that relationship. If you tell the parent that a certain child object has been added to its collection, both the parent and the child will know about the association.
+**The model that `has_many` is considered the parent. The model that `belongs_to` is considered the child. If you tell the child that it belongs to the parent, the parent won't know about that relationship (while not persisted in DB). If you tell the parent that a certain child object has been added to its collection, both the parent and the child will know about the association.**
 ```
 rake console
 
@@ -2241,7 +2243,7 @@ rake console
 [5] pry(main)> hello.artist.name
 => "Adele"
 
-# our parent doesn't know about his child
+# in memory (as long as not persisted [.persisted? => false]) our parent doesn't know about his child
 [6] pry(main)> adele.songs
 => []
 
@@ -2250,8 +2252,10 @@ rake console
 [7] pry(main)> rolling_in_the_deep = Song.new(name: "Rolling in the Deep")
 => #<Song:0x007fc75bb4d1e0 id: nil, name: "Rolling in the Deep", artist_id: nil, genre_id: nil>
 
+# let's add the song to the collection of songs that adele has
 [8] pry(main)> adele.songs << rolling_in_the_deep
 => [ #<Song:0x007fc75bb4d1e0 id: nil, name: "Rolling in the Deep", artist_id: nil, genre_id: nil>]
+# artist_id will be nil as long as not saved in the DB, but still adele.songs returns the good array
 
 # adding the song to the parent, the child knows about the relationship
 [9] pry(main)> rolling_in_the_deep.artist
@@ -2507,15 +2511,139 @@ end
 
 -----
 
+# on the Song side (child-side)
+
+## building the artist and immediately assigning it to the song
 s = Song.new(name: 'Thriller')
 s.artist = Artist.new(name: 'MJ')
 s.save # Will run 2 INSERTs
 
+## building the artist off the song
 s = Song.new(name: 'Runaway')
 s.build_artist(name: 'Kanye')
 s.save # Will run 2 INSERTs
 
 ```
 
+### has_many
+```ruby
+mj = Artist.new(name: "Michael Jackson")
+mj.save
+[commits to the database 1 INSERT]
 
+mj.songs.build(name: "Beat It")
+# instantiated in memory with foreign key
+# mj (always the object on the left) is the parent
+
+mj.persisted?
+=> true
+
+mj.songs
+# will return the object in memory of the songs mj has
+
+mj.save
+# persistence in DB: only INSERT 1 for the song, with the right foreign key
+
+---
+queen = Artist.new(name: "Queen")
+queen.persisted?
+=> false
+
+queen.songs.build(name: "Bohemian Rhapsody")
+# will instantiate a new song in memory, virtually associated even if not with the artist_id
+
+queen.songs
+# will return the right collection with the "Bohemian Rhapsody" in memory
+
+queen.save
+# will run 2 INSERTS:
+# persistence in BD: INSERT 1 for the artist (need a value for the primary key for the foreign key of the 2nd insert)
+# persistence in DB: INSERT 2 for the song, with the right foreign key
+
+---
+
+queen.songs << Song.new(name: "Don't stop me now")
+# pushing is closer to creating than building, you are always saving the object by pushing. 
+# INSERTs in the db and returns the collection
+
+queens.song.create(name: "We will rock you")
+# INSERTs in the db and returns the saved object, use this one if you don't need all of the collection in memory
+# mostly you use the build one and save it, never the create one
+```
+
+The object on the left is always the parent, and on the right is the child. When you save the parent the child gets automatically saved. But if you only save the child the parent won't get saved!
+
+```ruby
+# on the belongs_to :artist side (build_artist off song)
+
+> a = Song.new.build_artist
+=> #<Artist id: nil, name: nil, created_at: nil, updated_at: nil, artist_id: nil>
+
+> a
+=> #<Artist id: nil, name: nil, created_at: nil, updated_at: nil, artist_id: nil>
+
+> a.save
+[will run only 1 INSERT for the artist]
+# only the child of the 'Song.new.build_artist' gets saved, on the right side (artist), the parent doesn't get saved. There's no need to have an artist_id (to create an artist) so the song won't get saved.
+
+---
+# on the belongs_to :artist side (build_artist off 1 song)
+
+> s = Song.new
+=> #<Song id: nil, name: nil, created_at: nil, updated_at:nil, artist_id: nil>
+> a = s.build_artist
+=> #<Artist id: nil, name: nil, created_at: nil, updated_at:nil, artist_id: nil>
+> s.save
+# we save the parent, off of which the artist was born (child)
+[ will INSERT twice, the artist (to get the primary key) first and the the song with the right foreign key from INSERT 1]
+
+---
+
+# on the has_many :songs side (artist.songs.build)  build from 1 artist's songs collection
+a = Artist.new
+=> #<Artist id: nil, name: nil, created_at: nil, updated_at:nil, artist_id: nil>
+
+s = a.songs.build
+=> #<Song id: nil, name: nil, created_at: nil, updated_at:nil, artist_id: nil>
+
+s.save
+# we save the song, which is on the right, so is the child, and it will have to force the saving of the parent (artist) to save the child
+```
+
+Anyway playing with the console and the SQL logger. You want to play in the smallest sandbox as possible.
+AR is one of the most important parts of the whole stach, and once it clicks it wont't never unclick!
+
+### Object life cycle
+An object is born at initialization, and then has a lifecycle.
+You cannot overid initialize.
+ActiveRecord gives you callbacks, hooks to connect to moments of the object lifecycle (Create, Update, Destroyed).
+
+The validations are made when the object is persisted, if it is not valid it will populate the return value (AR error model) of the  `.error` method with `@messages`. You can call all methods listed in `.errors.local_methods` like `.errors.full_message.to_sentence`, `.valid?`.
+
+You can do custom validations
+```ruby
+class Artist < ActiveRecord::Base
+    has_many :songs
+    validates :name, presence: true
+    validates :name, length: { minimum: 5 }
+    validate :good_song
+    
+    def good_song
+        if self.name !="Taylor Swift"
+            errors.add(:good_song, "must be made by  TayTay")
+        end
+    end
+end
+```
+
+> Only 3 things you can do in programming: instantiate objects, set variables, define or call method
+
+You can also create actions to fire after a lifecycle event.
+```
+after_create :email_people
+# different from after_save
+
+def email_people
+    puts" I've emailed someone"
+end    
 
