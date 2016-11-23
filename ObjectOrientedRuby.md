@@ -83,9 +83,7 @@ That is because `this_dogs_name` is a local variable. A local variable has a loc
 
 We define an instance variable by prefacing the variable name with an `@` symbol.
 
-**Instance variables are bound to an instance of a class**. Instance variables hold information about an instance, usually an attribute of that instance. Think of instance variables as the containers for instance-specific information. 
-
-Instance variables **can be called on throughout the class, without needing to be passed into other methods as arguments** (as would be the case with local variables).
+> **Instance variables are bound to an instance of a class**. Instance variables hold information about an instance, usually an attribute of that instance. Think of instance variables as the containers for instance-specific information. Instance variables **can be called on throughout the class, without needing to be passed into other methods as arguments** (as would be the case with local variables).
 
 ```ruby
 class Dog
@@ -1099,7 +1097,7 @@ module Dance
   end
 end
 ```
-If we use `include` keyword, we allow our classes to use all of the methods of the included module **as instance methods**. 
+1 . If we use `include` keyword, we allow our classes to use all of the methods of the included module **as instance methods**. 
 ```ruby
 class Kid
   include Dance
@@ -1116,7 +1114,7 @@ angelina = Dancer.new
 angelina.twirl
 // returns "I'm twirling!"
 ```
-In order to lend a module's methods to a class **as class methods**, we use the `extend` keyword.
+2 . In order to lend a module's methods to a class **as class methods**, we use the `extend` keyword.
 
 ```ruby
 module MetaDancing
@@ -1167,17 +1165,14 @@ end
 ```
 We refer to the name-spaced modules or classes with `::`. The Parent::Child syntax is called namespacing, and references the parent and child relationship of the nested modules.
 
-Inheritance using the `<` syntax, implies that a class is a type of something. A `BMW` class should inherit from a `Car` class because a `BMW` is **a type of** car: class BMW < Car.
+- Inheritance using the `<` syntax, implies that a class is a type of something. A `BMW` class should inherit from a `Car` class because a `BMW` is **a type of** car: class BMW < Car.
+- The `::` syntax just denotes a name-space. Doing `BMW::Car` just gives the `BMW` class access to all constants, instance methods, etc, without stating that a BMW is a type of `Car`. The `::` syntax carries all public items over to the inheriting class or module.
 
-The `::` syntax just denotes a name-space. Doing `BMW::Car` just gives the `BMW` class access to all constants, instance methods, etc, without stating that a BMW is a type of `Car`. The `::` syntax carries all public items over to the inheriting class or module.
+It is a **common practice to create a folder called `concerns` that holds modules that will be used across classes** in an object oriented Ruby project.
 
-It is a common practice to create a folder called `concerns` that holds modules that will be used across classes in an object oriented Ruby project.
+It is often useful to use `self.class.all` (e.g. to abstract `Song.all`) to refactor an `.initialize` (instance method) method. When we include a module in a class, we are really telling that class to inherit methods from that module.
 
-It is often useful to use `self.class.all` to refactor an `.initialize` (instance method) method. When we include a module in a class, we are really telling that class to inherit methods from that module.
-
-So, we can use the super keyword to tell our Artist's .initialize method to use the code in the Memorable::InstanceMethods module's .initialize method and also to use any additional code in the Artist's .initialize method. The super keyword, placed inside a method, will tell that method to look up its behavior in the method of the same name that lives in the parent, or super, class.
-
-So, we can use the super keyword to tell our Artist's .initialize method to use the code in the Memorable::InstanceMethods module's .initialize method and also to use any additional code in the Artist's .initialize method.
+So, we can use the `super` keyword to tell our Artist's `.initialize` method to use the code in the Memorable::InstanceMethods module's `.initialize` method and also to use any additional code in the Artist's `.initialize` method. The `super` keyword, placed inside a method, will tell that method to look up its behavior in the method of the same name that lives in the parent, or `super`, class.
 ```ruby
 class Artist
   include Memorable::InstanceMethods
@@ -1243,7 +1238,7 @@ end
 ```
 
 ## Mass Assignment
-At this point, we're very familiar with the fact that methods can be defined to take in arguments. We also know that methods can be defined to take in multiple arguments: `method(argument1, argument2)`. As it currently stands, whoever uses our method needs to remember exactly what order to pass in the arguments. Clearly, we have a need to regulate the passing in of multiple arguments, otherwise we risk to break our methods if one argument is used as the other.
+At this point, we're very familiar with the fact that methods can be defined to take in arguments. We also know that methods can be defined to take in multiple arguments: `method(argument1, argument2)`. As it currently stands, whoever uses our method needs to remember exactly what order to pass in the arguments. Clearly, we have a need to **regulate the passing in of multiple arguments**, otherwise we risk to break our methods if one argument is used as the other.
 
 Keyword arguments are a special way of passing arguments into a method. They behave like hashes, pairing a key that functions as the argument name, with its value.
 ```ruby
@@ -1263,7 +1258,7 @@ end
 ```
 Our keyword arguments consist of two key/value pairs, `:name` and `:current_age`. Even if we change the order of our key/value pairs, our method won't break.
 
-Another benefit of using keyword arguments is the ability to "mass assign" attributes to an object. If a method is defined to accept keyword arguments, we can create the hash that the method is expecting to accept as an argument, set that hash equal to a variable, and simply pass that variable in to the method as an argument.
+Another **benefit of using keyword arguments is the ability to "mass assign" attributes to an object**. If a method is defined to accept keyword arguments, we can create the hash that the method is expecting to accept as an argument, set that hash equal to a variable, and simply pass that variable in to the method as an argument.
 
 ```ruby
 person_attributes = {name: "Sophie", age: 26}
@@ -1289,7 +1284,7 @@ For the purposes of this example, we won't get into the specifics of how we requ
 ```ruby
 twitter_user = {name: "Sophie", user_name: "sm_debenedetto", age: 26, location: "NY, NY"}
 ```
-we can use the twitter_user hash to instantiate a new instance of our own User class:
+We can use the twitter_user hash to instantiate a new instance of our own User class thanks to mass assignment:
 ```ruby
 sophie = User.new(twitter_user)
  => #<User:0x007fa1293e68f0 @name="Sophie", @age=26, @user_name="sm_debenedetto", @location="NY, NY">
