@@ -62,6 +62,29 @@ expect{author.add_story(story)}.to raise_error(InventedCustomError)
 expect(@artist).to be_an_instance_of(Artist)
 ```
 
+## Before and After actions
+
+```ruby
+describe FiguresController do
+  before do
+    queenb = Figure.create(:name => "Beyonce")
+    kanye = Figure.create(:name => "Kanye")
+    bqe = Landmark.create(name: 'BQE', year_completed: 1961)
+    mr_president = Title.create(name: "Mr. President")
+    bqe.figure = queenb
+    bqe.save
+  end
+
+  after do
+    Figure.destroy_all
+    Title.destroy_all
+    Landmark.destroy_all
+  end
+
+  it "allows you to view form to create a new figure" ...
+  
+end  
+```
 
 ## Capybara
 Capybara gives us a few methods to simulate how the user would interact with the page:
@@ -71,6 +94,8 @@ Capybara gives us a few methods to simulate how the user would interact with the
 ```ruby
 visit '/'
 fill_in(:user_name, with: "Avi")
+fill_in :figure_name, :with => "Doctor Who"
+check "title_#{Title.first.id}"
 click_button "Submit"
 
 expect(page.body).to include("Welcome!")
@@ -80,9 +105,36 @@ expect(page).to have_selector("form")
 expect(page).to have_field(:user_name)
 ```
 
+## About the spec-helper
+Each spec file begins by `require 'spec_helper'`.
+```ruby
+ENV["SINATRA_ENV"] = "test"
 
+require_relative '../config/environment'
+require 'rack/test'
+require 'capybara/rspec'
+require 'capybara/dsl'
 
+if defined?(ActiveRecord::Migrator) && ActiveRecord::Migrator.needs_migration?
+  raise 'Migrations are pending run `rake db:migrate SINATRA_ENV=test` to resolve the issue.'
+end
 
+RSpec.configure do |config|
+  config.run_all_when_everything_filtered = true
+  config.filter_run :focus
+  config.include Rack::Test::Methods
+  config.include Capybara::DSL
+  config.order = 'default'
+end
+
+ActiveRecord::Base.logger.level = 1
+
+def app
+  Rack::Builder.parse_file('config.ru').first
+end
+
+Capybara.app = app
+```
 
 
 
