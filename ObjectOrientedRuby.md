@@ -1445,9 +1445,9 @@ gem 'mail', '~> 2.6', '>= 2.6.3'
 
 If you type `gem env` you see your gems and INSTALLATION DIRECTORY tells you where they are located. They are managed by rvm and are shared resources between the projects of your machine.
 
-Let's take the first part of the versioning `'~> 2.6'`. A major version change is reflected by the first number (reading from left to right). Major version changes don't have to be backwards compatible. This means that if your app is built using version 1, and the gem updates to version 2, the new version can potentially break your app. A minor version change is reflected by the number after the first decimal point. All minor version changes have to be backwards compatible. The number after the second decimal point reflects a patch, which is a change to a gem to fix a bug but not introduce new functionality. 
+Let's take the first part of the versioning `'~> 2.6'`. A **major version** change is reflected by the first number (reading from left to right). Major version changes don't have to be backwards compatible. This means that if your app is built using version 1, and the gem updates to version 2, the new version can potentially break your app. A **minor version** change is reflected by the number after the first decimal point. All minor version changes have to be backwards compatible. The number after the second decimal point reflects a **patch**, which is a change to a gem to fix a bug but not introduce new functionality. 
 
-`1.2.3` means major version 1, minor version 2, and a patch version 3.
+> `1.2.3` means major version 1, minor version 2, and a patch version 3.
 
 The `~>` means any minor version change above the one listed. `'~> 2.6'` means any minor version above 2.6. 2.7, 2.8, and 2.9 would work (including patches); but version 3.0 wouldn't work because it indicates a new major version.
 
@@ -1508,7 +1508,7 @@ There's only one file Bundler requires you have (Gemfile), the other files are c
 - bin/run.rb - This file will start our application. This file will require the environment file we created earlier to provide our app with access to our gems.
 
 **CONFIG ENVIRONMENT**
-This means we'd want the gems to be loaded in our app before our own code. If we loaded our code first, we'd get uninitialized constant errors or undefined variable or method errors. Load order matters. We can specify load information in config/environment.rb to configure our load path (or load order) so that nothing breaks.
+This means **we want the gems to be loaded in our app before our own code**. If we loaded our code first, we'd get uninitialized constant errors or undefined variable or method errors. Load order matters. We can specify load information in config/environment.rb to configure our load path (or load order) so that nothing breaks.
 ```ruby
 require 'bundler/setup'
 Bundler.require
@@ -1527,6 +1527,7 @@ require_relative '../config/environment'
 MusicLibraryController.new.call
 ```
 
+**ABOUT REQUIRE_RELATIVE**
 `require` and `require_relative` methods might look similiar they do different things. Both load a file based on the filename passed in as a parameter and return true if the file was found and loaded successfully and they will raise a LoadError if it returns false. However...
 - `require` takes an **absolute path** for the filename, so the file must either be in the directory from which the application is being run or in one of the directories in your shell's PATH variable (which often includes the directory containing the gems you've installed).
 - `require_relative` takes a **relative path** that is relative to the file in which the require statement is called (so it's relative to the file being run, not to the directory from which the code is being called).
@@ -1540,15 +1541,21 @@ Scraping can be difficult to accomplish––in order to get the data we want, w
 So, if scraping is so tricky, why do we use it? Well, not all of the data we might be interested in using to program is available to use through APIs.
 
 ### Open URI
-Open-URI is a module in Ruby that allows us to programmatically make HTTP requests. It gives us a bunch of useful methods to make different types of requests, but for this guide, we're interested in only one: open. This method takes one argument, a URL, and will return to us the HTML content of that URL.
+Open-URI is a default module in Ruby that allows us to programmatically make HTTP requests. It gives us a bunch of useful methods to make different types of requests, but for this guide, we're interested in only one: open. This method takes one argument, a URL, and **will return to us the HTML content of that URL**.
 ```ruby
 html = open('http://www.google.com')
 ```
 This stores the HTML of Google into a variable called html. (More specifically, it actually stores the HTML in a temporary file that we can then call read on to get the raw HTML.). 
-Note that 'open-uri' is part of the ruby standard library, we don't need to add it as a gem, only to require it.
+Note that **'open-uri' is part of the ruby standard library**, we don't need to add it as a gem, only to `require` it.
+
+```ruby
+# In environment.rb
+    require 'open-uri'
+    # OpenUri is part of the Ruby standard library, that's why we only need to require it 
+```
 
 ### NOKOGIRI
-Nokogiri is a Ruby gem that helps us to parse HTML and collect data from it. Essentially, Nokogiri allows us to treat a huge string of HTML as if it were a bunch of nested nodes. Nokogiri offers you, the programmer, a series of methods that you can use to extract the desired information from these nested nodes. Nokogiri makes the level of precision required to extract the necessary data much easier to attain.
+Nokogiri is a Ruby gem that **helps us to parse HTML and collect data from it: it allows us to treat a huge string of HTML as if it were a bunch of nested nodes**. Nokogiri offers you, the programmer, a series of methods that you can use to extract the desired information from these nested nodes. Nokogiri makes the level of precision required to extract the necessary data much easier to attain.
 
 Let's set up a small CLI program.
 Let's start by creating a directory `mkdir Nogokiri` and inside create the following architecture, creating files with `touch file_name`.
@@ -1599,12 +1606,12 @@ instructors.each do |instructor|
   puts "Flatiron School <3 " + instructor.css("h2").text
 end
 ```
-When we use Nokogiri methods, we get a return value of XML elements, collected into an array. Even though the Nokogiri gem returns a Nokogiri::XML::Element (which looks like an array in ruby), we can use Ruby methods, such as .each and .collect, to iterate over it. The main thing to understand, however, is that Nokogiri collects these objects into hierarchical data structures. So, we could iterate over an array of Nokogiri objects, use enumerators, grab the values of attributes that act as hash keys, etc.
+When we use Nokogiri methods, **we get a return value of XML elements, collected into an array**. Even though the Nokogiri gem returns a `Nokogiri::XML::Element` (which looks like an array in ruby), we can use Ruby methods, such as `.each` and `.collect`, to iterate over it. The main thing to understand, however, is that Nokogiri collects these objects into hierarchical data structures. So, we could iterate over an array of Nokogiri objects, use enumerators, grab the values of attributes that act as hash keys, etc.
 
-#### Single responsibility principle SRP
-Each method, piece of code shouldn't be doing more than one thing!
+> **Single responsibility principle SRP. Each method, piece of code shouldn't be doing more than one thing!**
 
 #### Explaining .tap
+`#tap` yields `self` to the block, and then returns `self`. The primary purpose of this method is to “tap into” a method chain, in order to perform operations on intermediate results within the chain.
 ```ruby
 # Inside of the Animal class, with attr_accessors and initialize method
 
@@ -1619,8 +1626,10 @@ def self.new_from_wikipedia(url)
     
     animal
 end
+```
+We can refactor using `.tap` that **returns the Animal object that you tapped**, and also eliminates the local variable.
+```ruby
 
-# We can refactor using .tap that returns the Animal object that you tapped, and also eliminates the local variable
 def self.new_from_wikipedia(url)
     Animal.new.tap do |animal|
         AnimalScraper.wikipedia(url).each do |k, v|
@@ -1639,6 +1648,29 @@ class AnimalScraper
         animal[:name] = doc.search("h1#firstHeading").text
         animal[:family] = doc.search("span.family").text
     end
+end
+```
+
+Other examples of `.tap`
+```ruby
+# to create an instance and write some instance variables
+song.artist = Artist.new.tap {|a| a.name = "miley"}
+    # same as
+    # artist = Artist.new
+    # artist.name = "miley"
+    # song.artist = artist
+
+# inside of a Student class
+def self.new_from_db(row)
+    # create a new Student object given a row from the database
+    self.new.tap do |student|
+      student.id, student.name, student.grade = row[0], row[1], row[2]
+    end
+end
+
+# inside of an Artist class
+def self.create(name)
+    self.new(name).tap {|artist| artist.save}
 end
 ```
 
