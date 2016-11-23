@@ -818,10 +818,10 @@ crazy_in_love.artist_name
 Objects can be related to one another directly, when one object contains a reference to another: a bank account and transactions for instance.
 
 Domain modeling is the description of what you want the app to do 
-1. Identify your objects
+1 . Identify your objects
 I want to build and app that can load artists, songs and genres, for each of them it can generate an index.html that lists all of the items in the collection and then it can also generate a "show.html" (kanye-west.html) for each individual in the collection.
 
-2. Identify single responsibilities for each model
+2 . Identify single responsibilities for each model
 I need different machines that just do one thing, have encapsulated responsibilities
 
 - Artist, that is responsible for 
@@ -840,16 +840,20 @@ I need different machines that just do one thing, have encapsulated responsibili
     - template like index.html
     - items in the collection
 
-3. Design the interface
+3 . Design the interface
 Design what you should be able to do (even if you don't know yet how you'll get there)
+```ruby
 SiteGenerator.new(Artist.all, "views/artists/index.html", "_site/artists/index.html")
+```
 Here we pass in the collection, the template, and where I want the template to be generated
 
-4. Write the code and refactor
+4 . Write the code and refactor
+```ruby
 class SiteGenerator
     def initialize(collection, template, destination)
     end
 end
+```
 
 
 Video available online on [youtube](https://www.youtube.com/watch?v=iYcQ693LXck)
