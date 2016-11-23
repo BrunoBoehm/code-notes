@@ -148,7 +148,7 @@ def initialize(first_name, last_name)
 ```
 
 ### Object accessors
-In Ruby a macro is like a method, just some code, that instead of returning a Ruby datatype returns more Ruby code! The implementation of macros is considered metaprogrammingb: the writing of programs that operate on other programs. We'll implement macros to abstract away the manual, explicit definition of setter and getter methods in a Ruby class.
+In Ruby a macro is like a method, just some code, that instead of returning a Ruby datatype returns more Ruby code! **The implementation of macros is considered metaprogramming**: the writing of programs that operate on other programs. We'll implement macros to abstract away the manual, explicit definition of setter and getter methods in a Ruby class.
 
 In object-oriented Ruby, there is a strong convention to have a `setter` and a `getter` method that pertain to the same attribute. For example, a `.name` getter and a `.name=` setter on our Person class. Because this pattern is so common, we find ourself making these manual setter and getter definitions again and again.
 
@@ -199,7 +199,7 @@ We already know that any Ruby class can produce new instances of itself, via the
 
 >An #initialize method is a method that is called automatically whenever `#new` is used.
 
-A best practice is to say that initialize is "closed to modification, but open to extension". Initialize should be the smallest peace of code, but we can extent its functionalities through other constructor class methods.
+A best practice is to say that **initialize is "closed to modification, but open to extension"**. Initialize should be the smallest peace of code, but we can extent its functionalities through other constructor class methods.
 
 The initialize method is what's called a callback method, because it is automatically invoked every time the `#new` method is used to create a new instance of the class. You can also think of the initialize method as a constructor method. A constructor method is invoked upon the creation of an instance of a class and used to help define the instance of that class.
 
@@ -254,7 +254,7 @@ end
 ```
 
 ### Domain model
-A domain model is a representation of real-world concepts in software. The concept of domain modeling is key in object orientation. In object orientation, we think of our classes as templates for objects. The instances of our classes are thought of as objects. For example, a Person class produces people objects that have attributes and behaviors, as described and enacted by instance methods.
+A domain model is a representation of real-world concepts in software. The concept of **domain modeling is key in object orientation**. In object orientation, we think of our classes as templates for objects. The instances of our classes are thought of as objects. For example, a Person class produces people objects that have attributes and behaviors, as described and enacted by instance methods.
 
 An `AutoPlant` class that produces individual cars and has instance and class methods that handle things like `take_inventory` or `paint_cars`. Such a program not only represents a single object or concept but an entire environment––that of the auto factory. Consequently, this program could be understood as a domain model.
 
@@ -323,6 +323,7 @@ If `self` refers to the object on which the method is being called, and if that 
 
 ### 3 golden rules of Self
 3 cases for the use of `self` ([read more](https://hackhands.com/three-golden-rules-understand-self-ruby/))
+
 1. Use `self` when setting/getting instance attributes inside a class definition.
 2. Use `self` to denote a method within the class definition as a class method.
 3. Use `self` to reference the calling object within an instance method definition.
