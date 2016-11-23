@@ -442,7 +442,7 @@ or
   end
 ```
 ### Private methods
-Private methods cannot be called by an explicit receiver.  It means we can only call private methods within the context of the defining class: the receiver of a private method is always `self`. Private methods restrict an outsider from calling methods that belong to an object.
+**Private methods cannot be called by an explicit receiver**.  It means we can only call private methods within the context of the defining class: **the receiver of a private method is always `self`**. Private methods restrict an outsider from calling methods that belong to an object.
 
 ```ruby
 # initialize is already a private method
@@ -513,7 +513,7 @@ phil.choose_liquor
 
 ## Object Models
 ### Remembering Objects in CLASS variables
-Our application needs a way to store or remember a collection of class instances. Whether they are instances of a Game, User or Password class, all of these examples would require our program to keep track of instances that are created. Ruby allows us to do so by using class variables to store new instances as soon as they are created.
+Our application needs a way to store or remember a collection of class instances in memory as long as we don't have a database. Whether they are instances of a Game, User or Password class, all of these examples would require our program to keep track of instances that are created. Ruby allows us to do so by using class variables to store new instances as soon as they are created.
 
 ```ruby
 class Song
@@ -577,7 +577,7 @@ We call class methods like `Person.find_by_name` 'finders'. **Finder class metho
 
 Whenever we use `Person.find_by_name` the intention of our code is revealed. Instead of iterating on an array, our code reads clearly. Instead of describing the implementation of finding a person by name, our code simply says what it is doing, not how. This is called an API. 
 
-You want to build objects that provide a semantic and obvious API. Methods that reveal what the object will do, not how it does that. Always hide the how and show the what.
+You want to build objects that **provide a semantic and obvious API**. Methods that reveal what the object will do, not how it does that. Always **hide the how and show the what**.
 
 When we get a CSV (comma-separated values) we can make this first type of code:
 ```ruby
@@ -596,10 +596,12 @@ people = rows.collect do |row|
   name = data[0]
   age = data[1]
   company = data[2]
+  
   person = Person.new
   person.name = name
   person.age = age
   person.company = company
+  
   person
 end
 people #=> [#<Person @name="Elon Musk"...>, #<Person @name="Mark Zuckerberg"...>...]
@@ -821,6 +823,7 @@ I want to build and app that can load artists, songs and genres, for each of the
 
 2. Identify single responsibilities for each model
 I need different machines that just do one thing, have encapsulated responsibilities
+
 - Artist, that is responsible for 
 -   name
 -   songs
