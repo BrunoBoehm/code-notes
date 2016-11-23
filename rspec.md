@@ -86,6 +86,15 @@ describe FiguresController do
 end  
 ```
 
+It is also possible to generate symbols thta can be used in all of the following tests.
+```ruby
+describe 'Song' do 
+  let(:song) {Song.new('Man in the Mirror')}
+  let(:file_name) {'Michael Jackson - Black or White - pop.mp3'}
+  ...
+end  
+```
+
 ## Capybara
 Capybara gives us a few methods to simulate how the user would interact with the page:
 - `visit` & `page` – Capybara methods for controlling the test user's browser and examining the current state of the page as they 'see' it.
