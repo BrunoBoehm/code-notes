@@ -310,6 +310,7 @@ In the MVC framework, there are 3 different levels of testing.
 5. User/Browser: The top of our application pyramid is finally the user. Whether describing the people using our application, the interface they use such as a Command Line, Voice, or HTML, or the program they use to even access our application, such as a Browser like Chrome or Safari, or a Native app, our application is responsible for delivering the user an experience on some sort of pre-existing platform.
 
 There are 3 levels of testing
+
 1. Unit tests test the models in our application and how they interact with our database.
 2. Controller tests test that the code responsible for delivering the appropriate data to a user is working properly. Controller tests should test not HTML or forms but, rather, that the controller is behaving as expected.
 3. Integration tests are the highest-level test, and they are closest to describing how a user will actually interact with our application. Integration tests are the highest-level test, and they are closest to describing how a user will actually interact with our application. 
@@ -1179,19 +1180,21 @@ value="<%= @post.content %>" is what is displayed in the form
 ## User authentication in Sinatra
 We'll build a Sinatra application that will will allow users to sign up for, log into, and then log out of your application.
 
-**LOG IN**
+### LOG IN
 The action of **logging in** is the simple action of storing a user's ID in the `session` hash. 
+
 1. User visits the login page and fills out a form with their `email` and `password`. They hit 'submit' to POST that data to a controller route.
 2. That controller route accesses the user's email and password from the params hash. That info is used to find the appropriate user from the database with a line such as `User.find_by(email: params[:email], password: params[:password])`. Then, that `user.id` is stored as the value of `session[:id]`.
 3. As a result, we can introspect on the session hash in any other controller route and grab the current user by matching up a user ID with the value in `session[:id]`. That means that, for the duration of the session (i.e., the time between when someone logs in to and logs out of your app), the app will know who the current user is on every page.
 
 For the time being, we will simply store a user's password in the database in its raw form. However, that is not safe! In an upcoming lesson, we'll learn about password encryption.
 
-**LOG OUT**
+### LOG OUT
 The action of **logging out** is really just the action of clearing all of the data, including the user's ID, from the session hash. Luckily for us, there is already a Ruby method for emptying a hash: `#clear`.
 
-**SIGN UP**
+### SIGN UP
 Before a user can sign in, they need to sign up! A new user submits their information (for example, their name, email, and password) via a form. When that form gets submitted, a POST request is sent to a route defined in the controller.
+
 1. That route will get the new user's name, email, and password from the `params` hash
 2. It will create and save a new instance of User. For example: `User.create(name: params[:name], email: params[:email], password: params[:password])`
 3. It signs in the user automatically (would be annoying if you had to create a new account on a site and then sign in immediately afterwards). So in the same controller route in which we create a new user, we set the `session[:id]` equal to the new user's ID, effectively logging them in.
@@ -2013,5 +2016,141 @@ class PetsController < ApplicationController
 end
 ```
 
+## Sinatra Project Structure
+The basic architecture for a Sinatra App is the following (the rest of the files will be generated based on commands and tasks).
+```
+/app
+    /models
+    /controllers
+    /views
+/config
+    environment.rb
+/db
+    /migrate
+    seeds.rb
+/spec
+    /controllers
+    /models
+    spec_helper.rb
+config.ru
+Gemfile
+Rakefile
+README.md
+```
+
+### 1. Gemfile
+Let's start with the Gemfile
+```ruby
+source 'http://rubygems.org'
+
+gem 'sinatra'
+gem 'activerecord', :require => 'active_record'
+gem 'sinatra-activerecord', :require => 'sinatra/activerecord'
+gem 'rake'
+gem 'require_all'
+gem 'bcrypt'
+
+group :development do
+    gem 'shotgun'
+    gem 'pry'
+    gem 'tux'
+    gem 'sqlite3'
+end
+
+group :test do
+  gem 'rspec'
+  gem 'capybara'
+  gem 'rack-test'
+  gem 'database_cleaner', git: 'https://github.com/bmabey/database_cleaner.git'
+end
+```
+
+### 2. config/environment.rb
+We need a `/config/environment.rb` file to set the default environment, require the `gems` , establish a `DB` connection, and `require_all` of the app files (thanks to the require_all gem).
+```ruby
+require 'bundler/setup'
+Bundler.require
+
+ENV['SINATRA_ENV'] ||= "development"
+
+ActiveRecord::Base.establish_connection(
+  :adapter => "sqlite3",
+  :database => "db/#{ENV['SINATRA_ENV']}.sqlite"
+)
+
+require_all 'app'
+require_all 'lib'
+```
+Note we can also require our gems with `Bundler.require(:default, ENV['SINATRA_ENV'])` (default + specific to the ENV). The `Bundler.require` method basically requires all of our gems from `.`gemfile.lock`.
+
+Note it would also be possible to require the files in several other manual ways -  without the `require_all` gem.
+```ruby
+Dir[File.join(File.dirname(__FILE__), "../app/models", "*.rb")].each {|f| require f}
+Dir[File.join(File.dirname(__FILE__), "../app/controllers", "*.rb")].sort.each {|f| require f}
+```
+or using the require_relative statement (that searches relatively/from the current file's folder)
+```ruby
+# in config/environment.rb
+require_relative "../app/controllers/application_controller.rb"
+```
+
+### 3. config.ru
+A `config.ru` file is necessary when building Rack-based applications and using rackup/shotgun to start the application server (the ru stands for rackup). config.ru is first responsible for **loading our application environment**, code, and libraries. Once all our code is loaded, config.ru then specifies **which controllers to load as part of our application** using run or use (all controllers must be registered with `use` and the main one called with `run`!!).
+```ruby
+require_relative './config/environment'
+
+if defined?(ActiveRecord::Migrator) && ActiveRecord::Migrator.needs_migration?
+  raise 'Migrations are pending run `rake db:migrate` to resolve the issue.'
+end
+
+use Rack::Static, :urls => ['/css'], :root => 'public' 
+
+use Rack::MethodOverride
+
+use LandmarksController
+use FiguresController
+run ApplicationController
+```
+Note `use Rack::MethodOverride` is used to enable us to process patch and delete requests.
+There's a hack to auto-add the `use` for multiple controllers
+```ruby
+Dir[File.join(File.dirname(__FILE__), "app/controllers", "*.rb")].collect {|file| File.basename(file).split(".")[0] }.reject {|file| file == "application_controller" }.each do |file|
+  string_class_name = file.split('_').collect { |w| w.capitalize }.join
+  class_name = Object.const_get(string_class_name)
+  use class_name
+end
+```
+
+### 4. Rakefile
+Thanks to this `Rakefile` we can now use the tasks listed in `rake -T` for all of our operations with the database.
+```ruby
+require_relative './config/environment'
+require 'sinatra/activerecord/rake'
+
+ENV["SINATRA_ENV"] ||= "development"
+
+task :console do
+  Pry.start
+end
+```
+
+### 5. application_controller.rb
+```ruby
+class ApplicationController < Sinatra::Base
+  register Sinatra::ActiveRecordExtension
+  
+  configure do
+    enable :sessions
+    set :public_folder, 'public'
+    set :views, 'app/views'
+    set :session_secret, "my_application_secret"
+  end
 
 
+  get '/' do
+   ... #regular routes stuff
+  end
+end
+```
+Note the need to declare `register Sinatra::ActiveRecordExtension` [sinatra-activerecord gem](https://github.com/janko-m/sinatra-activerecord)
+Note it is also possible to configure the :views using `set :views, Proc.new { File.join(root, "../views/") }`.
