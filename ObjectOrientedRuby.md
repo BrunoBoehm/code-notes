@@ -825,20 +825,20 @@ I want to build and app that can load artists, songs and genres, for each of the
 I need different machines that just do one thing, have encapsulated responsibilities
 
 - Artist, that is responsible for 
--   name
--   songs
--   genres
+    - name
+    - songs
+    - genres
 - Song, responsible for
--   name
--   genre
--   artist
+    - name
+    - genre
+    - artist
 - Genre responsible for 
--   name
--   songs
--   artists
+    - name
+    - songs
+    - artists
 - Site generator is responsible for
--   template like index.html
--   items in the collection
+    - template like index.html
+    - items in the collection
 
 3. Design the interface
 Design what you should be able to do (even if you don't know yet how you'll get there)
