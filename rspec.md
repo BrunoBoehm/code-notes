@@ -39,6 +39,76 @@ describe Author do
         end
     end
 end
+
+---
+
+describe 'Music Library CLI' do
+  it 'allows a user to list songs' do
+    music_library_controller = MusicLibraryController.new("./spec/fixtures/mp3s")
+
+    expect(MusicLibraryController).to receive(:new).and_return(music_library_controller)
+    expect(music_library_controller).to receive(:gets).and_return("list songs", "exit")
+
+    output = capture_puts {run_file("./bin/musiclibrary")}
+
+    expect(output).to include("1. Action Bronson - Larry Csonka - indie")
+  end
+end  
+
+---
+
+describe "Song Basics" do
+  describe '#initialize with #name' do
+    it 'accepts a name for the song' do
+      song = Song.new("In the Aeroplane Over the Sea")
+      expect(song.name).to eq("In the Aeroplane Over the Sea")
+    end
+  end
+
+  describe '#name=' do
+    it "sets the song name" do
+      song = Song.new("In the Aeroplane Over the Sea")
+      song.name = "Jump Around"
+
+      expect(song.name).to eq("Jump Around")
+    end
+  end
+
+  describe '.all' do
+    it 'returns the class variable @@all' do
+      Song.class_variable_set(:@@all, [])
+
+      expect(Song.all).to match_array([])
+    end
+  end
+
+  describe '.destroy_all' do
+    it 'resets the @@all class variable to an empty array' do
+      Song.class_variable_set(:@@all, ["Song"])
+
+      Song.destroy_all
+      expect(Song.all).to match_array([])
+    end
+  end
+
+  describe '#save' do
+    it 'adds the song instance to the @@all class variable' do
+      song = Song.new("In the Aeroplane Over the Sea")
+
+      song.save
+
+      expect(Song.all).to include(song)
+    end
+  end
+
+  describe '.create' do
+    it 'initializes and saves the song' do
+      song = Song.create("In the Aeroplane Over the Sea")
+
+      expect(Song.all).to include(song)
+    end
+  end
+end
 ```
 `context` and `describe` are interchangeable, it's more about the readability ("I'm describing Authors with stories, it has...").
 
@@ -54,12 +124,28 @@ expect(@artist.songs.count).to eq(1)
 expect(@song.artist).to eq(@artist)
 
 expect(author.stories).to match_array([])
+expect(artist.genres).to match_array([indie_rock, electro_pop])
+
+expect(defined?(Concerns::Findable)).to be_truthy
+expect(artist.instance_variable_defined?(:@genres)).to be_falsey
+
+expect(Concerns::Findable).to be_a(Module)
+expect(song_1).to be_a(Song)
+
+expect(Artist).to respond_to(:find_by_name)
 
 expect(author.stories).to include(story)
+expect(output).to include("Action Bronson")
 
 expect{author.add_story(story)}.to raise_error(InventedCustomError)
 
 expect(@artist).to be_an_instance_of(Artist)
+
+expect(music_library_controller).to receive(:gets).and_return("list songs", "exit")
+
+expect{MusicLibraryController.new('./spec/fixtures/mp3s')}.to_not raise_error
+
+expect(MusicImporter).to receive(:new).with('./db/mp3s').and_return(MusicImporter.new('./db/mp3s'))
 ```
 
 ## Before and After actions
