@@ -1353,9 +1353,12 @@ Note if we were to use ERB we would
 
 ```
 
-Using `Dir.glob` returns the filenames found by expanding the search pattern (which is an Array of the patterns or the pattern String), either as an array or as parameters to the block. Note that this pattern is not a regexp (it’s closer to a shell glob). 
+Using `Dir.glob` returns the filenames found by expanding the search pattern (which is an Array of the patterns, or the pattern String), either as an array or as parameters to the block. Note that this pattern is **not a regexp** (it’s closer to a shell glob). 
 ```ruby
 Dir.glob("#{path}/*.mp3").collect{ |f| f.gsub("#{path}/", "") }
+
+# we could also write this (with use of a Regex inside of the gsub
+Dir[File.join(path, '/*.mp3')].map { |e| e.gsub(/.*\/mp3s\//, "") }
 ```
 
 `__FILE__` is a reference to the current file name, thus, `File.dirname(__FILE__)` will return the path to the file relative to where it's being executed from.
@@ -1363,11 +1366,20 @@ Dir.glob("#{path}/*.mp3").collect{ |f| f.gsub("#{path}/", "") }
 def files
 data_path = File.join(File.dirname(__FILE__), '..', 'db', 'data')
 # goes up one directory level from current dir, and then to db/data
+```
 
+`Dir.entries(folder)` get all file names from the folder, in an `array [".", "..", "first file", "second file"...]`. `[2..-1]` from the third item to the last, because we don't want ".", ".."
+```ruby
 Dir.entries(data_path)[2..-1]
-# Dir.entries(folder) get all file names from the folder, in an array [".", "..", "first file", "second file"...]
-# [2..-1] from the third item to the last, because we don't want ".", ".."
 end
+```
+
+`expand` is a somewhat ugly Ruby idiom for getting the absolute path to a file when you know the path relative to the current file. This is how it works: `File.expand_path` returns the absolute path of the first argument, relative to the second argument (which defaults to the current working directory). `__FILE__` is the path to the file the code is in. Since the second argument in this case is a path to a file, and `File.expand_path` assumes a directory, we have to stick an extra `..` in the path to get the path right.
+```ruby
+File.expand_path("../../Gemfile", __FILE__)
+
+# also could be written 
+File.expand_path('../Gemfile', File.dirname(__FILE__))
 ```
 
 ## Binding
