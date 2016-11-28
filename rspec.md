@@ -134,6 +134,8 @@ expect(song_1).to be_a(Song)
 
 expect(Artist).to respond_to(:find_by_name)
 
+expect(post).to be_valid
+
 expect(author.stories).to include(story)
 expect(output).to include("Action Bronson")
 
