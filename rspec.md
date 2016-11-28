@@ -199,6 +199,7 @@ click_button "Submit"
 expect(page.body).to include("Welcome!")
 
 expect(page).to have_text("Hi Avi, nice to meet you!")
+expect(page).to have_css("h1", text: "My Post")
 expect(page).to have_selector("form")
 expect(page).to have_field(:user_name)
 ```
