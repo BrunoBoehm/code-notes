@@ -144,11 +144,17 @@ expect{author.add_story(story)}.to raise_error(InventedCustomError)
 
 expect(@artist).to be_an_instance_of(Artist)
 
+expect{
+    post :create, { :first_name => "Sam", :last_name => "Smith" }
+    }.to change(Student,:count).by(1)
+
 expect(music_library_controller).to receive(:gets).and_return("list songs", "exit")
 
 expect{MusicLibraryController.new('./spec/fixtures/mp3s')}.to_not raise_error
 
 expect(MusicImporter).to receive(:new).with('./db/mp3s').and_return(MusicImporter.new('./db/mp3s'))
+
+expect(response).to redirect_to Student.last
 ```
 
 ## Before and After actions
@@ -193,16 +199,22 @@ Capybara gives us a few methods to simulate how the user would interact with the
 visit '/'
 fill_in(:user_name, with: "Avi")
 fill_in :figure_name, :with => "Doctor Who"
+fill_in 'post_title', with: 'My post title'
 check "title_#{Title.first.id}"
 click_button "Submit"
 
 expect(page.body).to include("Welcome!")
+expect(page.current_path).to eq(student_path(@student))
 
 expect(page).to have_text("Hi Avi, nice to meet you!")
 expect(page).to have_css("h1", text: "My Post")
 expect(page).to have_selector("form")
+expect(page).to have_content('Post Form')
 expect(page).to have_field(:user_name)
+expect(page).to have_link(second_post.title, href: post_path(second_post))
 ```
+
+As you are updating the code, make sure to test it out in the browser – don't just rely on the tests. It's important to see the errors in both the tests and the browser since you'll want to become familiar with both types of failure messages.
 
 ## About the spec-helper
 Each spec file begins by `require 'spec_helper'`.
