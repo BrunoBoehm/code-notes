@@ -122,6 +122,7 @@ Make sure your `spec_helper` knows about the files it needs to test, it's best p
 expect(author.name).to eq("Hemingway")
 expect(@artist.songs.count).to eq(1)
 expect(@song.artist).to eq(@artist)
+expect(page.status_code).to eq(200)
 
 expect(author.stories).to match_array([])
 expect(artist.genres).to match_array([indie_rock, electro_pop])
