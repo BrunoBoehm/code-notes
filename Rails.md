@@ -280,7 +280,7 @@ get '/register', to: 'users#new', as: 'register'
 ```
 Now the application lets users navigate to `/register` to sign up, and you, the developer, can utilize your own custom `register_path` route helper throughout the app.
 
-### Rails forms **tags**
+### Rails **form-tag**
 Rails forms give users the ability to submit data into form fields. This can be used for: creating new database records, building a contact form, integrating a search engine field, and pretty much every other aspect of the application that requires user input. We have the flexibility to utilize:
 - Built-in form helper methods
 - Plain HTML form elements
@@ -380,8 +380,32 @@ As a recap we have now
 And we have used 4 tags (more [here](http://api.rubyonrails.org/classes/ActionView/Helpers/FormTagHelper.html))
 - `form_tag posts_path`
 - `text_field_tag :title`
+- `label_tag :description, "Desc"`
 - `text_area_tag :description`
 - `submit_tag("Submit Post")`
+
+This `form_tag` setup is the most basic form helper that's available in Rails.
+```ruby
+<%= form_tag("/cats") do %>
+  <%= label_tag('cat[name]', "Name") %>
+  <%= text_field_tag('cat[name]') %>
+ 
+  <%= label_tag('cat[color]', "Color") %>
+  <%= text_field_tag('cat[color]') %>
+ 
+  <%= submit_tag "Create Cat" %>
+<% end %>
+```
+Will build out the following HTML
+```ruby
+<form accept-charset="UTF-8" action="/cats" method="POST">
+  <label for="cat_name">Name</label>
+  <input id="cat_name" name="cat[name]" type="text">
+  <label for="cat_color">Color</label>
+  <input id="cat_color" name="cat[color]" type="text">
+  <input name="commit" type="submit" value="Create Cat">
+</form>
+```
 
 ## Edit/Update actions
 As you may have noticed, there is a trend in Rails conventions where the logic for rendering a form is separate from the action that manages the database record alteration. 
@@ -448,10 +472,9 @@ The differences between `form_for` and `form_tag` are subtle, but important. Bel
 - `form_for` automatically knows the standard route (it follows RESTful conventions) for the form data as opposed to having to manually declare it
 - `form_for` gives the option to dynamically change the submit button text (this comes in very handy when you're using a form partial and the new and edit pages will share the same form, but more on that in a later lesson)
 
-
 A good rule of thumb for when to use one approach over the other is below:
-- Use `form_for` when your form is directly connected to a model. Extending our example from the introduction, this would be our Hamster's profile edit form that connects to the profile database table. This is the most common case when `form_for` is used
-- Use `form_tag` when you simply need an HTML form generated. Examples of this would be: a search form field or a contact form
+- Use `form_for` when your form is directly connected to a model `object`. Extending our example from the introduction, this would be our Hamster's profile edit form that connects to the profile database table. This is the most common case when `form_for` is used, and it's the real magical form helper in Rails, it handles the retrieval of values from your object model.
+- Use `form_tag` when you simply need an HTML form generated. Examples of this would be: a search form field or a contact form. `form_tag` is a lower-level form helper that simply generates a form element. `form_tag` makes no assumptions about what you're trying to do, and you're responsible for specifying exactly what the form is supposed to do (send a POST request, PATCH request, etc.)
 
 Here's the comparison between the two, let's start with the `form_tag`
 ```ruby
@@ -483,6 +506,7 @@ Here's the refactored version
   <%= f.submit %>
 <% end %>
 ```
+`form_for` yields through `|f|` a FormBuilder object that lets you create form elements that correspond to attributes in the model
 
 If you had previously created a `PUT` route like we did in the `form_tag` lesson, we'll need to change that to a `PATCH` method since that is the HTTP verb that `form_for` utilizes.
 ```ruby
@@ -518,10 +542,108 @@ With the new structure introduced by form_for, the params now look like this:
 ```
 Notice how the title and description attributes are now nested within the post hash? That's why we needed to add the `require` method.
 
+When you're using the `form_for` method, the object is passed as a form_for parameter, and it creates corresponding inputs with each of the attributes. For example, if you have `form_for(@cat)`, the form field params would look like `cat[name]`, `cat[color]`, etc
+```ruby
+<%= form_for(@cat) do |f| %>
+  <%= f.label :name %>
+  <%= f.text_field :name %>
+  <%= f.label :color %>
+  <%= f.text_field :color %>
+  <%= f.submit %>
+<% end %>
+```
+This will generate the following HTML
+```html
+<form accept-charset="UTF-8" action="/cats" method="post">
+  <label for="cat_name">Name</label>
+  <input id="cat_name" name="cat[name]" type="text" />
+  <label for="cat_color">Color</label>
+  <input id="cat_color" name="cat[color]" type="text" />
+  <input name="commit" type="submit" value="Create" />
+</form>
+```
 
+## Strong Params
+To understand the goal of strong params, let's pretend that you run a pharmacy. What would happen if you let all prescription orders come through without checking for: valid prescriptions, driver licenses, etc.? (Spoiler alert: you'd probably end up in jail).
+In the same way Rails application (starting in Rails 4+) wanted to shore up some security vulnerabilities and now require that you whitelist the parameters that are permitted when you're sending form data to the database. To prevent confusion, in previous lessons we manually turned off the strong parameter requirement.
 
+We want to make sure that when users submit a form we only let the field we want get by. Let's enable Strong Params. To do this, open up `config/application.rb` and delete the line that says: `config.action_controller.permit_all_parameters = true`. Now restarting the server we'll see the error `ForbiddenAttributesError`:
+![forbidden attributes](https://s3.amazonaws.com/flatiron-bucket/readme-lessons/ForbiddenAttributesError.png)
 
+What this means is that Rails needs to be told what parameters are allowed to be submitted through the form to the database. The default is to let nothing through. Let's update our code
+```ruby
+def create
+  @post = Post.new(params["post"])
+  @post.save
+  redirect_to post_path(@post)
+end
 
+# replace by
+def create
+  @post = Post.new(params.require(:post).permit(:title, :description))
+  @post.save
+  redirect_to post_path(@post)
+end
+```
+And in our `update` method, where we only want to enable the modification of the title (not the description).
+```ruby
+def update
+  @post = Post.find(params[:id])
+  @post.update(params["post"])
+  redirect_to post_path(@post)
+end
 
+# becomes
+def update
+  @post = Post.find(params[:id])
+  @post.update(params.require(:post).permit(:title))
+  redirect_to post_path(@post)
+end
+```
+
+What is the deal with the `#permit` vs `#require`? The `#require` method is the most restrictive. It means that the params that gets passed in must contain a key called "post". If it's not included then it fails and the user gets an error. The `#permit` method is a bit looser. It means that the params hash may have whatever keys are in it. So in the create case, it may have the `:title` and `:description` keys. If it doesn't have one of those keys it's no problem, the hash just won't accept any other keys.
+
+In our example we had different code for create and update, but generally you have the same items. It's a standard Rails practice to remove code repetition, so let's abstract the strong parameter call into its own method in the controller:
+```ruby
+# app/controllers/posts_controller.rb
+ 
+def create
+  @post = Post.new(post_params)
+  @post.save
+  redirect_to post_path(@post)
+end
+ 
+def update
+  @post = Post.find(params[:id])
+  @post.update(post_params)
+  redirect_to post_path(@post)
+end
+ 
+private
+    def post_params
+      params.require(:post).permit(:title, :description)
+    end
+```
+We can even improve this DRY private method by passing the permitted fields in as `*args` splat, since for the edit action the user can only modify the `:title`.
+```ruby
+# app/controllers/posts_controller.rb
+ 
+def create
+  @post = Post.new(post_params(:title, :description))
+  @post.save
+  redirect_to post_path(@post)
+end
+ 
+def update
+  @post = Post.find(params[:id])
+  @post.update(post_params(:title))
+  redirect_to post_path(@post)
+end
+ 
+private
+    def post_params(*args)
+      params.require(:post).permit(*args)
+    end
+```
 
 
