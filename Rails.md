@@ -1008,6 +1008,11 @@ class Account < ActiveRecord::Base
 end
 ```
 
+Here's the `format` validator
+```ruby
+validates :name, format: { without: /[0-9]/, message: "does not allow numbers" }
+```
+
 There is also the inclusion validator, that validates that the attributes' values are included in a given set. The inclusion helper has an option :in that receives the set of values that will be accepted. The `:in` option has an alias called `:within` that you can use for the same purpose, if you'd like to. The previous example uses the `:message` option to show how you can include the attribute's value.
 ```ruby
 class Coffee < ApplicationRecord
@@ -1152,3 +1157,216 @@ or in short
     end
   end
 ```
+or 
+```ruby
+  def create
+    @author = Author.new(author_params)
+
+    if @author.save
+      redirect_to author_path(@author)
+    else
+      render :new
+    end
+  end
+```
+
+And for the `update` action:
+```ruby
+  def update
+    if @post.update(post_params)
+      redirect_to post_path(@post)
+    else
+      render :edit
+    end
+  end
+```
+
+### Validations with `form_tag`
+Now that we've learned to handle the server side of validations, we need to
+take care of the client side.
+No one likes re-doing work. First, let's make sure we know how to pre-fill
+forms with the user's input so they don't have to type everything all over
+again.
+
+There are two ways to pre-fill forms in Rails: `form_tag` and `form_for`.
+form_for is very heavy on Rails magic and continues to baffle scientists
+to this day, so we'll be going over `form_tag` first.
+
+We're working with the `Person` model
+```ruby
+# app/models/person.rb
+ 
+class Person < ActiveRecord::Base
+  validates :name, format: { without: /[0-9]/, message: "does not allow numbers" }
+  validates :email, uniqueness: true
+end
+```
+
+Here's the form
+```ruby
+<!-- app/views/people/new.html.erb //-->
+ 
+<%= form_tag("/people") do %>
+  Name: <%= text_field_tag "name" %><br>
+  Email: <%= text_field_tag "email" %>
+  <%= submit_tag "Create Person" %>
+<% end %>
+```
+This will output the following HTML
+```html
+<form action="/people" accept-charset="UTF-8" method="post">
+  <input name="utf8" type="hidden" value="&#x2713;" />
+  <input type="hidden" name="authenticity_token" value="TKTzvQF+atT/XHG/7h48xKVdXvILdiPj83XQhn2mWBNNhvv0Oh5YfAl2LM3DlHsQjbMOFVsYEyOwj+rPaSk3Bw==" />
+  Name: <input type="text" name="name" id="name" /><br />
+  Email: <input type="text" name="email" id="email" />
+  <input type="submit" name="commit" value="Create Person" />
+</form>
+```
+
+Remember that our `create` action now looks like this:
+```ruby
+# app/controllers/people_controller.rb
+ 
+  def create
+    @person = Person.new(person_params)
+ 
+    if @person.valid?
+      @person.save
+      redirect_to person_path(@person)
+    else
+      # re-render the :new template WITHOUT throwing away the invalid @person
+      render :new
+    end
+  end
+```
+
+With this in mind, we can use the invalid `@person` object to "re-fill" the usually-empty new form with the user's invalid entries. This way they don't have to re-type anything (You wouldn't always want to do this –– for example, with credit card numbers –– because you want to minimize the amount of times sensitive information travels back and forth over the internet.)
+
+```ruby
+<!-- app/views/people/new.html.erb //-->
+ 
+<%= form_tag "/people" do %>
+  Name: <%= text_field_tag "name", @person.name %><br>
+  Email: <%= text_field_tag "email", @person.email %>
+  <%= submit_tag "Create Person" %>
+<% end %>
+```
+The second argument to `text_field_tag`, as with most form tag helpers, is the "default" value. Here's what it changes in the HTML form:
+```html
+Name: <input type="text" name="name" id="name" /><br>
+Email: <input type="text" name="email" id="email" />
+
+<!-- becomes -->
+Name: <input type="text" name="name" id="name" value="Jane Developer" /><br />
+Email: <input type="text" name="email" id="email" value="jane@developers.fake" />
+```
+
+Let's now display full errors with `errors.full_messages`.
+When a model fails validation, its errors attribute is filled with information about what went wrong. Rails creates an `ActiveModel::Errors` object to carry this information, and we can check it's existence and then iterate:
+```ruby
+<% if @person.errors.any? %>
+  <div id="error_explanation">
+    <h2>There were <%= pluralize(@person.errors.count, "error") %>:</h2>
+    <ul>
+      <% @person.errors.full_messages.each do |message| %>
+        <li><%= message %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
+```
+
+`ActiveModel::Errors` has much more than just a list of `full_message` error strings. It can also be used to access field-specific errors by interacting with it like a hash. If the field has errors, they will be returned in an array of strings:
+```ruby
+@person.errors[:name] #=> ["does not allow numbers"]
+@person.errors[:email] #=> []
+```
+With this in mind, we can conditionally "error-ify" each field in the form,
+targeting the divs containing each field:
+```html
+<div class="field">
+  <%= label_tag "name", "Name" %>
+  <%= text_field_tag "name", @person.name %>
+</div>
+```
+And conditionally adding a class if there are errors:
+```html
+<div class="field<%= ' field_with_errors' if @person.errors[:name].any? %>">
+  <%= label_tag "name", "Name" %>
+  <%= text_field_tag "name", @person.name %>
+</div>
+```
+
+Here's the full form code for our `new` action
+```html
+<%= form_tag("/people") do %>
+  <% if @person.errors.any? %>
+    <div id="error_explanation">
+      <h2>There were some errors:</h2>
+      <ul>
+        <% @person.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+ 
+ 
+  <div class="field<%= ' field_with_errors' if @person.errors[:name].any? %>">
+    <%= label_tag "name", "Name" %>
+    <%= text_field_tag "name", @person.name %>
+  </div>
+ 
+  <div class="field<%= ' field_with_errors' if @person.errors[:email].any? %>">
+    <%= label_tag "email", "Email" %>
+    <%= text_field_tag "email", @person.email %>
+  </div>
+ 
+  <%= submit_tag "Create" %>
+<% end %>
+```
+
+And in terms of `edit` action we have to put in our opening form tag `post_path(@post), method: "patch"`
+```html
+<h2>Editing "<%= @post.title %>"</h2>
+<%= form_tag post_path(@post), method: "patch" do %>
+
+  <% if @post.errors.any? %>
+  <div id="error_explanation">
+    <h2>We found <%= pluralize(@post.errors.count, "error") %></h2>
+    <ul>
+      <% @post.errors.full_messages.each do |msg| %>
+        <li><%= msg %></li>
+      <% end %>
+    </ul>
+  </div>
+  <% end %>
+
+
+  <div class="field<%= ' field_with_errors' if @post.errors[:title].any? %>">
+    <%= label_tag "title", "Title" %>
+    <%= text_field_tag "title", @post.title %>
+  </div>
+
+  <div class="field<%= ' field_with_errors' if @post.errors[:category].any? %>">
+    <%= label_tag "category", "Category" %>
+    <p>Must be either "Fiction" or "Non-Fiction".</p>
+    <%= text_field_tag "category", @post.category %>
+    <p>
+      Please type carefully as our top scientists are working around the clock to
+      enable state-of-the-art dropdown technology for this form field.
+    </p>
+  </div>
+
+  <div class="field<%= ' field_with_errors' if @post.errors[:content].any? %>">
+    <%= label_tag "content", "Content" %>
+    <br />
+    <%= text_area_tag "content", @post.content %>
+  </div>
+  <%= submit_tag "Update" %>
+<% end %>
+```
+
+
+
+
