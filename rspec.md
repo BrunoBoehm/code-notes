@@ -123,6 +123,7 @@ expect(author.name).to eq("Hemingway")
 expect(@artist.songs.count).to eq(1)
 expect(@song.artist).to eq(@artist)
 expect(page.status_code).to eq(200)
+expect(rendered).to match(/Title/)
 
 expect(author.stories).to match_array([])
 expect(artist.genres).to match_array([indie_rock, electro_pop])
@@ -132,6 +133,9 @@ expect(artist.instance_variable_defined?(:@genres)).to be_falsey
 
 expect(Concerns::Findable).to be_a(Module)
 expect(song_1).to be_a(Song)
+expect(assigns(:post)).to be_a_new(Post)
+
+expect(assigns(:post)).to be_persisted
 
 expect(Artist).to respond_to(:find_by_name)
 
@@ -147,8 +151,15 @@ expect(@artist).to be_an_instance_of(Artist)
 expect{
     post :create, { :first_name => "Sam", :last_name => "Smith" }
     }.to change(Student,:count).by(1)
+    
+expect {
+    delete :destroy, {:id => post.to_param}, valid_session
+    }.to change(Post, :count).by(-1)    
 
 expect(music_library_controller).to receive(:gets).and_return("list songs", "exit")
+
+expect(response).to redirect_to(Post.last)
+expect(:get => "/posts").to route_to("posts#index")
 
 expect{MusicLibraryController.new('./spec/fixtures/mp3s')}.to_not raise_error
 
@@ -175,6 +186,17 @@ describe FiguresController do
     Title.destroy_all
     Landmark.destroy_all
   end
+  
+  let(:valid_attributes) {
+    {title: "My String", description: "My desc"}
+  }
+  let(:valid_session) { {} }
+  
+  before(:each) do
+    @post = assign(:post, Post.create!(
+      :title => "MyString"
+    ))
+  end  
 
   it "allows you to view form to create a new figure" ...
   
