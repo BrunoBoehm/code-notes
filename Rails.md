@@ -920,3 +920,235 @@ To make all these in one command, you would run:
 > rails generate scaffold Apartment address:string price:float description:text image_url:string
 ```
 
+## Validations and forms
+
+### AR Validations
+ActiveRecord can [validate](http://guides.rubyonrails.org/active_record_validations.html) our models for us before they even touch the database. This means it's harder to end up with bad data, which can cause problems later even if our code is technically bug-free. We can use ActiveRecord::Base class methods like `#validates` to set things up.
+
+In the context of Rails, validations are special method calls that go at the
+top of model class definitions and prevent them from being saved to the
+database if their data doesn't look right. In general, "validations" are any code that perform the job of protecting the database from invalid code.
+
+Many relational databases such as SQLite have data validation features that check things like length and data type. In Rails, these validations are not used, because each database works a little differently, and handling everything in ActiveRecord itself guarantees that we'll always get the same features no matter what database we're using under the hood.
+
+```ruby
+class Person < ActiveRecord::Base
+  validates :name, presence: true
+end
+```
+`#validates` is our Swiss Army knife for validations. It takes two arguments:
+- the first is the name of the attribute we want to validate
+- the second is a hash of options that will include the details of how to validate it.
+```ruby
+class Person < ActiveRecord::Base
+  validates(:name, { presence: true })
+end
+```
+
+An ActiveRecord model instantiated with `#new` will not be validated, because no attempt to write to the database was made. Validations won't run unless you call a method that actually hits the DB, like `#save`. The only way to trigger validation without touching the database is to call the `#valid?` method.
+Here is the [list](http://guides.rubyonrails.org/active_record_callbacks.html#running-callbacks) of all methods that trigger validation
+
+**What can we do when a record fails validation?**
+By default, ActiveRecord does not raise an exception when validation fails. DB
+operation methods (such as `#save`) will simply return false and decline to
+update the database.
+To find out what went wrong, you can look at the model's `#errors` object. You can check all errors at once by examining `errors.messages`.
+```ruby
+p = Person.new
+p.errors.messages #=> empty
+p.valid? #=> false
+p.errors.messages #=> name: can't be blank
+```
+You can check one attribute at a time by passing the name to errors as a key,
+like so:
+```ruby
+person.errors[:name]
+```
+
+We can display validation errors in views, using the `ActiveModel::Errors#full_messages helper`
+```ruby
+<% if @article.errors.any? %>
+  <div id="error_explanation">
+    <h2>
+      <%= pluralize(@article.errors.count, "error") %>
+      prohibited this article from being saved:
+    </h2>
+ 
+    <ul>
+    <% @article.errors.full_messages.each do |msg| %>
+      <li><%= msg %></li>
+    <% end %>
+    </ul>
+  </div>
+<% end %>
+```
+
+`length` is one of the most versatile:
+```ruby
+class Person < ActiveRecord::Base
+  validates :name, length: { minimum: 2 }
+  validates :bio, length: { maximum: 500 }
+  validates :password, length: { in: 6..20 }
+  validates :registration_number, length: { is: 6 }
+end
+
+# which in pure ruby / no-poetry mode
+class Person < ActiveRecord::Base
+  validates(:name, { :length => { :minimum => 2 } })
+  validates(:bio, { :length => { :maximum => 500 } })
+  validates(:password, { :length => { :in => 6..20 } })
+  validates(:registration_number, { :length => { :is => 6 } })
+end
+```
+
+Another common built-in validator is `uniqueness`. This will prevent any account from being created with the same email as another already-existing account.
+```ruby
+class Account < ActiveRecord::Base
+  validates :email, uniqueness: true
+end
+```
+
+There is also the inclusion validator, that validates that the attributes' values are included in a given set. The inclusion helper has an option :in that receives the set of values that will be accepted. The `:in` option has an alias called `:within` that you can use for the same purpose, if you'd like to. The previous example uses the `:message` option to show how you can include the attribute's value.
+```ruby
+class Coffee < ApplicationRecord
+  validates :size, inclusion: { in: %w(small medium large),
+    message: "%{value} is not a valid size" }
+end
+```
+The default error message for this helper is "is not included in the list". 
+Note: `%w(foo bar)` is a shortcut for `["foo", "bar"]`. Meaning it's a notation to write an array of strings separated by spaces instead of commas and without quotes around them. Also, the parenthesis can be almost any other character such as square brackets `%w[...]`, curly braces `%w{...}` or even something like exclamation marks `%w!...!`.
+
+There are ways to implement [custom validators](http://guides.rubyonrails.org/active_record_validations.html#performing-custom-validations). `#validate` is the simplest, because all you need to do is define an instance method that is invoked by `#validate`. This is probably the best way to start with most custom validations, because everything is in one place, and you can come back later to re-organize if it starts to get more complex.
+
+The main 3 methods are:
+`validate` for quick custom validations that you can extract into one of the `ActiveModel` classes and use `#validates` or `#validates_with` instead, or use the same validation logic on a different model.
+```ruby
+class Invoice < ApplicationRecord
+  validate :expiration_date_cannot_be_in_the_past,
+    :discount_cannot_be_greater_than_total_value
+ 
+  def expiration_date_cannot_be_in_the_past
+    if expiration_date.present? && expiration_date < Date.today
+      errors.add(:expiration_date, "can't be in the past")
+    end
+  end
+ 
+  def discount_cannot_be_greater_than_total_value
+    if discount > total_value
+      errors.add(:discount, "can't be greater than total value")
+    end
+  end
+end
+```
+Another example
+```ruby
+class Post < ActiveRecord::Base
+  validates :title, presence: true
+  validates :content, length: { minimum: 250 }
+  validates :summary, length: { maximum: 250 }
+  validates :category, inclusion: { in: %w(Fiction Non-Fiction) }
+  validate :is_clickbait?
+
+  CLICKBAIT_PATTERNS = [
+    /Won't Believe/i,
+    /Secret/i,
+    /Top [0-9]*/i,
+    /Guess/i
+  ]
+
+  def is_clickbait?
+    if CLICKBAIT_PATTERNS.none? { |pat| pat.match title }
+      errors.add(:title, "must be clickbait")
+    end
+  end
+end
+```
+
+Subclassing `ActiveModel::EachValidator` and `validates` for validating one specific attribute. In this case, the custom validator class must implement a `validate_each` method which takes three arguments: record, attribute, and value. These correspond to the instance, the attribute to be validated, and the value of the attribute in the passed instance.
+```ruby
+class EmailValidator < ActiveModel::EachValidator
+  def validate_each(record, attribute, value)
+    unless value =~ /\A([^@\s]+)@((?:[-a-z0-9]+\.)+[a-z]{2,})\z/i
+      record.errors[attribute] << (options[:message] || "is not an email")
+    end
+  end
+end
+ 
+class Person < ApplicationRecord
+  validates :email, presence: true, email: true
+end
+```
+
+Subclassing `ActiveModel::Validator` and invoking `validates_with` for doing many validations in one pass. 
+```ruby
+class MyValidator < ActiveModel::Validator
+  def validate(record)
+    unless record.name.starts_with? 'X'
+      record.errors[:name] << 'Need a name starting with X please!'
+    end
+  end
+end
+ 
+class Person
+  include ActiveModel::Validations
+  validates_with MyValidator
+end
+```
+
+### Validations in controller actions
+Now that we know Rails automatically performs validations defined on models, let's use this information to help users fix typos or other problems in their form submissions.
+Up until this point, our create action has looked something like this:
+```ruby
+# app/controllers/posts_controller.rb
+
+  def create
+    @post = Post.create(post_params)
+ 
+    redirect_to post_path(@post)
+  end
+```
+However, we have two problems now:
+- If the post is invalid, there will be no show path to redirect to. The post was never saved to the database, so that post_path will result in a 404!
+- If we redirect, we start a new page load, which will lose all of the feedback from the validations.
+
+When a form is submitted, a full page load occurs, as if you had navigated to a completely new URL. This means that all of the variables set by the controller's new action (like @post) disappear and are unavailable to the create action. Rails throws everything out after each request, except for the `session` hash. You're probably used to validations happening almost instantaneously on websites that you interact with on a daily basis. When you get validation feedback without a full page load, that's JavaScript at work, sneakily performing requests in the background without throwing away the current page. We won't be using that advanced technique just yet!
+
+```ruby
+# app/controllers/posts_controller.rb
+ 
+  def create
+    # Create a brand new, unsaved, not-yet-validated Post object from the form.
+    @post = Post.new(post_params)
+ 
+    # Run the validations WITHOUT attempting to save to the database, returning
+    # true if the Post is valid, and false if it's not.
+    if @post.valid?
+      # If--and only if--the post is valid, do what we usually do.
+      @post.save
+      # This returns a status_code of 302, which instructs the browser to
+      # perform a NEW REQUEST! (AKA: throw @post away and let the show action
+      # worry about re-reading it from the database)
+      redirect_to post_path(@post)
+    else
+      # If the post is invalid, hold on to @post, because it is now full of
+      # useful error messages, and re-render the :new page, which knows how
+      # to display them alongside the user's entries.
+      render :new
+    end
+  end
+```
+In the above code, since we want the :new template from the same controller, we don't have to specify anything except the template name. Remember: redirects incur a new page load. When we redirect after validation failure, we lose the instance of `@post` that has feedback (messages for the user) in its errors attribute.
+
+or in short
+```ruby
+# app/controllers/posts_controller.rb
+  def create
+    @post = Post.new(post_params)
+    if @post.valid?
+      @post.save
+      redirect_to post_path(@post)
+    else
+      render :new
+    end
+  end
+```
