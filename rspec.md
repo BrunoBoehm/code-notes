@@ -247,5 +247,294 @@ end
 Capybara.app = app
 ```
 
+## Rails Generators
+A primary goal of the Rails team was to make it efficient to build core application functionality. The Rails system has a number of generators that will do some of the manual work for us, with nice extra benefits:
+- They can setup some basic specs for an application's test suite. They won't write our complex logic tests for us, but they will provide some basic examples.
+- They are setup to work the same way each time. This helps standardize your code and enables your development to be more efficient since you don't have to worry as much about bugs related to spelling, syntax errors, or anything else that can occur when writing code manually.
+- They follow Rails best practices, which includes utilizing RESTful naming patterns, removing duplicate code, using partials and a number of other best of breed design patterns (if you don't know what all of these are, don't worry, we will cover them shortly).
+
+Careful though: certain generators create quite a bit of code, and if that code is not going to be used it will clutter the application code and cause confusion for future developers.
+
+Each of the generators are entered into the terminal and will follow the syntax:
+```
+rails generate <name of generator>
+rails g <name of generator>
+
+rails g migration add_published_status_to_posts published_status:string
+rails g migration remove_published_status_from_posts published_status:string
+rails g migration add_post_status_to_posts post_status:boolean
+rails g migration change_post_status_data_type_to_posts post_status:string
+```
+
+Model generators are used regularly. It does a great job of creating the core code needed to create a model and associated database table without adding a lot of bloat to the application.
+At a high level, this creates:
+- A database migration that will add a table and add the columns name, genre, and bio.
+- A model file that will inherit from ActiveRecord::Base
+- Some mocked RSpec test files
+```
+rails g model Author name:string genre:string bio:text
+invoke  active_record
+create    db/migrate/20151127225446_create_authors.rb
+create    app/models/author.rb
+invoke    rspec
+create      spec/models/author_spec.rb
+invoke      factory_girl
+create        spec/factories/authors.rb
+```
+
+Controller generators are great if you are creating static views or non-CRUD related features. It will create a ton of code
+Below is a list that is a little more high level:
+- A controller file that will inherit from ApplicationController
+- A set of routes to each of the generator arguments: dashboard, stats, financials, and settings
+- A new directory for all of the view templates along with a view template file for each of the controller actions that we declared in the generator command
+- A number of view based tests
+- A view helper method file and spec helper file
+- A Coffeescript file for specific JavaScripts for that controller
+- A scss file for the styles for the controller
+```
+rails g controller admin dashboard stats financials settings
+create  app/controllers/admin_controller.rb
+ route  get 'admin/settings'
+ route  get 'admin/financials'
+ route  get 'admin/stats'
+ route  get 'admin/dashboard'
+invoke  erb
+create    app/views/admin
+create    app/views/admin/dashboard.html.erb
+create    app/views/admin/stats.html.erb
+create    app/views/admin/financials.html.erb
+create    app/views/admin/settings.html.erb
+invoke  rspec
+create    spec/controllers/admin_controller_spec.rb
+create    spec/views/admin
+create    spec/views/admin/dashboard.html.erb_spec.rb
+create    spec/views/admin/stats.html.erb_spec.rb
+create    spec/views/admin/financials.html.erb_spec.rb
+create    spec/views/admin/settings.html.erb_spec.rb
+invoke  helper
+create    app/helpers/admin_helper.rb
+invoke    rspec
+create      spec/helpers/admin_helper_spec.rb
+invoke  assets
+invoke    coffee
+create      app/assets/javascripts/admin.coffee
+invoke    scss
+create      app/assets/stylesheets/admin.scss
+```
+This is a generator to be careful with – it can create a number of files that are never used and can cause wasted files in an application.
+
+If you are building an API, using a front end MVC framework, or simply want to manually create your views, the resource generator is a great option for creating the code. The resource generator is a smart generator that creates some of the core functionality needed for a full featured resource without much code bloat.
+```
+rails g resource Account name:string payment_status:string
+invoke  active_record
+create    db/migrate/20151127233150_create_accounts.rb
+create    app/models/account.rb
+invoke    rspec
+create      spec/models/account_spec.rb
+invoke      factory_girl
+create        spec/factories/accounts.rb
+invoke  controller
+create    app/controllers/accounts_controller.rb
+invoke    erb
+create      app/views/accounts
+invoke    rspec
+create      spec/controllers/accounts_controller_spec.rb
+invoke    helper
+create      app/helpers/accounts_helper.rb
+invoke      rspec
+create        spec/helpers/accounts_helper_spec.rb
+invoke    assets
+invoke      coffee
+create        app/assets/javascripts/accounts.coffee
+invoke      scss
+create        app/assets/stylesheets/accounts.scss
+invoke  resource_route
+route    resources :accounts
+```
+`resources :accounts` is considered a 'magic' route that entails the full set of RESTful routes needed to perform CRUD in an application. Let's see those routes
+```
+rake routes | grep account
+accounts      GET    /accounts(.:format)          accounts#index
+              POST   /accounts(.:format)          accounts#create
+new_account   GET    /accounts/new(.:format)      accounts#new
+edit_account  GET    /accounts/:id/edit(.:format) accounts#edit
+account       GET    /accounts/:id(.:format)      accounts#show
+              PATCH  /accounts/:id(.:format)      accounts#update
+              PUT    /accounts/:id(.:format)      accounts#update
+              DELETE /accounts/:id(.:format)      accounts#destroy
+```
+
+## Scaffolding
+It's not considered a good practice to use scaffolds in a production application. It's important to study scaffolds since they can be a great reference for how we can build CRUD functionality into our apps.
+```
+rails g scaffold Article title:string body:text
+invoke  active_record
+create    db/migrate/20151128001950_create_articles.rb
+create    app/models/article.rb
+invoke    rspec
+create      spec/models/article_spec.rb
+invoke      factory_girl
+create        spec/factories/articles.rb
+invoke  resource_route
+ route    resources :articles
+invoke  scaffold_controller
+create    app/controllers/articles_controller.rb
+invoke    erb
+create      app/views/articles
+create      app/views/articles/index.html.erb
+create      app/views/articles/edit.html.erb
+create      app/views/articles/show.html.erb
+create      app/views/articles/new.html.erb
+create      app/views/articles/_form.html.erb
+invoke    rspec
+create      spec/controllers/articles_controller_spec.rb
+create      spec/views/articles/edit.html.erb_spec.rb
+create      spec/views/articles/index.html.erb_spec.rb
+create      spec/views/articles/new.html.erb_spec.rb
+create      spec/views/articles/show.html.erb_spec.rb
+create      spec/routing/articles_routing_spec.rb
+invoke      rspec
+create        spec/requests/articles_spec.rb
+invoke    helper
+create      app/helpers/articles_helper.rb
+invoke      rspec
+create        spec/helpers/articles_helper_spec.rb
+invoke    jbuilder
+create      app/views/articles/index.json.jbuilder
+create      app/views/articles/show.json.jbuilder
+invoke  assets
+invoke    coffee
+create      app/assets/javascripts/articles.coffee
+invoke    scss
+create      app/assets/stylesheets/articles.scss
+invoke  scss
+create    app/assets/stylesheets/scaffolds.scss
+```
+Scaffolds actually go beyond the other generators and create both the front- and back-end code needed for CRUD features.
+What did the scaffold build for us? If we look through the files that got printed out in the console, we see:
+- A migration file
+- A Model file
+- A controller
+- View templates for each of the controller actions that render a view
+- The full set of RESTful routes
+- And every other component needed for a functional CRUD environment
+
+It's interesting to see how Rails set up the controller. Below are the contents of the articles_controller.rb file:
+```ruby
+class ArticlesController < ApplicationController
+  before_action :set_article, only: [:show, :edit, :update, :destroy]
+ 
+  # GET /articles
+  # GET /articles.json
+  def index
+    @articles = Article.all
+  end
+ 
+  # GET /articles/1
+  # GET /articles/1.json
+  def show
+  end
+ 
+  # GET /articles/new
+  def new
+    @article = Article.new
+  end
+ 
+  # GET /articles/1/edit
+  def edit
+  end
+ 
+  # POST /articles
+  # POST /articles.json
+  def create
+    @article = Article.new(article_params)
+ 
+    respond_to do |format|
+      if @article.save
+        format.html { redirect_to @article, notice: 'Article was successfully created.' }
+        format.json { render :show, status: :created, location: @article }
+      else
+        format.html { render :new }
+        format.json { render json: @article.errors, status: :unprocessable_entity }
+      end
+    end
+  end
+ 
+  # PATCH/PUT /articles/1
+  # PATCH/PUT /articles/1.json
+  def update
+    respond_to do |format|
+      if @article.update(article_params)
+        format.html { redirect_to @article, notice: 'Article was successfully updated.' }
+        format.json { render :show, status: :ok, location: @article }
+      else
+        format.html { render :edit }
+        format.json { render json: @article.errors, status: :unprocessable_entity }
+      end
+    end
+  end
+ 
+  # DELETE /articles/1
+  # DELETE /articles/1.json
+  def destroy
+    @article.destroy
+    respond_to do |format|
+      format.html { redirect_to articles_url, notice: 'Article was successfully destroyed.' }
+      format.json { head :no_content }
+    end
+  end
+ 
+  private
+    # Use callbacks to share common setup or constraints between actions.
+    def set_article
+      @article = Article.find(params[:id])
+    end
+ 
+    # Never trust parameters from the scary internet, only allow the white list through.
+    def article_params
+      params.require(:article).permit(:title, :body)
+    end
+end
+```
+
+The main reason why scaffolds are discouraged in production is because they create so much code and so many files that they can be hard to manage. The best applications were built by following TDD principles where I created features one element at a time, whereas scaffolds build dozens of processes instantly.
+
+A good alternative is `resource` generators. The scaffold generator tends to be very 'opinionated' with the code that it builds, it builds out the system in a very specific manner, which is rarely the way that you would want to build your application.
+
+With modern development practices, a large number of Rails apps are leveraging client side MVC setups such as `Backbone` or `AngularJS`. These frameworks render the view templates for a Rails application pointless, so if you rely on using scaffolds you're going to have to be removing quite a bit of code after each generate command.
+
+Let's pretend that you're integrating the `ReactJS` framework into your Rails application. If you use a scaffold you will instantly have to go through the code and remove a large percentage of the code along with around 50% of the files themselves. Whereas if you run the resource generator, it simply creates the: migrations, model, routes, controller, and asset pipeline files. This means that you will be able to instantly start implementing the ReactJS components instead of having to be concerned with which elements need to be deleted.
+
+All the files that you currently see in your project directory, with the exception of a few `spec` files, were generated via the `rails new` command. Consequently, it built a fully fledged web app ready out of the box. This is an example of why the Rails framework is called an opinionated framework that **favors convention over configuration**. With Sinatra, we can build an app from scratch by just adding `require 'sinatra'` in a file and calling `rackup`. Rails is much heavier than that. With an app ready out of the box through generators like rails new and rails generate scaffold, we're able to build larger scale applications very quickly.
+
+For instance, say you were making an app to help New Yorkers find apartments. Your apartments should have an address (string), a price (float), a description (text), and an image url (string). You want to make the following things:
+
+1. an apartment model
+2. an apartments table with four columns (address, price, description, image_url)
+3. an apartments controller
+4. routes for apartments (show, new, index, update, edit, delete, create)
+5. views (show, new, edit, index)
+
+To make all these in one command, you would run:
+```
+> rails generate scaffold Apartment address:string price:float description:text image_url:string
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
