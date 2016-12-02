@@ -1001,16 +1001,22 @@ class Person < ActiveRecord::Base
 end
 ```
 
-Another common built-in validator is `uniqueness`. This will prevent any account from being created with the same email as another already-existing account.
+Another common built-in validator is `uniqueness`. This will prevent any account from being created with the same email as another already-existing account. You can put a scope.
 ```ruby
 class Account < ActiveRecord::Base
   validates :email, uniqueness: true
+  validates :title, uniqueness: { scope: [:artist_name, :release_year]}
 end
 ```
 
 Here's the `format` validator
 ```ruby
 validates :name, format: { without: /[0-9]/, message: "does not allow numbers" }
+```
+
+The `numericality` validator, with a conditional application
+```ruby
+validates :release_year, presence: true, numericality: {less_than_or_equal_to: Date.today.year}, if: :released?
 ```
 
 There is also the inclusion validator, that validates that the attributes' values are included in a given set. The inclusion helper has an option :in that receives the set of values that will be accepted. The `:in` option has an alias called `:within` that you can use for the same purpose, if you'd like to. The previous example uses the `:message` option to show how you can include the attribute's value.
@@ -1182,15 +1188,10 @@ And for the `update` action:
 ```
 
 ### Validations with `form_tag`
-Now that we've learned to handle the server side of validations, we need to
-take care of the client side.
-No one likes re-doing work. First, let's make sure we know how to pre-fill
-forms with the user's input so they don't have to type everything all over
-again.
+Now that we've learned to handle the server side of validations, we need to take care of the client side.
+No one likes re-doing work. First, let's make sure we know how to pre-fill forms with the user's input so they don't have to type everything all over again.
 
-There are two ways to pre-fill forms in Rails: `form_tag` and `form_for`.
-form_for is very heavy on Rails magic and continues to baffle scientists
-to this day, so we'll be going over `form_tag` first.
+There are two ways to pre-fill forms in Rails: `form_tag` and `form_for`. `form_for` is very heavy on Rails magic and continues to baffle scientists to this day, so we'll be going over `form_tag` first.
 
 We're working with the `Person` model
 ```ruby
@@ -1203,7 +1204,7 @@ end
 ```
 
 Here's the form
-```ruby
+```erb
 <!-- app/views/people/new.html.erb //-->
  
 <%= form_tag("/people") do %>
@@ -1242,7 +1243,7 @@ Remember that our `create` action now looks like this:
 
 With this in mind, we can use the invalid `@person` object to "re-fill" the usually-empty new form with the user's invalid entries. This way they don't have to re-type anything (You wouldn't always want to do this –– for example, with credit card numbers –– because you want to minimize the amount of times sensitive information travels back and forth over the internet.)
 
-```ruby
+```erb
 <!-- app/views/people/new.html.erb //-->
  
 <%= form_tag "/people" do %>
@@ -1251,7 +1252,7 @@ With this in mind, we can use the invalid `@person` object to "re-fill" the usua
   <%= submit_tag "Create Person" %>
 <% end %>
 ```
-The second argument to `text_field_tag`, as with most form tag helpers, is the "default" value. Here's what it changes in the HTML form:
+The second argument to `text_field_tag`, as with most form tag helpers, is the "default" value (it will be `nil` at first, since we've only instantiated the object with no value, and will display the input values if `render :new` is called upon an error). Here's what it changes in the HTML form:
 ```html
 Name: <input type="text" name="name" id="name" /><br>
 Email: <input type="text" name="email" id="email" />
@@ -1263,7 +1264,7 @@ Email: <input type="text" name="email" id="email" value="jane@developers.fake" /
 
 Let's now display full errors with `errors.full_messages`.
 When a model fails validation, its errors attribute is filled with information about what went wrong. Rails creates an `ActiveModel::Errors` object to carry this information, and we can check it's existence and then iterate:
-```ruby
+```erb
 <% if @person.errors.any? %>
   <div id="error_explanation">
     <h2>There were <%= pluralize(@person.errors.count, "error") %>:</h2>
@@ -1326,7 +1327,7 @@ Here's the full form code for our `new` action
 <% end %>
 ```
 
-And in terms of `edit` action we have to put in our opening form tag `post_path(@post), method: "patch"`
+And in terms of `edit` action we have to put in our opening form tag `post_path(@post), method: "patch"`  but the rest of the form looks the same.
 ```html
 <h2>Editing "<%= @post.title %>"</h2>
 <%= form_tag post_path(@post), method: "patch" do %>
@@ -1367,6 +1368,364 @@ And in terms of `edit` action we have to put in our opening form tag `post_path(
 <% end %>
 ```
 
+### Validations with `form_for`
+The biggest difference between these two helpers is that `form_for` creates a form specifically for a model object. `form_for` is full of convenient features.
+In the example below, `@post` is the model object that needs a form. `form_for` automatically performs a route lookup to find the right URL for post.
+form_for takes a block. It passes an instance of `FormBuilder` as a parameter to the block, which is what `|f|` is below.
+A basic implementation looks like this:
+```erb
+<!-- app/views/posts/edit.html.erb //-->
+ 
+<%= form_for @post do |f| %>
+  <%= f.text_field :title %>
+  <%= f.text_area :content %>
+  <%= f.submit %>
+<% end %>
+```
+That creates the HTML:
+```html
+<form class="edit_post" id="edit_post" action="/posts/1" accept-charset="UTF-8" method="post">
+  <input name="utf8" type="hidden" value="&#x2713;" />
+  <input type="hidden" name="_method" value="patch" />
+  <input type="hidden" name="authenticity_token" value="nRPP2OqVKB00/Cr+8EvHfYrb5sAkZRtr8f6dzBaJAI+cMceR0fUatcLWd4zdwYCpojW2J3QLK6uyBKeFAgZvmw==" />
+  <input type="text" name="post[title]" id="post_title" value="Existing Post Title"/>
+  <textarea name="post[content]" id="post_content">Existing Post Content</textarea>
+  <input type="submit" name="commit" value="Update Post" />
+</form>
+```
 
+Here would be the equivalent with `form_tag`
+```erb
+<!-- app/views/posts/edit.html.erb //-->
+ 
+<%= form_tag post_path(@post), method: "patch", name: "edit_post", id: "edit_post" do %>
+  <%= text_field_tag "post[title]", @post.title %>
+  <%= text_area "post[content]", @post.content %>
+  <%= submit_tag "Update Post" %>
+<% end %>
+```
+Remember from a few lessons ago how CRUD methods return false when validation fails? We can use that to our advantage here and branch our actions based on the result:
+```ruby
+# app/controllers/posts_controller.rb
+ 
+  def create
+    @post = Post.new(post_params)
+ 
+    if @post.save
+      redirect post_path(@post)
+    else
+      render :new
+    end
+  end
+```
 
+Because of form_for, Rails will automatically prepopulate the new form with the values the user entered on the previous page.
+To get some extra verbosity, we can add the snippet from the previous lesson to the top of the form:
+```erb
+<!-- app/views/posts/new.html.erb //-->
+ 
+<% if @post.errors.any? %>
+  <div id="error_explanation">
+    <h2>
+      <%= pluralize(@post.errors.count, "error") %>
+      prohibited this post from being saved:
+    </h2>
+ 
+    <ul>
+    <% @post.errors.full_messages.each do |msg| %>
+      <li><%= msg %></li>
+    <% end %>
+    </ul>
+  </div>
+<% end %>
+```
+
+Not only will `FormBuilder` pre-fill an existing Post object's data, it will also wrap the tag in a div with an error class if the field has failed validation(s):
+```html
+<div class="field_with_errors">
+  <input type="text" name="post[title]" id="post_title" value="Existing Post Title"/>
+</div>
+```
+This can also result in some unexpected styling changes because `<div>` is a block tag (which takes up the entire width of its container) while `<input>` is an inline tag. If your layout suddenly gets messed up when a field has errors, this is probably why.
+
+Our challenge as developers is to keep track of the different layers of magic that make this tool so convenient. The old adage is true: we're responsible for understanding not only how to use form_for but also why it works. Otherwise, we'll be completely lost as soon as a sufficiently unusual edge case appears.
+When in doubt, read the HTML. Get used to hitting the "View Source" and "Open Inspector" hotkeys in your browser (`Ctrl-u` and `Ctrl-Shift-i` on Chrome Windows; `Option-Command-u` and `Option-Command-i` on Chrome Mac), and remember that most browsers let you examine POST data in their [developer network tools](http://superuser.com/questions/395919/where-is-the-post-tab-in-chrome-developer-tools-network).
+
+### Delete Forms
+So far, we've worked with three pieces of the CRUD puzzle:
+- CREATING records, using HTTP POST requests.
+- READING records, using HTTP GET requests.
+- UPDATING records, using HTTP PATCH requests.
+One piece remains:
+- DELETING records, using HTTP DELETE requests.
+
+Before we dive into the problem with `DELETE` (and `PATCH`) requests, let's proceed as if we were none the wiser, setting up our route and form as usual:
+```ruby
+# config/routes.rb
+ 
+delete 'people/:id', to: 'people#destroy'
+```
+and in the view of the `show` page
+```erb
+# app/views/people/show.html.erb
+ 
+<h2><%= @person.name %></h2>
+<%= @person.email %>
+<%= form_tag people_path(@person.id), method: "delete" %>
+  <%= submit_tag "Delete #{@person.name}" %>
+<% end %>
+```
+But, wait a minute... there's something weird about the output we get:
+```html
+<h2>Caligula</h2>
+caligula@rome-circa-40-AD.com
+<form accept-charset="UTF-8" action="/people/1" method="post">
+  <input name="_method" type="hidden" value="delete" />
+  <input name="utf8" type="hidden" value="&#x2713;" />
+  <input name="authenticity_token" type="hidden" value="f755bb0ed134b76c432144748a6d4b7a7ddf2b71" />
+  <input name="commit" type="submit" value="Delete Caligula" />
+</form>
+```
+
+Browser and server developers are the yin to the web developers' yang. These are the people who own and maintain the tools themselves: Internet Explorer, Firefox, Chrome, Apache, and so on.
+When a web developer makes a mistake, it might affect the users of their site. When a browser or server developer makes a mistake, it might affect over a billion people!
+Because of this, browser/server developers have to go slow. Really slow. And they have to resist the urge to release "duct tape" solutions because duct tape doesn't scale to a billion users! This means that, sometimes, incomplete solutions can remain in place for years, or even decades, while the maintainers go back and forth trying to find a better approach.
+
+As of HTML5, forms officially do not support `DELETE` and `PATCH` for their methods. What you're seeing in the above `#form_tag()` behavior is a workaround implemented for us by Rails itself.
+
+As shown, you have to go to a user's show page to delete them. What if we want an admin control panel where users can be deleted from a list?
+```erb
+<!-- app/views/people/index.html.erb //-->
+ 
+<% @people.each do |person| %>
+    <div class="person">
+      <span><%= person.name %></span>
+      <%= link_to "Delete", person, method: :delete, data: { confirm: "Really?" } %>
+    </div>
+<% end %>
+```
+The HTML generated by that call to link_to looks like this:
+```html
+<a data-confirm="Really?" rel="nofollow" data-method="delete" href="/people/1">Delete</a>
+```
+The `data-confirm` attribute and the `data-method` attribute rely on some JavaScript built into Rails.
+- `data-method` will "submit" a DELETE request as if a form had been submitted. It will use GET (the default method used by all browsers for HTML links) if the user has JavaScript disabled.
+- `data-confirm` pops up a confirmation window before the link is followed, allowing the user to make sure they're ready to delete someone forever (what a decision!).
+
+### Rails testing
+One of the most fundamental aspects of programmer productivity is the feedback loop. "Scripting" languages like Ruby and Python are great for this because you can run your code immediately after writing it. Conversely, lower-level languages like C must be compiled before being run.
+
+Rails ships with many features to save precious seconds in developer feedback
+loops, but there's no two ways about it: in anything but the most trivial app, it can be pretty complex to make sure your code is actually working correctly. In this lesson, we'll learn to shorten our feedback loop with different flavors of Rails tests, combining some standard approaches suggested in the Guides themselves with some more advanced practices that require additional dependencies (namely Capybara).
+
+We'll be covering three types of tests:
+- Models (RSpec)
+- Controllers (RSpec)
+- Features (RSpec/Capybara)
+Features are the fanciest, so we'll leave them for last. They are preferred over regular Rails "View" tests.
+
+By default, Rails uses Test::Unit for testing, which keeps its tests in the
+mysteriously-named test/ folder. If you're planning from the start to use RSpec instead, you can tell Rails to `skip Test::Unit` by passing the `-T` flag to rails new, like so:
+```
+rails new cool_app -T
+```
+Then, you will add the gem to your Gemfile:
+```
+gem 'rspec-rails'
+```
+And use the built-in generator to add a spec folder with the right boilerplate:
+```
+bundle install
+bundle exec rails g rspec:install
+```
+This is the Rails equivalent of the usual `rspec --init`.
+
+#### Model tests
+These go in `spec/models`, one file per model.
+Model tests use the least amount of special features, since all you really need is the model class itself. The most common usage for model tests is to make sure you have set up your validations correctly.
+Suppose we're working with this model:
+```ruby
+# app/models/monster.rb
+ 
+class Monster < ActiveRecord::Base
+  validates :name, presence: true
+  validates :size, inclusion: { in: ["tiny", "average", "like, REALLY big"] }
+  validates :taxonomy, format: { with: /\A[A-Z](\.|[a-z]+) [a-z]{2,}\z/,
+    message: "must include genus and species, like 'Homo sapiens'" }
+end
+```
+
+First, let's test for **validity**: we'll make sure that it understands a valid Monster:
+```ruby
+# spec/models/monster_spec.rb
+ 
+describe Monster do
+  let(:attributes) do
+    {
+      name: "Dustwing",
+      size: "tiny",
+      taxonomy: "Abradacus nonexistus"
+    }
+  end
+ 
+  it "is considered valid" do
+    expect(Monster.new(attributes)).to be_valid
+  end
+end
+```
+`let` is a standard helper method that takes a symbol and a block. It runs the block once per example in which it is called and saves the return value in a local variable named according to the symbol. This means you get a fresh copy in every test case. `let` ss more fine-grained than `before`, which means you have better control over your data. It can be used in combination with before statements to set up your test data just right before the examples are run.
+
+RSpec provides plenty of built-in matchers, which you can peruse in their [API docs](http://rspec.info/documentation/3.4/rspec-expectations/frames.html#!RSpec/Matchers.html), but be_valid is conspicuously absent from the list. This code uses a neat trick that RSpec refers to as "[predicate matchers](https://www.relishapp.com/rspec/rspec-expectations/docs/built-in-matchers/predicate-matchers)", and you'll see it a lot in Rails testing.
+In Ruby, it's conventional for methods that return true or false to be named with a question mark at the end. These methods are called predicate methods, because "predicate" is an English grammar term for the part of a sentence that makes a statement about the subject.
+As you learned earlier in this unit, Rails provides a valid? method that returns `true` or `false` depending on whether the model object in question passed its validations.
+In RSpec, when you call a nonexistent matcher (such as be_valid), it strips off the `be_` (valid), adds a question mark (`valid?`), and checks to see if the object responds to a method by that name (`monster.valid?`).
+
+Now, let's add some tests to make sure our validations are working in the
+opposite direction:
+```ruby
+# spec/models/monster.rb
+ 
+  let(:missing_name) { attributes.except(:name) }
+  let(:invalid_size) { attributes.merge(size: "not that big") }
+  let(:missing_species) { attributes.merge(taxonomy: "Abradacus") }
+ 
+  it "is invalid without a name" do
+    expect(Monster.new(missing_name)).not_to be_valid
+  end
+ 
+  it "is invalid with an unusual size" do
+    expect(Monster.new(invalid_size)).not_to be_valid
+  end
+ 
+  it "is invalid with a missing species" do
+    expect(Monster.new(missing_species)).not_to be_valid
+  end
+```
+Note that each of these `let` blocks rely on the first one, `attributes`, which contains all of our valid attributes. `missing_name` uses the Rails hash helper except to exclude the name key while the other two use the standard Ruby `merge` method to overwrite valid attributes with invalid ones.
+
+Note `should` is an older RSpec syntax that has been deprecated in favor of `expect`.
+
+#### Controller tests
+The biggest risk in writing controller tests is redundancy: controllers exist to connect views and models, so it's difficult to test them in isolation.
+First, we'll go over how to write controller tests. Then, our discussion of the why will bring us into the final subject, "feature tests".
+```ruby
+# spec/controllers/monsters_controller_spec.rb
+ 
+describe MonstersController, type: :controller do
+  let(:attributes) do
+    {
+      name: "Dustwing",
+      size: "tiny",
+      taxonomy: "Abradacus nonexistus"
+    }
+  end
+ 
+  it "renders the show template" do
+    monster = Monster.create!(attributes)
+    get :show, id: monster.id
+    expect(response).to render_template(:show)
+  end
+ 
+  describe "creation" do
+    before { post :create, monster: attributes }
+    let(:monster) { Monster.find_by(name: "Dustwing") }
+ 
+    it "creates a new monster" do
+      expect(monster).to_not be_nil
+    end
+ 
+    it "redirects to the monster's show page" do
+      expect(response).to redirect_to(monster_path(monster))
+    end
+  end
+end
+```
+You can use the `get` and `post` methods (along with patch and delete) to initiate test requests on the controller. A response object is available to set expectations on, such as `render_template` or `redirect_to`.
+The tests above are great, especially while we're still getting used to how controllers are wired. However, almost these exact tests could be copied for any controller set up according to Rails' RESTish conventions. There's nothing inherently wrong with that, but the **redundance, along with the need to test views, inspired the creation of a new type of test supported by Capybara known as a "Feature Test"**.
+
+#### Feature tests
+If you were going to write tests for a car's steering wheel, what would you
+start with?
+
+```
+When the steering wheel is rotated to the left, the tires rotate to the left.
+```
+The acceptance test above covers too much ground, making it brittle and difficult to maintain. This is called an acceptance test because it is phrased in terms of features that provide value to the user. (It could also be called an integration test because it tests more than one piece of the system at once.)
+
+```
+When the steering column's flange rotates, the steering shaft transmits the
+rotation to the steering box.
+```
+The unit test above tests a single unit of functionality (the steering column - the controller). It is so specific that it almost feels like we just rewrote the controller code with different phrasing.
+
+```
+When the steering wheel is rotated to the left, the steering column transmits
+the rotation to the steering box.
+```
+This is a feature test, and on the other hand, it is Just Right. It covers the steering wheel (view) and steering column (controller). It lets us think like a user (in terms of the steering wheel, or view) while still making intelligent assertions about how the underlying system should respond to input (in terms of the steering column, or controller).
+
+#### Capybara
+When you see key words like visit, fill_in, and page, you know you're looking at a Capybara test.
+To set up Capybara, one must first add the `gem` to the Gemfile: 
+```
+gem 'capybara'
+```
+Then set up Capybara-Rails integration in `spec/rails_helper.rb`:
+```
+require 'capybara/rails'
+```
+Then set up Capybara-RSpec integration in `spec/spec_helper.rb`:
+```
+require 'capybara/rspec'
+```
+Feature tests are traditionally located in `spec/features`, but you can put them anywhere if you pass the `:type => :feature` option to your `describe` call.
+
+To test our monster manager with Capybara, we'll start by setting up a GET request and then use Capybara's convenient helper functions to interact with the page just like a user would:
+```ruby
+# spec/features/monster_creation.rb
+ 
+describe "monster creation", type: :feature do
+  before do
+    visit new_monster_path
+    fill_in "Name", with: "Dustwing"
+    select "tiny", from: "monster_size"
+    fill_in "Taxonomy", with: "Abradacus nonexistus"
+    click_button "Create Monster"
+  end
+```
+
+When `click_button` is called, this will trigger the `POST` request to the controller's create action, just as if a user had clicked it in their browser. Now, we can write our original controller tests like usual:
+```ruby
+  let(:monster) { Monster.find_by(name: "Dustwing") }
+ 
+  it "creates a monster" do
+    expect(monster).to_not be_nil
+  end
+ 
+  it "redirects to the new monster's page" do
+    expect(current_path).to eq(monster_path(monster))
+  end
+```
+And because we're in Capybara land, we also have a very convenient way of making assertions about the final `GET` request:
+```ruby
+  it "displays the monster's name" do
+    within "h1" do
+      expect(page).to have_content(monster.name)
+    end
+  end
+```
+`within` sets the context for our next expectation, restricting it to the first `<h1>` tag encountered on the page. This way, our expect call will only pass if the specified content ("Dustwing") appears inside that first heading.
+
+One interesting thing about this approach is that we're being much less explicit about certain expectations. For example, we're testing the redirect not with the initial 302 response but instead by examining the current path in Capybara's virtual "browser session". This is much more powerful and intuitive, and it doesn't sacrifice much in the way of expressivity.
+
+The hardest part about testing usually ends up being the "why" and not the "how". Why write the test this way and not that way? For standard
+CRUD functionality, Capybara is designed to save you a lot of time and mental
+effort.
+
+These can serve as fairly reliable guidelines: 
+- Models should always be thoroughly unit tested.
+- Controllers should be as thin as possible to keep your feature tests simple.
+- If you can't avoid making a controller complex, it deserves its own isolated test.
+- Capybara's syntax is much more powerful than Rails's built-in functionality for view tests, so stick with it whenever possible.
+- Don't get carried away with the details when testing views: you just need to make sure the information is in the right place. If your tests are too strict, it will be impossible to make even simple tweaks to your templates without breaking the `build`.
 
