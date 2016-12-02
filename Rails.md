@@ -2058,6 +2058,74 @@ end
 
 Let's cover one last callback that is super useful. This one is called `before_create`. `before_create` is very close to `before_save` with one major difference: it only gets called when a model is created for the first time. This means not every time the object is persisted, just when it is new.
 
+### Cool AR queries
+#### using `.merge`
+To combine two queries (that both return `ActiveRecord::Relation` objects), you can your `#merge` to combine with `AND` (intersection):
+```ruby
+User.where(:first_name => 'Tobias').merge(User.where(:last_name  => 'Fünke'))
+
+# could also be written
+first_name_relation = User.where(:first_name => 'Tobias') # ActiveRecord::Relation
+last_name_relation  = User.where(:last_name  => 'Fünke') # ActiveRecord::Relation
+first_name_relation.merge(last_name_relation)
+```
+
+To combine using `OR` (only availabel in ActiveRecord 5+)
+```ruby
+first_name_relation.or(last_name_relation)
+```
+
+Here are a few examples of `merge` used in queries.
+```ruby
+Post.where(published: true).merge( Post.order('created_at DESC').first(5) )
+```
+Returns the intersection of all published posts with the 5 most recently created posts.
+
+```ruby
+Post.where(published: true).joins(:comments).merge( Comment.where(spam: false) )
+```
+Performs a single join query with both where conditions.
+
+#### using `.joins`
+If you want to select all categories that have articles, you can call a single association `join`
+```ruby
+Category.joins(:articles)
+
+# will produce the following SQL query
+SELECT categories.* FROM categories
+    INNER JOIN articles ON articles.category_id = categories.id
+```
+Or, in English: "return a Category object for all categories with articles". 
+Note that you will see duplicate categories if more than one article has the same category. If you want unique categories, you can use `Category.joins(:articles).distinct`.
+
+To get multiple associations, like getting all articles with at least one category and comment.
+```ruby
+Article.joins(:category, :comments)
+
+# will issue the following SQL queries
+SELECT articles.* FROM articles
+  INNER JOIN categories ON articles.category_id = categories.id
+  INNER JOIN comments ON comments.article_id = articles.id
+```
+Note again that articles with multiple comments will show up multiple times.
+
+Conditions can be given such as
+```ruby
+time_range = (Time.now.midnight - 1.day)..Time.now.midnight
+
+Client.joins(:orders).where(orders: { created_at: time_range })
+```
+This will find all clients who have orders that were created yesterday, again using a BETWEEN SQL expression.
+
+
+
+
+
+
+
+
+
+
 
 
 
