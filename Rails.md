@@ -920,6 +920,11 @@ To make all these in one command, you would run:
 > rails generate scaffold Apartment address:string price:float description:text image_url:string
 ```
 
+And to destroy a generator's actions you can
+```ruby
+rails destroy scaffold Apartment
+```
+
 ## Validations and forms
 
 ### AR Validations
@@ -1777,4 +1782,282 @@ These can serve as fairly reliable guidelines:
 - If you can't avoid making a controller complex, it deserves its own isolated test.
 - Capybara's syntax is much more powerful than Rails's built-in functionality for view tests, so stick with it whenever possible.
 - Don't get carried away with the details when testing views: you just need to make sure the information is in the right place. If your tests are too strict, it will be impossible to make even simple tweaks to your templates without breaking the `build`.
+
+## Active Record Associations
+It all starts in the database. Foreign keys are columns that refer to the primary key of another table. Conventionally, foreign keys in Active Record are comprised of the name of the `model` you're referencing, and `_id`. So for example if the foreign key was for a `posts` table it would be `post_id`.
+
+Like any other column, foreign keys are accessible through instance methods of the same name. For example, a migration that looks like this:
+```ruby
+class AddAuthorIdToPosts < ActiveRecord::Migration
+  def change
+    change_table :posts do |t|
+      t.integer :author_id
+    end
+  end
+end
+```
+
+Would mean you could find a post's author with the following Active Record query:
+```ruby
+Author.find(@post.author_id)
+
+# or
+Post.where("author_id = ?", @author.id)
+```
+
+### `belongs_to` and `has_many`
+#### On the parent side
+The most common relationship is many-to-one, and it is declared in Active Record with `belongs_to` and `has_many`.
+Each Post is associated with **one** Author.
+```ruby
+class Post < ActiveRecord::Base
+  belongs_to :author
+end
+
+# we can now lookup
+@post.author_id = 5
+@post.author #=> #<Author id=5>
+```
+
+In the opposite direction, each `Author` might be associated with **zero, one, or many** `Post` objects.
+```ruby
+class Author < ActiveRecord::Base
+  has_many :posts
+end
+
+# we can now lookup
+@author.posts #=> [#<Post id=3>, #<Post id=8>]
+```
+
+Remember, Active Record uses its Inflector to switch between the singular and plural forms of your models.
+
+Name | Data
+--- | ---
+Model | Author
+Table | authors
+Foreign Key | author_id
+belongs_to | :author
+has_many | :authors
+
+Like many other Active Record class methods, the symbol you pass determines the name of the instance method that will be defined
+- `belongs_to :author` will give you `@post.author`
+- `has_many :posts` will give you `@author.posts`
+
+To `build` a new item in a collection.
+If you want to add a new post for an author, you might start this way:
+```ruby
+new_post = Post.new(author_id: @author.id, title: "Web Development for Cats")
+new_post.save
+```
+But the association macros save the day again, allowing this instead, starting from the `author`:
+```ruby
+new_post = @author.posts.build(title: "Web Development for Cats")
+new_post.save
+```
+This will return a new Post object with the `author_id` already set for you! We use this one as much as possible because it's just easier. build works just like new. So the instance that is returned isn't quite saved to the database just yet. You'll need to `#save` the instance when you want it to be persisted to the database.
+
+#### On the child side
+The other way round, starting from the `post`
+```ruby
+@post.author = Author.new(name: "Leeroy Jenkins") 
+
+# becomes
+new_author = @post.build_author(name: "Leeroy Jenkins")
+new_author.save
+```
+Remember, if you used the `build_` option, you'll need to persist your new author with `#save`.
+
+#### On the parent's collection side
+If you add an existing object to a collection association, Active Record will conveniently take care of setting the foreign key for you:
+```ruby
+@author = Author.find_by(name: "Leeroy Jenkins")
+@author.posts
+#=> []
+
+@post = Post.new(title: "Web Development for Cats")
+@post.author
+#=> nil
+
+@author.posts << @post
+@post.author
+#=> #<Author @name="Leeroy Jenkins">
+```
+
+### One to one `has_one` relationships
+Profiles can get pretty complex, so in large applications it can be a good idea to give them their own model. In this case:
+- Every author would have one, and only one, profile.
+- Every profile would have one, and only one, author.
+
+`belongs_to` makes another appearance in this relationship, but instead of `has_many` the other model is declared with `has_one`.
+If you're not sure which model should be declared with which macro, it's usually a safe bet to put belongs_to on whichever model has the foreign key column in its database table.
+
+### Many to Many relationship with join table
+Each post `has_many` tags, each tag `has_many` posts.
+The universe is in balance. We're programmers, so this really disturbs us. Let's shake things up and think about tags.
+- One-to-One doesn't work because a post can have multiple tags.
+- Many-to-One doesn't work because a tag can appear on multiple posts.
+
+Active Record has a migration method for doing exactly this.
+```
+create_join_table :posts, :tags
+```
+This will create a table called posts_tags.
+
+Ideally, we'd like to be able to call a `@my_post.tags` method to get all the join entries, right? That's where `has_many :through` comes in.
+```ruby
+class Post
+  has_many :posts_tags
+end
+ 
+class PostsTag
+  belongs_to :post
+  belongs_to :tag
+end
+ 
+class Tag
+  has_many :posts_tags
+end
+
+# becomes
+class Post
+  has_many :posts_tags
+  has_many :tags, through: :posts_tags
+end
+ 
+class PostsTag
+  belongs_to :post
+  belongs_to :tag
+end
+ 
+class Tag
+  has_many :posts_tags
+  has_many :posts, through: :posts_tags
+end
+```
+
+The `has_many :through` association is also useful for setting up "shortcuts" through nested `has_many` associations. For example, if a document has many sections, and a section has many paragraphs, you may sometimes want to get a simple collection of all paragraphs in the document. You could set that up this way:
+```ruby
+class Document < ApplicationRecord
+  has_many :sections
+  has_many :paragraphs, through: :sections
+end
+ 
+class Section < ApplicationRecord
+  belongs_to :document
+  has_many :paragraphs
+end
+ 
+class Paragraph < ApplicationRecord
+  belongs_to :section
+end
+```
+With through: :sections specified, Rails will now understand:
+```ruby
+@document.paragraphs
+```
+
+For every relationship, there is a foreign key somewhere. Foreign keys correspond to the `belongs_to` macro on the model.
+One-to-one and many-to-one relationships only require a single foreign key, which is stored in the 'subordinate' or 'owned' model. The other model declares its relationship via a `has_one` or `has_many` statement, respectively.
+Many-to-many relationships require a join table containing a foreign key for both models. The models are joined using `has_many :through` statements.
+
+Here's the list of all [class methods](http://api.rubyonrails.org/classes/ActiveRecord/Associations/ClassMethods.html) given.
+
+### Example with Flatiron BNB
+Let's set up a [domain model](https://www.draw.io/?chrome=0&nav=1#G0BwkVQI_Ozq8mTk9KUlBIUGUzTWc) with the following models
+```ruby
+class User < ActiveRecord::Base
+	has_many :listings, foreign_key: "host_id"  							# User as host
+	has_many :reservations, through: :listings								# User as host
+	has_many :trips, foreign_key: "guest_id", class_name: "Reservation"		# User as guest
+	has_many :reviews, foreign_key: "guest_id"								# User as guest
+end
+
+class Review < ActiveRecord::Base
+	belongs_to :reservation
+	belongs_to :guest, class_name: "User"
+end
+
+class Reservation < ActiveRecord::Base
+	belongs_to :listing
+	has_many :reviews
+	belongs_to :guest, class_name: "User"
+end
+
+class Neighborhood < ActiveRecord::Base
+	belongs_to :city
+	has_many :listings
+end
+
+class Listing < ActiveRecord::Base
+	belongs_to :neighborhood
+	belongs_to :host, class_name: "User"
+	has_many :reservations
+	has_many :reviews, through: :reservations
+	has_many :guests, class_name: "User", through: :reviews
+end
+
+class City < ActiveRecord::Base
+	has_many :neighborhoods
+	has_many :listings, through: :neighborhoods
+end
+```
+
+## AR Lifecycle events
+Everything we cover here are called "Active Record Lifecycle Callbacks". Many people just call them callbacks. It's a bit shorter.
+Here is a rule of thumb: Whenever you are modifying an attribute of the model, use `before_validation`. If you are doing some other action, then use `before_save`.
+```ruby
+class Post < ActiveRecord::Base
+ 
+  belongs_to :author
+  validate :is_title_case 
+ 
+# New Code!!
+  before_validation :make_title_case 
+ 
+  private
+ 
+  def is_title_case
+    if title.split.any?{|w|w[0].upcase != w[0]}
+      errors.add(:title, "Title must be in title case")
+    end
+  end
+ 
+  def make_title_case
+    self.title = self.title.titlecase
+  end
+end
+```
+If we change this to a `before_save` callback, we wouldn't be able to `create(title: "testing")`. Indeed it turns out that the `before_save` is called after validation occurs. So Rails goes is `.valid?` "Nope! Stop!", and never makes it to `before_save`.
+
+Now let's do something that belongs in the `before_save`. We use `before_save` for actions that need to occur that aren't modifying the model itself. For example, whenever you save to the database, let's send an email to the Author alerting them that the post was just saved!
+
+```ruby
+class Post < ActiveRecord::Base
+ 
+  belongs_to :author
+  validate :is_title_case 
+ 
+  before_validation :make_title_case 
+ 
+# New Code!!
+  before_save :email_author_about_post
+ 
+  private
+ 
+  def is_title_case
+    if title.split.any?{|w|w[0].upcase != w[0]}
+      errors.add(:title, "Title must be in title case")
+    end
+  end
+ 
+  def make_title_case
+    self.title = self.title.titlecase
+  end
+end
+```
+
+Let's cover one last callback that is super useful. This one is called `before_create`. `before_create` is very close to `before_save` with one major difference: it only gets called when a model is created for the first time. This means not every time the object is persisted, just when it is new.
+
+
+
 
