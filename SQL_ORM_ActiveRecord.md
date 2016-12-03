@@ -531,7 +531,116 @@ Outer/complex join example
 
 It is referred to as "complex" simply because SQL is conducting an inner join in addition to gathering a little more information from one or more tables.
 
+#### Some examples of queries
+Taken from this [video from Learn](https://www.youtube.com/watch?v=qfB1MRnzk4g) here are a few queries,
 
+Here is the database schema that we can run from the command line: `sqlite3 ecommerce-database.db < schema.sql` (it will create the file and execute the `sql` statement in the context of the database).
+```sql
+CREATE TABLE products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    price INTEGER
+);
+
+CREATE TABLE customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT
+);
+
+CREATE TABLE carts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER
+);
+
+CREATE TABLE line_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cart_id INTEGER,
+    product-id INTEGER
+);
+```
+
+Here's some seed data we can insert `sqlite3 ecommerce-database.db < seed.sql`
+```
+INSERT INTO customers (name) VALUES
+("Avi"), ("Steven"), ("Jill");
+
+INSERT INTO carts (customer_id) VALUES
+(1), 
+(2), 
+(1);
+
+INSERT INTO products (name, price) VALUES
+("Phone"), 
+("Tv"), 
+("Radio");
+
+INSERT INTO line_items (cart_id, product_id) VALUES
+(1, 1), 
+(1, 2), 
+(2, 2);
+(3, 3);
+```
+
+To get the products from a cart (let's say `cart_id = 1`)
+```sql
+SELECT products.*   # selects all colums
+FROM products
+JOIN line_items ON line_items.product_id = products.id
+WHERE line_items.cart_id = 1
+```
+
+To get the total price of a cart and number of articles in each cart
+```sql
+SELECT cart_id, SUM(products.price) AS total_price, COUNT(*) AS product_count 
+
+FROM products
+JOIN line_items ON products.id = line_items.product_id
+
+GROUP BY line_items.cart_id
+```
+
+To get the same as above, as well as the name of the person who owns each cart (2 other tables to join to reach the info)
+```sql
+SELECT customers.name, cart_id, SUM(products.price) AS total_price, COUNT(*) AS product_count
+
+FROM products
+JOIN line_items ON products.id = line_items.product_id
+INNER JOIN carts ON line_items.cart_id = carts.id
+INNER JOIN customers ON carts.customer_id = customers.id
+
+GROUP BY line_items.cart_id
+```
+
+To get the most valuable customer
+```sql
+SELECT customers.name, SUM(products.price) AS total_price, COUNT(*) AS product_count 
+FROM products
+JOIN line_items ON line_items.product_id = products.id
+INNER JOIN carts ON line_items.cart_id = carts.id
+INNER JOIN customers ON carts.customer_id = customers.id
+GROUP BY carts.customer_id
+ORDER BY total_price DESC
+LIMIT 1
+```
+You actually `SELECT` from the "combined" table that's created by `FROM ... JOIN ... INNER JOIN ... INNER JOIN` (will append each database), and then `GROUP` and `ORDER` and `LIMIT` to get only one row of the original "combined" table constructed by the query.
+
+To get the most popular product:
+```sql
+SELECT products.name, COUNT(*) AS product_count
+
+FROM products
+JOIN line_items ON products.id = line_items.product_id
+INNER JOIN carts ON line_items.cart_id = carts.id
+INNER JOIN customers ON carts.customer_id = customers.id
+
+GROUP BY line_items.product_id
+ORDER BY product_count DESC
+LIMIT 1
+```
+
+Two very useful articles about the JOIN SQL queries
+- [visual explanatio of JOIN SQL query](http://blog.flatironschool.com/sql-joins-explained-visually-the-3-ring-binder/)
+- [another visual explanation attempt](https://blog.codinghorror.com/a-visual-explanation-of-sql-joins/)
 
 ## ORMs and Active Record
 Object Relational Mapping (ORM) is the technique of accessing a relational database using an object-oriented programming language.
@@ -2226,7 +2335,7 @@ class Genre < ActiveRecord::Base
 end
 ```
 
-**The model that `has_many` is considered the parent. The model that `belongs_to` is considered the child. If you tell the child that it belongs to the parent, the parent won't know about that relationship (while not persisted in DB). If you tell the parent that a certain child object has been added to its collection, both the parent and the child will know about the association.**
+**Here the model that `has_many` is considered the parent. The model that `belongs_to` is considered the child. If you tell the child that it belongs to the parent, the parent won't know about that relationship (while not persisted in DB). If you tell the parent that a certain child object has been added to its collection, both the parent and the child will know about the association.**
 ```
 rake console
 
@@ -2498,6 +2607,8 @@ end
 
 > As soon as you have something else than relational info (`artist_id`, `genre_ids`, `song_id`...), that is `name`, `birthdate`, you need to create another part to the `params` hash. This will enable you to pass methods like `.create(params[:artist])` using mass assignment instead of regular parameter per parameter assignment.
 
+Mass assignment basically will call the method that has the name of each key (`:artist_id` will be called on the instantiated object as `.artist_id=` - provided there's the column name in the table). Indeed you can associate a post to an author by saying (with p instantiated as a Post instance) `p.author_id=` (and passing the value of the relevant integer), but it's better to use high-level assigners (because an id column can change!): use `p.author=` instead.
+
 ### belongs_to: Create & New/Build
 There's a subtle difference between `create_association` (similar to create: instantiation and persistence in the DB) and `build_association` (similar to new: instantiation only).
 ```ruby
@@ -2526,6 +2637,23 @@ s.save # Will run 2 INSERTs
 ```
 
 ### has_many
+2 possibilities to create an has_many association
+```ruby
+# using build
+    # {"figure"=>{"name"=>"Jon", "title_ids"=>["1"], "landmark_ids"=>["1","4"]}, "title"=>{"name"=>"Master Jedi"}, "landmark"=>{"name"=>"Waza Stadium"}}
+    figure = Figure.new(params[:figure])
+    figure.titles.build(params[:title]) unless params[:title][:name].empty?
+    figure.landmarks.build(params[:landmark]) unless params[:landmark][:name].empty?
+    figure.save
+
+# using <<
+    # {"figure"=>{"name"=>"Jon", "title_ids"=>["1"], "landmark_ids"=>["1","4"]}, "title"=>{"name"=>"Master Jedi"}, "landmark"=>{"name"=>"Waza Stadium"}}
+    figure = Figure.create(params[:figure])
+    figure.titles << Title.new(params[:title]) unless params[:title][:name].empty?
+    figure.landmarks << Landmark.new(params[:landmark]) unless params[:landmark][:name].empty?
+```
+
+Let's understand what happens
 ```ruby
 mj = Artist.new(name: "Michael Jackson")
 mj.save
@@ -2546,33 +2674,49 @@ mj.save
 
 ---
 queen = Artist.new(name: "Queen")
+=> #<Artist id: nil, name: "Queen">
+
 queen.persisted?
 => false
 
 queen.songs.build(name: "Bohemian Rhapsody")
+=> #<Song id: nil, name: "Bohemian Rhapsody", artist_id: nil>    
 # will instantiate a new song in memory, virtually associated even if not with the artist_id
 
 queen.songs
+=> #<ActiveRecord::Associations::CollectionProxy [#<Song id: nil, name: "Bohemian Rhapsody", artist_id: nil>]> 
 # will return the right collection with the "Bohemian Rhapsody" in memory
 
 queen.save
-# will run 2 INSERTS:
-# persistence in BD: INSERT 1 for the artist (need a value for the primary key for the foreign key of the 2nd insert)
-# persistence in DB: INSERT 2 for the song, with the right foreign key
+D, [2016-11-23T12:33:47.074774 #277] DEBUG -- :    (0.2ms)  begin transaction    D, [2016-11-23T12:33:47.081454 #277] DEBUG -- :   SQL (0.5ms)  INSERT INTO "artists" ("name") VALUES (?)  [["name", "Queen"]]      
+D, [2016-11-23T12:33:47.082611 #277] DEBUG -- :   SQL (0.2ms)  INSERT INTO "songs" ("name", "artist_id") VALUES (?, ?)  [["name", "Bohemian Rhapsody"], ["artist_id", 11]]                                     
+D, [2016-11-23T12:33:47.087615 #277] DEBUG -- :    (4.5ms)  commit transaction
+=> true      
+```
 
----
+`queen.songs.build()` will associate the objects in memory. When you save the parent (queen) it will save the child (song), thus running 2 INSERTS:
+- persistence in DB: INSERT 1 for the artist (need a value for the primary key for the foreign key of the 2nd insert)
+- persistence in DB: INSERT 2 for the song, with the right foreign key
+
+```ruby
+# continues previous example
 
 queen.songs << Song.new(name: "Don't stop me now")
-# pushing is closer to creating than building, you are always saving the object by pushing. 
-# INSERTs in the db and returns the collection
+D, [2016-11-23T12:36:01.773348 #277] DEBUG -- :    (1.3ms)  begin transaction
+D, [2016-11-23T12:36:01.777504 #277] DEBUG -- :   SQL (1.4ms)  INSERT INTO "songs" ("name", "artist_id") VALUES (?, ?)  [["name", "Don't stop me now"], ["artist_id", 11]]                              
+D, [2016-11-23T12:36:01.787775 #277] DEBUG -- :    (8.5ms)  commit transaction
+=> #<ActiveRecord::Associations::CollectionProxy [#<Song id: 14, name: "Bohemian Rhapsody", figure_id: 11>, #<Landmark id: 15, name: "Don't stop me now", figure_id: 11>]>
 
 queens.song.create(name: "We will rock you")
 # INSERTs in the db and returns the saved object, use this one if you don't need all of the collection in memory
 # mostly you use the build one and save it, never the create one
 ```
 
-The object on the left is always the parent, and on the right is the child. When you save the parent the child gets automatically saved. But if you only save the child the parent won't get saved!
+You are saving the object by pushing as long as the parent is saved (queen). More on this [here](http://stackoverflow.com/questions/11043096/rails-push-into-array-saves-object). Pushing is closer to creating than building (that needs `.save`). it will also always return the collection, which can be useful.
 
+
+The object on the left is the parent, and on the right is the child. When you save the parent the child gets automatically saved. But if you only save the child the parent won't get saved! 
+This is very useful on the belongs_to side (child of the relationship). If you build off the `song` (child of the relationship) doing `s = Song.new.build_artist()` and save `s` you save the parent that instantiated the artist off of itself (the artist is built out of the song: song inside of the method is the parent, artist is the child, so when you save the song the child gets saved).
 ```ruby
 # on the belongs_to :artist side (build_artist off song)
 
@@ -2596,7 +2740,6 @@ The object on the left is always the parent, and on the right is the child. When
 > s.save
 # we save the parent, off of which the artist was born (child)
 [ will INSERT twice, the artist (to get the primary key) first and the the song with the right foreign key from INSERT 1]
-
 ---
 
 # on the has_many :songs side (artist.songs.build)  build from 1 artist's songs collection
@@ -2612,6 +2755,7 @@ s.save
 
 Anyway playing with the console and the SQL logger. You want to play in the smallest sandbox as possible.
 AR is one of the most important parts of the whole stach, and once it clicks it wont't never unclick!
+
 
 ### Aliasing AR associations
 3 models
