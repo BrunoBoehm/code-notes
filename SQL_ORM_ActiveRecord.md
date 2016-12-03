@@ -560,7 +560,7 @@ CREATE TABLE line_items (
 ```
 
 Here's some seed data we can insert `sqlite3 ecommerce-database.db < seed.sql`
-```
+```sql
 INSERT INTO customers (name) VALUES
 ("Avi"), ("Steven"), ("Jill");
 
