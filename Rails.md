@@ -2176,7 +2176,8 @@ As a first pass, we might build a form like this:
 
 ```erb
 <%= form_for @post do |f| %>
-  <%= f.label :category_id, :category %><%= f.text_field :category_id %>
+  <%= f.label :category_id, :category %>
+  <%= f.text_field :category_id %>
   <%= f.text_field :content %>
 <% end %>
 ```
@@ -2204,8 +2205,8 @@ We could rewrite our controller to accept a `category_name` instead of an id:
 ```ruby
 class PostsController < ApplicationController
   def create
-    category = Category.find_or_create_by(name: params[:category_name])
-    Post.create(content: params[:content], category: category)
+    category = Category.find_or_create_by(name: params[:post][:category_name])
+    Post.create(content: params[:post][:content], category: category)
   end
 end
 ```
@@ -2271,7 +2272,7 @@ Now the user can enter a category by name (instead of needing to look up its id)
 If we want to let the user pick from existing categories, we can use a [Collection Select](http://apidock.com/rails/ActionView/Helpers/FormOptionsHelper/collection_select) helper to render a `<select>` tag:
 ```erb
 <%= form_for @post do |f| %>
-  <%= f.collection_select :category, Category.all, :id, :name %>
+  <%= f.collection_select :category_id, Category.all, :id, :name %>
   <%= f.text_field :content %>
 <% end %>
 ```
@@ -2286,7 +2287,7 @@ The return values are used as the value attribute and contents of each `<option>
 
 However, we've lost the ability for users to create their own categories. That might be what you want. For example, the content management system for a magazine would probably want to enforce that the category of an article is one of the sections actually printed in the magazine.
 
-In our case, however, we want to give users the flexibility to create a new category *or* pick an existing one. What we want is autocompletion, which we can get with a [`datalist`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/datalist). `datalist` is a new element in the HTML5 spec that allows for easy autocomplete:
+In our case, however, we want to give users the flexibility to create a new category *or* pick an existing one. What we want is autocompletion, which we can get with a [datalist](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/datalist). `datalist` is a new element in the HTML5 spec that allows for easy autocomplete:
 
 ```erb
 <%= form_for @post do |f| %>
@@ -2301,10 +2302,44 @@ In our case, however, we want to give users the flexibility to create a new cate
 ```
 
 ###  Using array parameters / Category has_many posts selection
-Rails uses a [naming convention](http://guides.rubyonrails.org/v3.2.13/form_helpers.html#understanding-parameter-naming-conventions) to let you submit an array of values to a controller.
+Rails uses a [naming convention](http://guides.rubyonrails.org/v3.2.13/form_helpers.html#understanding-parameter-naming-conventions) to let you submit an array/hash of values to a controller.
+
+The two basic structures are arrays and hashes. Hashes mirror the syntax used for accessing the value in params. For example if a form contains
+```html
+<input id="person_name" name="person[name]" type="text" value="Henry"/>
+```
+the params hash will contain
+```
+{'person' => {'name' => 'Henry'}}
+```
+and params[:person][:name] will retrieve the submitted value in the controller.
+
+Hashes can be nested as many levels as required, for example
+```html
+<input id="person_address_city" name="person[address][city]" type="text" value="New York"/>
+```
+will result in the params hash being
+```
+{'person' => {'address' => {'city' => 'New York'}}}
+```
+Normally Rails ignores duplicate parameter names. If the parameter name contains an empty set of square brackets `[]` then they will be accumulated in an array. If you wanted people to be able to input multiple phone numbers, you could place this in the form:
+```html
+<input name="person[phone_number][]" type="text"/>
+<input name="person[phone_number][]" type="text"/>
+<input name="person[phone_number][]" type="text"/>
+```
+This would result in `params[:person][:phone_number]` being an array.
+
+We can mix and match these two concepts. For example, one element of a hash might be an array as in the previous example, or you can have an array of hashes. For example a form might let you create any number of addresses by repeating the following form fragment
+```html
+<input name="addresses[][line1]" type="text"/>
+<input name="addresses[][line2]" type="text"/>
+<input name="addresses[][city]" type="text"/>
+```
+This would result in `params[:addresses]` being an array of hashes with keys `line1:`, `line2:` and `city:`. Rails decides to start accumulating values in a new hash whenever it encounters an input name that already exists in the current hash. There’s a restriction, however, while hashes can be nested arbitrarily, only one level of “arrayness” is allowed.
 
 If you put this in a view so that the user can select 3 `posts` to associate with a `category`, it looks like this
-```
+```erb
 <%= form_for @category do |f| %>
   <input name="category[post_ids][]">
   <input name="category[post_ids][]">
@@ -2315,7 +2350,7 @@ When the form is submitted, your controller will have access to a `post_ids` par
 
 We can write a setter method for this, just like we did for `category_name`:
 
-```
+```ruby
 # app/models/category.rb
 class Category < ActiveRecord::Base
    def post_ids=(ids)
@@ -2327,7 +2362,7 @@ class Category < ActiveRecord::Base
 end
 ```
 Now we can use the same wiring in the controller to set `post_ids` from `params`:
-```
+```ruby
 # app/controllers/categories_controller.rb
 class CategoriesController < ApplicationController
   def create
@@ -2342,5 +2377,208 @@ class CategoriesController < ApplicationController
 end
 ```
 
+#### Example with Song, Genres, Artists, Notes
+The song form enables us to work on a song by assigning it an artist, genre and notes.
+Here's the form
+```erb
+<%= form_for @song do |f| %>
+  <%= f.label :title %>
+  <%= f.text_field :title %>
+
+  <%= f.label :artist_name, "Artist Name" %>
+  <%= f.text_field :artist_name, list: "artists_autocomp" %>
+  <datalist id="artists_autocomp">
+	<% @artists.each do |artist| %>
+		<option value="<%= artist.name %>">
+	<% end %>
+  </datalist>
+
+  <%= f.label :genre_id, "Song's genre name" %>
+  <%= f.collection_select :genre_id, @genres.order(:name), :id, :name %>
+  
+  <label>Add a few notes</label>
+  <input id="song_notes_1" name="song[notes][][content]" placeholder="first note">
+  <input id="song_notes_2" name="song[notes][][content]" placeholder="second note">
+
+  <%= f.submit %>
+<% end %>
+```
+This is handled by the Song controller
+```ruby
+class SongsController < ApplicationController
+    ...
+  def new
+    @song = Song.new
+    @artists = Artist.all
+    @genres = Genre.all
+  end
+
+  def create
+    # raise params.inspect
+    # "song"=>{"title"=>"Show Must Go On", "artist_name"=>"Queen", "genre_id"=>"139", "notes"=>["Awesome", "Epic"]}
+    @song = Song.new(song_params)
+
+    if @song.save
+      redirect_to @song
+    else
+      render :new
+    end
+  end
+  
+  private
+
+  def song_params
+    params.require(:song).permit(:title, :artist_name, :genre_id, notes: [:content])
+  end  
+    ...
+end
+```
+
+And the Song Model
+```ruby
+class Song < ActiveRecord::Base
+  belongs_to :artist
+  belongs_to :genre
+  has_many :notes
+
+  validates_presence_of :title
+
+  def artist_name=(name)
+  	self.artist = Artist.find_or_create_by(name: name)
+  end
+
+  def artist_name
+  	self.artist.name if self.artist
+  	# same as self.try(:artist).try(:name)
+  end
+
+  def genre_name=(name)
+  	self.genre = Genre.find_or_create_by(name: name)
+  end
+
+  def genre_name
+  	self.genre.name
+  end
+
+
+  def notes=(notes)
+  	notes.each do |note|
+  		self.notes << Note.create(content: note[:content])
+  	end
+  	# takes from the array's hash with the :content key
+  	# params.require(:song).permit(:title, :artist_name, :genre_id, notes: [:content])
+  end
+
+  def note_contents=(notes_array)
+  	notes_array.each do |note|
+  		self.notes << Note.create(content: note) unless note.empty?
+  	end
+  end
+
+  def note_contents
+  	self.notes.map { |note| note.content }
+  end
+
+  # def genre_name=(name)
+  # 	self.genre = Genre.find_or_create_by(name: name)
+  # end
+
+  # def genre_name
+  # 	self.genre.name if self.genre
+  # end
+
+end
+```
+It would also have been possible to have a simple non-nested array (no hash inside) to have the following combination for `notes`. 
+```ruby
+# songs/new view
+<%= form_for @song do |f| %>
+<%= f.text_field :title %>
+<%= f.text_field :artist_name %>
+<%= f.collection_select :genre_id, Genre.all, :id, :name %>
+<input name='song[note_contents][]' id='song_notes_1'>
+<input name='song[note_contents][]' id='song_notes_2'>
+<input name='song[note_contents][]' id='song_notes_3'>
+<%= f.submit %>
+<% end %>
+
+# controllers/songs_controller.rb
+  def song_params
+    params.require(:song).permit(:title, :artist_name, :genre_id, note_contents: [])
+  end
+
+# models/song.rb
+  def note_contents=(notes)
+    notes.each do |content|
+      if content.strip != ''
+        self.notes.build(content: content)
+      end
+    end
+  end
+
+  def note_contents
+    self.notes.map(&:content)
+    # same as self.notes.map { |note| note.content }
+  end
+```
+
+Note on the `&:symbol` operator in ruby: the `&` operator takes its operand, converts it to a `Proc` object if it isn't already (by calling `to_proc` on it) and **passes it to the method as if a block had been used**.
+```ruby
+my_proc = Proc.new { puts "foo" }
+
+my_method_call(&my_proc) # is identical to:
+my_method_call { puts "foo" }
+
+# another example
+people.collect(&:name)
+# is the same as
+people.collect { |p| p.name }
+
+# and lastly
+people.select(&:manager?).collect(&:salary)
+# is the same as
+people.select { |p| p.manager? }.collect { |p| p.salary }
+```
+
+Note: Nested parameters work this way:
+```ruby
+params.require(:person).permit(:name, { emails: [] },
+              friends: [ :name,
+                         { family: [ :name ], hobbies: [] }
+                        ]
+            )
+```
+This declaration whitelists 
+
+- `:name`
+- `:emails`, as an array of permitted values
+- `:friends`, as an array of resources with specific hash attributes
+-   `:name` attribute as a *hash* key
+-   `:family` attribute as an *array* containing *hashes* with the key `:name`
+-   `:hobbies` as an *array* of permited values
+
+Each attribute can have any of permitted scalar value. The permitted scalar types are String, Symbol, NilClass, Numeric, TrueClass, FalseClass, Date, Time, DateTime, StringIO, IO, ActionDispatch::Http::UploadedFile, and Rack::Test::UploadedFile.
+
+For example
+```ruby
+# in the views form
+<%= f.text_field :title %>
+<%= f.text_field :artist_name, list: "artists_autocomp" %>
+<%= f.collection_select :genre_id, @genres.order(:name), :id, :name %>
+<input id="song_notes_1" name="song[notes][][content]" placeholder="first note">
+<input id="song_notes_2" name="song[notes][][content]" placeholder="second note">
+
+# in the controllers params
+params.require(:song).permit(:title, :artist_name, :genre_id, notes: [:content])
+
+# as the params sent by the view
+"song"=>{
+    "title"=>"Take Me Out", 
+    "artist_name"=>"Franz Ferdinand", 
+    "genre_id"=>"133", 
+    "notes"=>[
+        {"content"=>"Electric"}, {"content"=>"Frantic"}
+    ]}
+```
 
 
