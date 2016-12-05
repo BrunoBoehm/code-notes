@@ -2060,7 +2060,7 @@ Let's cover one last callback that is super useful. This one is called `before_c
 
 ### Cool AR queries
 #### using `.merge`
-To combine two queries (that both return `ActiveRecord::Relation` objects), you can your `#merge` to combine with `AND` (intersection):
+To combine two queries (that both return `ActiveRecord::Relation` objects), you can use `#merge` to combine with `AND` (intersection):
 ```ruby
 User.where(:first_name => 'Tobias').merge(User.where(:last_name  => 'Fünke'))
 
@@ -2070,10 +2070,7 @@ last_name_relation  = User.where(:last_name  => 'Fünke') # ActiveRecord::Relati
 first_name_relation.merge(last_name_relation)
 ```
 
-To combine using `OR` (only availabel in ActiveRecord 5+)
-```ruby
-first_name_relation.or(last_name_relation)
-```
+You can also combine/add with `&` or `+` but this will return an array and not and `ActiveRecord::Relation` anymore (like running `.to_a`).
 
 Here are a few examples of `merge` used in queries.
 ```ruby
@@ -2087,7 +2084,7 @@ Post.where(published: true).joins(:comments).merge( Comment.where(spam: false) )
 Performs a single join query with both where conditions.
 
 #### using `.joins`
-If you want to select all categories that have articles, you can call a single association `join`
+If you want to select all categories that have articles, you can call a single association `join`. Note that inside of the `()` you need to put the `other` (singular is `belongs_to`, plural if `has_many`): below we write `:articles` because the `Category has_many :articles`.
 ```ruby
 Category.joins(:articles)
 
@@ -2117,15 +2114,233 @@ Client.joins(:orders).where(orders: { created_at: time_range })
 ```
 This will find all clients who have orders that were created yesterday, again using a BETWEEN SQL expression.
 
+To combine using `OR` (only availabel in ActiveRecord 5+)
+```ruby
+first_name_relation.or(last_name_relation)
+```
 
+### Displaying Association Data
+With the following model structure `Post belongs_to :category` and `Category has_many :posts` we can create some seed data `rake db:seed`
+```ruby
+# db/seeds.rb
+ 
+clickbait = Category.create!(name: "Motivation")
+clickbait.posts.create!(title: "10 Ways You Are Already Awesome")
+clickbait.posts.create!(title: "This Yoga Stretch Cures Procrastination, Maybe")
+clickbait.posts.create!(title: "The Power of Positive Thinking and 100 Gallons of Coffee")
+ 
+movies = Category.create!(name: "Movies")
+movies.posts.create!(title: "Top 20 Summer Blockbusters Featuring a Cute Dog")
+```
 
+And now in our views access the associated (owner and target / parent and child)
+```erb
+<!-- app/views/posts/show.html.erb -->
+ 
+<h1><%= @post.title %></h1>
+ 
+<h3>Category: <%= link_to @post.category.name, category_path(@post.category) if @post.category %></h3>
+ 
+<p><%= @post.description %></p>
+```
 
+### Law of Demeter "One Dot"
+The association-related complexity is hidden away within the associated model. This protects user-related code from future changes to friend functionality.
+```ruby
+user.best_friend
 
+# is better than
+user.friends.find_by(best: true)
+```
+For example, if the above architecture changed such that best friendship was determined by the highest "friendship" value instead of a boolean best flag, the "two-dots" code would need to be changed everywhere, but the first snippet, which obeys the Law of Demeter, hides that complexity in the `User#best_friend` method, whose definition can be changed without having to track down and update every single usage.
 
+## Forms and basic associations
+Let's say we have a simple blogging system. Our models are Post and Category. A Post `belongs_to` a Category.
 
+```ruby
+# app/models/post.rb
+class Post < ActiveRecord::Base
+  belongs_to :category
+end
 
+# app/models/category.rb
+class Category < ActiveRecord::Base
+  has_many :posts
+end
+```
 
+Now we need to build the functionality for a user to create a Post. We're going to need a form for the Post's content, and some way to represent what Category the Post belongs to.
 
+### Using category_id
+As a first pass, we might build a form like this:
+
+```erb
+<%= form_for @post do |f| %>
+  <%= f.label :category_id, :category %><%= f.text_field :category_id %>
+  <%= f.text_field :content %>
+<% end %>
+```
+
+This will work if we wire up our `PostsController` with the right parameters:
+
+```ruby
+class PostsController < ApplicationController
+  def create
+    Post.create(post_params)
+  end
+
+  private
+
+  def post_params
+    params.require(:post).permit(:category_id, :content)
+  end
+end
+```
+
+But as a user experience, this is miserable. I have to know the id of the category I want to use. As a user, it is very unlikely that I know this or want to.
+
+### Using a category_name (first attempt)
+We could rewrite our controller to accept a `category_name` instead of an id:
+```ruby
+class PostsController < ApplicationController
+  def create
+    category = Category.find_or_create_by(name: params[:category_name])
+    Post.create(content: params[:content], category: category)
+  end
+end
+```
+But we'll have to do this anywhere we want to set the category for a Post. When we're setting a Post's categories, the one thing we know we have is a Post object. What if we could move this logic to the model?
+
+### Defining a custom setter (second attempt)
+What if we gave the Post model a `category_name` attribute? Since our ActiveRecord models are still just Ruby classes, we can define our own setter methods:
+
+```ruby
+# app/models/post.rb
+class Post < ActiveRecord::Base
+   def category_name=(name)
+     self.category = Category.find_or_create_by(name: name)
+   end
+end
+```
+
+The setter method `#category_name=` is called whenever a `Post` is initialized with a `category_name` field. It will associate the `category` object instance to the `post` object.
+
+We can expand `Post.create(post_params)` to the code below, so that you can see that `#category_name=` will indeed be called.
+```ruby
+Post.create({
+ {
+    category_name: params[:post][:category_name],
+    content: params[:post][:content]
+  }
+})
+```
+Since we have defined this setter ourselves, `Post.create` does not try to fall back to setting `category_name` through ActiveRecord. 
+You can think of `#category_name=` as intercepting the call to the database and instead shadowing the attribute `category_name` by:
+- one, making sure the `Category` exists
+- providing it in-memory for the `Post` model. 
+We sometimes call these in-memory attributes "virtuals".
+
+Now we can set `category_name` on a post. We can do it when creating a post too, so our controller becomes quite simple again:
+```ruby
+class PostsController < ApplicationController
+  def create
+    Post.create(post_params)
+  end
+
+  private
+
+  def post_params
+    params.require(:post).permit(:category_name, :content)
+  end
+end
+```
+
+Notice the difference—we're now accepting a category name, rather than a category id. Even though you don't have an ActiveRecord field for `category_name`, because there is a key in the `post_params` hash for `category_name` it still calls the `category_name=` method.
+
+We can change the view as well now:
+```erb
+<%= form_for @post do |f| %>
+  <%= f.label :category_name %>
+  <%= f.text_field :category_name %>
+  <%= f.text_field :content %>
+<% end %>
+```
+Now the user can enter a category by name (instead of needing to look up its id), and we handle finding or creating the `Category` in the black box of the server. This results in a much friendlier experience for the user.
+
+### Selecting from existing categories
+If we want to let the user pick from existing categories, we can use a [Collection Select](http://apidock.com/rails/ActionView/Helpers/FormOptionsHelper/collection_select) helper to render a `<select>` tag:
+```erb
+<%= form_for @post do |f| %>
+  <%= f.collection_select :category, Category.all, :id, :name %>
+  <%= f.text_field :content %>
+<% end %>
+```
+
+The format is the following
+```ruby
+collection_select(object, method, collection, value_method, text_method, options = {}, html_options = {})
+```
+Returns `<select>` and `<option>` tags for the collection of existing return values of method for object's class. The value returned from calling `method` on the instance `object` will be selected. The `:value_method` and `:text_method` parameters are methods to be called on each member of collection. 
+
+The return values are used as the value attribute and contents of each `<option>` tag, respectively. This will create a **drop down selection input** where the user can pick a category.
+
+However, we've lost the ability for users to create their own categories. That might be what you want. For example, the content management system for a magazine would probably want to enforce that the category of an article is one of the sections actually printed in the magazine.
+
+In our case, however, we want to give users the flexibility to create a new category *or* pick an existing one. What we want is autocompletion, which we can get with a [`datalist`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/datalist). `datalist` is a new element in the HTML5 spec that allows for easy autocomplete:
+
+```erb
+<%= form_for @post do |f| %>
+  <%= f.text_field :category, list: "categories_autocomplete" %>
+  <datalist id="categories_autocomplete">
+    <%= Category.all.each do |category| %>
+      <option value="<%= category.name %>">
+    <% end %>
+  </datalist>
+  <textarea name="post[content]"></textarea>
+<% end %>
+```
+
+###  Using array parameters / Category has_many posts selection
+Rails uses a [naming convention](http://guides.rubyonrails.org/v3.2.13/form_helpers.html#understanding-parameter-naming-conventions) to let you submit an array of values to a controller.
+
+If you put this in a view so that the user can select 3 `posts` to associate with a `category`, it looks like this
+```
+<%= form_for @category do |f| %>
+  <input name="category[post_ids][]">
+  <input name="category[post_ids][]">
+  <input name="category[post_ids][]">
+<% end %>
+```
+When the form is submitted, your controller will have access to a `post_ids` param, which will be an array of strings.
+
+We can write a setter method for this, just like we did for `category_name`:
+
+```
+# app/models/category.rb
+class Category < ActiveRecord::Base
+   def post_ids=(ids)
+     ids.each do |id|
+       post = Post.find(id)
+       self.posts << post
+     end
+   end
+end
+```
+Now we can use the same wiring in the controller to set `post_ids` from `params`:
+```
+# app/controllers/categories_controller.rb
+class CategoriesController < ApplicationController
+  def create
+    Category.create(category_params)
+  end
+
+  private
+
+  def category_params
+    params.require(:category).permit(:name, :post_ids)
+  end
+end
+```
 
 
 
