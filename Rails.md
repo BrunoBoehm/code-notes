@@ -2725,6 +2725,9 @@ Now, we just need to get our form to create a `params` hash like that. Easy Peas
 
     <%= addr.label :address_type %>
     <%= addr.text_field :address_type %><br>
+    <!--  or if we instantiate in the controller the address_type we won't even need to let the user the choice, or use a hidden field like below
+        <%= addr.hidden_field :address_type, value: "..." %>
+    -->
   <% end %>
 
   <%= f.submit %>
@@ -2773,6 +2776,38 @@ end
 ```
 
 But it's best to know how to build the `addresses_attributes=` and not to use the `accepts_nested_attributes` and `field_for`, because it leaves more liberty and won't break when it gets a bit more complex.
+`fields_for` will instantiate a form for each of the objects you instantiate in the controller `new` action (`@person.addresses.build(address_type: "Spacedress")`). Be careful because when we use `fields_for` it will give you a hash of attributes (`{"0" => ..., "1" => ...}`) and not an array anymore.
+You can transform your array methods doing a hack
+```ruby
+addresses_attributes.each do |i, address_attribute|
+    self.addresses.build(address_attributes)
+end
+
+# or
+addresses_attributes.values.each do |address_attribute|
+    self.addresses.build(address_attributes)
+end
+```
+
+Don't forget to use `raise something.inspect` to debug your controllers and models (and `<%= binding.pry %>` for your views).
+
+**Remember: every key in a hash needs to correspond to a writer (mass assignment), but don't override AR methods given by your associations.**
+
+Note: we could also use the `FormBuilder` Object to give us the type and put it in a `<legend>` (use a binding pry to access it when debugging)
+```erb
+addr.object.address_type
+=> "Home"
+```
+
+Let's say our `Person belongs_to :team` and we want to enable the person to choose an existing team or create it. Team has a `:name` and `:hometown`.
+```ruby
+def team_attributes=(team_attributes)
+    self.team = Team.where (:name => team_attributes[:name]).first_or_create do |t|
+        t.hometown = team_attributes[:hometown]
+    end
+end
+```
+Remember the forms (or views) never interact directly with our models (cooks), the controllers (waiters)  are in between. When we pass the giant hash to the controller, it will call the `new` action, that will call the custom `addresses_attributes=` method from the model. The controller pushes the relevant data to the model.
 
 ### Avoiding duplicates
 One situation we can't use `accepts_nested_attributes_for` is when we want to avoid duplicates of the row we're creating.
