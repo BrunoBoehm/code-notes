@@ -4412,10 +4412,1127 @@ In addition, the reason to put the ID of the resource in the URL is so that we h
   @post.author # This will tell us who the author of the post was! We don't need this information in the URL
 ```
 
-
 Nesting resources is a powerful tool that helps you keep your routes neat and tidy and is better than dynamic route segments for representing parent/child relationships in your system. However, as a general rule, you should only nest resources one level deep and ensure that you are considering Separation of Concerns in your routing.
 
+### The Flash
+The flash is a special part of the session which is cleared with each request. This means that values stored there will only be available in the next request, which is useful for passing error messages etc.
 
+It is accessed in much the same way as the session, as a hash (it's a FlashHash instance).
+
+Let's use the act of logging out as an example. The controller can send a message which will be displayed to the user on the next request:
+```ruby
+class LoginsController < ApplicationController
+  def destroy
+    session[:current_user_id] = nil
+    flash[:notice] = "You have successfully logged out."
+    redirect_to root_url
+  end
+end
+```
+Note that it is also possible to assign a flash message as part of the redirection. You can assign :notice, :alert or the general purpose :flash:
+```ruby
+redirect_to root_url, notice: "You have successfully logged out."
+redirect_to root_url, alert: "You're stuck here!"
+redirect_to root_url, flash: { referral_code: 1234 }
+```
+The destroy action redirects to the application's `root_url`, where the message will be displayed. Note that it's entirely up to the next action to decide what, if anything, it will do with what the previous action put in the flash. It's conventional to display any error alerts or notices from the flash in the application's layout:
+```erb
+<html>
+  <!-- <head/> -->
+  <body>
+    <% flash.each do |name, msg| -%>
+      <%= content_tag :div, msg, class: name %>
+    <% end -%>
+ 
+    <!-- more content -->
+  </body>
+</html>
+```
+This way, if an action sets a notice or an alert message, the layout will display it automatically.
+
+You can pass anything that the session can store; you're not limited to notices and alerts:
+```erb
+<% if flash[:just_signed_up] %>
+  <p class="welcome">Welcome to our site!</p>
+<% end %>
+```
+If you want a flash value to be carried over to another request, use the keep method:
+```ruby
+class MainController < ApplicationController
+  # Let's say this action corresponds to root_url, but you want
+  # all requests here to be redirected to UsersController#index.
+  # If an action sets the flash and redirects here, the values
+  # would normally be lost when another redirect happens, but you
+  # can use 'keep' to make it persist for another request.
+  def index
+    # Will persist all flash values.
+    flash.keep
+ 
+    # You can also use a key to keep only some kind of value.
+    # flash.keep(:notice)
+    redirect_to users_url
+  end
+end
+```
+By default, adding values to the flash will make them available to the next request, but sometimes you may want to access those values in the same request. For example, if the create action fails to save a resource and you render the new template directly, that's not going to result in a new request, but you may still want to display a message using the flash. To do this, you can use flash.now in the same way you use the normal flash:
+```ruby
+class ClientsController < ApplicationController
+  def create
+    @client = Client.new(params[:client])
+    if @client.save
+      # ...
+    else
+      flash.now[:error] = "Could not save client"
+      render action: "new"
+    end
+  end
+end
+```
+
+### Create and Nested Resources
+Continuing with our blog application, we're going to extend our nested resources to allow for creating and modifying blog posts by author.
+
+The first thing we want to do is to create a new post that is automatically linked to an `Author`. We could set up a select box on the post page and make the author choose. However, if we're already on the author's page, we know who the author is, so why not do it without forcing the user to choose?
+
+We already used nested resources to view posts by author, so now let's look at nested resources to create posts by author. As usual, we want to start with the route. We want to add `:new` to our nested `:posts` resource:
+
+```ruby
+# config/routes.rb
+
+resources :authors, only: [:show, :index] do
+  resources :posts, only: [:show, :index, :new]
+end
+```
+
+This gives us access to `/authors/:id/posts/new`, and a `new_author_post_path` helper.
+
+**Top-tip:** Remember to run `rake routes` if you're unsure of the URL helper name.
+
+We have the route, so now we need to update our `posts_controller#new` action to handle the `:author_id` parameter.
+
+```ruby
+# controllers/posts_controller.rb
+
+def new
+  @post = Post.new(author_id: params[:author_id])
+end
+```
+
+Notice that we're passing the `params[:author_id]` into `Post.new()`. We want to make sure that, if we capture an `author_id` through a nested route, we keep track of it and assign the post to that author. We'll actually be carrying this `id` with us for the next few steps, babysitting it through the server request/response cycle.
+
+Now let's get into our author `show` template and add a link to the nested new post page for that author.
+
+```erb
+<!-- authors/show.html.erb -->
+
+<h1><%= @author.name %></h1>
+
+<%= link_to "New Post", new_author_post_path(@author) %>
+
+<p>Posts:</p>
+<% @author.posts.each do |post| %>
+  <div><%= post.title %></div>
+<% end %>
+```
+
+Something seems off. Where's our author? Looks like we didn't do a great job babysitting that `author_id`. We set it up in the `new` action, but it never made it to the view so that it could get submitted back to the server. Let's fix that. Open up the post form partial and add a hidden field for the `:author_id`.
+
+```erb
+<!-- posts/_form.html.erb -->
+
+<%= form_for(@post) do |f| %>
+  <label>Post title:</label><br>
+
+  <%= f.hidden_field :author_id %>
+
+  <%= f.text_field :title %><br>
+  <label>Post Description</label><br>
+  <%= f.text_area :description %><br>
+  <%= f.submit %>
+<% end %>
+```
+
+If we reload the new post page for the author and inspect the source, we should see something like this:
+
+```html
+<input type="hidden" value="1" name="post[author_id]" id="post_author_id">
+```
+
+Great. That part's working, but we need to carry that `author_id` with us even further.
+
+Remember [Strong Parameters](http://guides.rubyonrails.org/action_controller_overview.html#strong-parameters)? We need to update our `posts_controller` to accept `:author_id` as a parameter for a post. So let's get in there and modify our `post_params` method.
+
+```ruby
+# controllers/posts_controller.rb
+
+...
+
+private
+
+def post_params
+  params.require(:post).permit(:title, :description, :author_id)
+end
+```
+
+Now we know the `author_id` will be allowed for mass-assignment in the `create` action.
+
+Let's try it out. Go to an author's new post page, and make a post. We should see the author's name in the byline now!
+
+Why didn't we have to make a nested resource route for `:create` in addition to `:new`? 
+
+The `form_for(@post)` helper in `posts/_form.html.erb` will automatically route to `POST posts_controller#create` for a new `Post`. By carrying the `author_id` as we did and allowing it through strong parameters, the existing `create` route and action can be used without needing to do anything else.
+
+### Update and Nested Resource
+We can use the same technique to allow us to directly edit an author's posts.
+First, we allow the `:edit` action in the nested route:
+
+```ruby
+# config/routes.rb
+
+resources :authors, only: [:show, :index] do
+  resources :posts, only: [:show, :index, :new, :edit]
+end
+```
+
+We don't have to change any views because `new` and `edit` both use the same `_form` partial that already has the `author_id`.
+
+Now we need to update our post `show` view to give us the new nested link to edit the post for the author.
+
+```erb
+<!-- posts/show.html.erb -->
+
+<h1><%= @post.title %></h1>
+<p>by <%= link_to @post.author.name, author_path(@post.author) if @post.author %> (<%= link_to "Edit Post", edit_author_post_path(@post.author, @post) if @post.author %>)</p>
+<p><%= @post.description %> </p>
+```
+
+And if we try it out, everything should work just fine. Reload the page, click the edit link, and edit the post. Pretty easy, right? We didn't even have to change the controller this time. What's the catch?
+
+The catch is that we've opened ourselves up to a couple of potential bugs or, worse, opportunities for our more playful users to make a mess of our data. Let's work backward, starting with our recent changes to `edit`.
+
+If you go back to your author post edit page, you'll see a URL similar to `http://localhost:3000/authors/1/posts/1/edit`. This tells us that we are editing the `Post` with `id: 1` by the `Author` with `id: 1`. But what if we change that `author_id` in the URL? Try browsing to `http://localhost:3000/authors/123456/posts/1/edit`, and see what happens.
+
+We end up on the same page! But post `1` belongs to author `1` — not author `123456`. In fact, there *is no* author `123456` in the system. How is this happening?
+
+Remember how we didn't have to change the controller when we added the nested resource route for `:edit`? Well, this is the price we pay for taking shortcuts. What we should do is check to make sure that 1) the `author_id` is valid and 2) the post matches the author. So let's fix that now.
+
+```ruby
+# controllers/posts_controller.rb
+
+def edit
+  if params[:author_id]
+    author = Author.find_by(id: params[:author_id])
+    if author.nil?
+      redirect_to authors_path, alert: "Author not found."
+    else
+      @post = author.posts.find_by(id: params[:id])
+      redirect_to author_posts_path(author), alert: "Post not found." if @post.nil?
+    end
+  else
+    @post = Post.find(params[:id])
+  end
+end
+```
+
+Here we're looking for the existence of `params[:author_id]`, which we know would come from our nested route. If it's there, we want to make sure that we find a valid author. If we can't, we redirect them to the `authors_path` with a `flash[:alert]`.
+
+If we do find the author, we next want to find the post by `params[:id]`, but, instead of directly looking for `Post.find()`, we need to filter the query through our `author.posts` collection to make sure we find it in that author's posts. It may be a valid post `id`, but it might not belong to that author, which makes this an invalid request.
+
+Now if we go back and try our invalid URL (`http://localhost:3000/authors/123456/posts/1/edit`), we should be redirected back to where we belong.
+
+**Top-tip:** One of the downsides of RESTful URL schemes is that curious users can edit the URLs to try to explore the system further. This is how we discovered [all the hidden Netflix genres](http://mashable.com/2016/01/11/netflix-search-codes/#LM6QcfeksZqG). However, this could also lead to security holes in your system, allowing users to potentially mismatch id parameters and wreak havoc in your database, so always guard against that by doing what we've done above.
+
+While we're at it, we should fix up our `new` action to ensure that we're creating a new post for a valid author. Let's make it look like this:
+
+```ruby
+# controllers/posts_controller.rb
+
+def new
+  if params[:author_id] && !Author.exists?(params[:author_id])
+    redirect_to authors_path, alert: "Author not found."
+  else
+    @post = Post.new(author_id: params[:author_id])
+  end
+end
+```
+
+Here we check for `params[:author_id]` and then for `Author.exists?` to see if the author is real.
+
+Why aren't we doing a `find_by` and getting the author instance? Because we don't need a whole author instance for `Post.new`; we just need the `author_id`. And we don't need to check against the `posts` of the author because we're just creating a new one. So we use `exists?` to quickly check the database in the most efficient way.
+
+But what if `params[:author_id]` is `nil` in the example above? If we just did `Post.new` without the `(author_id: params[:author_id])` argument, the `author_id` attribute of the new `Post` would be initialized as `nil` anyway. So we don't have to do anything special to handle it. It works for us if there is or isn't an `author_id` present.
+
+Which brings us to the last thing we have to do.
+
+When someone creates a new post via our nested route, we automatically assign an author, and everything works great. But what about when they create a new post from the regular old `new_post_path`?
+
+We could just eliminate that route and only allow post creation through the nested resource. That might be a valid choice in some applications. But we've decided we want to be able to select an author at the time of posting if we haven't used the nested route.
+
+Since we're already set up to handle `author_id` on the controller, all we have to do is augment our `posts/_form.html.erb` partial to present a list of authors when none is present.
+
+```erb
+<!-- posts/_form.html.erb -->
+
+<%= form_for(@post) do |f| %>
+  <label>Post title:</label><br>
+  <% if @post.author.nil? %>
+    <%= f.select :author_id, options_from_collection_for_select(Author.all, :id, :name) %><br>
+  <% end %>
+  <%= f.hidden_field :author_id %>
+
+...
+```
+
+That gives us a select control if we don't have an author, but we have a problem. We can only have one `:author_id` field. We could put that `hidden_field` in an `else`, which would work, but then we would have a whole bunch of logic cluttering up our view. So let's dump it in our `posts_helper` and clean up that form.
+
+```ruby
+# helpers/posts_helper.rb
+
+module PostsHelper
+  def author_id_field(post)
+    if post.author.nil?
+      select_tag "post[author_id]", options_from_collection_for_select(Author.all, :id, :name)
+    else
+      hidden_field_tag "post[author_id]", post.author_id
+    end
+  end
+end
+```
+
+And back in our form partial:
+
+```erb
+<!-- posts_form.html.erb -->
+
+<%= form_for(@post) do |f| %>
+  <%= author_id_field(@post) %>
+  <br>
+  <label>Post title:</label><br>
+  <%= f.text_field :title %><br>
+
+...
+```
+
+Now we should have a selector when we browse to `/posts/new` and a hidden `author_id` field when we browse to `/authors/1/posts/new`.
+
+### Namespaced routes
+We're going to explore different ways of routing things in our blog application to help us organize and group certain routes and controllers more logically.
+
+We decide that we want to keep track of some basic blog statistics, such as how many posts and authors we have. We start by creating a `stats_controller.rb` with an `index` action and corresponding view.
+
+We can't actually browse to it yet because we need to set up a route. Let's add it to `routes.rb`:
+```ruby
+# config/routes.rb
+
+get '/stats', to: 'stats#index'
+```
+
+Easy enough, but, after thinking about it, `/stats` isn't something we want to just hang off the root of our blog URL for anyone to see. It's really just for blog admins, and we want to set up a URL scheme to segregate admin things into their own logical space.
+We modify our route:
+```ruby
+# config/routes.rb
+
+get '/admin/stats', to: 'stats#index'
+```
+
+Now we can browse to `/admin/stats` for the stats page, and we can no longer go straight to `/stats`.
+
+#### Scoping Routes
+Over time, we might decide to add more admin functions, grouping them all together like we did above, until eventually our `routes.rb` looks something like this:
+
+```ruby
+# config/routes.rb
+
+...
+
+get '/admin/stats', to: 'stats#index'
+get '/admin/authors/new', to: 'authors#new'
+get '/admin/authors/delete', to: 'authors#delete'
+get '/admin/authors/create', to: 'authors#create'
+get '/admin/comments/moderate', to: 'comments#moderate'
+```
+
+As you can see, even with only a few more actions in our `admin` section, our routes are getting ugly. Not to mention we're repeating ourselves a lot by typing in `/admin` on all these routes. Yes, even routes should be DRY!
+
+What we need is a way to group all these under `/admin` without typing `/admin` all the time. That's where `scope` comes in.
+In routing, `scope` allows us to prefix a block of routes under one grouping. So let's change our stats route:
+```ruby
+# config\routes.rb
+
+scope '/admin' do
+  resources :stats, only: [:index]
+end
+```
+
+Now we can reload `/admin/stats`, and it still works. Notice our new route is resourced. Now that we don't have to manually prefix `/admin`, we can go back to using resourced routes within the `/admin` scope.
+
+If you run `rake routes`, you'll see that the new `/admin/stats` helpers are `stats_path` and `stats_url`.
+
+#### Scoping with Modules
+Scoping works nicely to group our URLs together logically, but what happens when we have a bunch of controllers that are handling admin functions? As the application grows, it's going to be harder and harder to keep track of which controllers are for regular blog functions and which are for admin functions.
+
+We want to group all our admin controllers logically to make it easier to maintain and add to the app, so let's add an `/admin` directory under `/controllers` where all the admin controllers will go:
+
+`mkdir app/controllers/admin`
+
+Now let's move our `stats_controller.rb` into the `/admin` folder.
+
+When you create a new folder under `/controllers`, Rails will automatically pick that up as a `module` and expect you to namespace the controller accordingly. We need to modify our `admin/stats_controller.rb` to look like this:
+
+```ruby
+# controllers/admin/stats_controller.rb
+
+class Admin::StatsController < ApplicationController
+  def index
+
+    ...
+
+  end
+end
+```
+
+Now that we have our controller in a module, Rails will expect the views to match. Let's create a new directory at `/app/views/admin/stats` and move our `stats/index.html.erb` into it, so we'll wind up with `/app/views/admin/stats/index.html.erb`.
+
+**Top-tip:** The `views` folder for a controller module (in this case `/admin`) expects a subfolder structure that matches the names of the controllers (in this case `/admin/stats`).
+
+If we try to reload `/admin/stats` now, we will get an error because we need to tell our routes about our new module.
+
+```ruby
+# config/routes.rb
+
+scope '/admin', module: 'admin' do
+  resources :stats, only: [:index]
+end
+```
+
+We're telling `scope` that we want to use `/admin` as a URL prefix, and we're also letting Rails know that all of the included routes will be handled by controllers in the `admin` module.
+
+If we reload `/admin/stats`, everything should work just like it did, but now we are logically organizing our controllers.
+
+#### Namespace
+Right now, our route is scoped as `scope '/admin', module: 'admin'`, which is fine but perhaps a bit less DRY than we'd like. Fortunately, Rails gives us a shortcut here. When we want to route with a module *and* use that module's name as the URL prefix, we can use the `namespace` method instead of `scope, module`.
+
+```ruby
+# config/routes.rb
+
+namespace :admin do
+  resources :stats, only: [:index]
+end
+```
+
+If we reload `/admin/stats`, everything still works, but we've simplified the declaration of the routes. The `namespace` method makes the assumption that the path prefix and module name match, saving us some typing.
+
+**Top-tip:** There is one important difference between `scope '/admin', module: 'admin'` and `namespace :admin`, and it's in the URL helpers. Remember above that using `scope` gave us a `stats_path` helper. But now that we are using `namespace`, run `rake routes` again. You'll see that the helper is now prefixed with `admin_`, so `stats_path` becomes `admin_stats_path`. If you switch from `scope` to `namespace`, take care to update any URL helpers you have in use!
+
+## Rails Authentication
+### Cookies and Sessions
+Cookies are a way for an HTTP server to ask the user's browser to store a little bit of data for it, and then get that data back from the browser later. They are fundamental to the operation of nearly every contemporary website.
+
+Primarily, cookies are used for log in. They provide a way for us to verify who a user is once, and then remember it for their entire session. Without cookies, you would have to provide your username and password on every single request to the server.
+
+Cookies may also be used to store other information about a user, such as what's in their shopping cart, or what ads you've shown them during their visit.
+
+In this document, we'll cover what cookies are, how they fit into the HTTP response flow, and how you can access them within your Rails application.
+
+#### Shopping
+Let's say we want to build an e-commerce site. Users can come to the site, add some items to their shopping cart, and then pay for all of them at the end. Simple.
+
+Where does the user's shopping cart live?
+
+We could create a `Cart` model, which [`has_and_belongs_to_many`][habtm] `Item`s. But that leaves a fundamental problem: how do we know what cart to load when we get a request? When one user requests to see their cart, how can I tell them apart from another user, and make sure they're seeing the right cart?
+
+The flow looks like this:
+
+  * When a user adds something to their cart, their browser will make a `POST` request to `/cart`.
+  * Later, to see the content of their cart, they'll send a `GET` request to `/cart`. 
+
+
+
+Remember what's included in an HTTP request:
+  * an [HTTP verb][rfc_http_methods], like `GET`, `PUT`, or `POST`
+  * a path
+  * various headers
+
+HTTP servers are typically stateless. They receive requests, process them, return data, then forget about them.
+
+For example, `GET` requests usually encode this information in the path. When you write a route matching `/items/:item_id`, you are telling Rails to pull the value `id` from the request path and save it in `params[:id]`. In your `items_controller`, you'll probably have a method that looks something like:
+
+```ruby
+def show
+  @item = Item.find(params[:item_id])
+end
+```
+
+Which loads the row for that item from the database and returns it as an ActiveRecord model object, which your `show.html.erb` then renders.
+
+If we want to be able to retrieve the current cart, we need to have its `id` somewhere in the HTTP request. Specifically, it must be in the path or the headers.
+
+If we want to be able to retrieve the current cart, we need to have its id somewhere in the HTTP request. Specifically, it must be in the path or the headers.
+
+It would be possible, though quite convoluted, to store this information in the path. This would have strange effects: since the path is shown in the browser's URL bar, a user who copies a URL and sends it to a friend ("check out this neat skirt!") would also be copying their shopping cart ID. Upon loading the page, the friend would see what's in the user's cart. Since a cart is owned by a particular user, and may contain private information, this is probably not what we want.
+
+Cookies allow us to store this information in the only other place available to us: `HTTP headers`.
+
+#### What's a cookie, anyway?
+Let's see what [the spec][rfc_cookies] has to say:
+
+      This section outlines a way for an origin server to send state
+      information to a user agent and for the user agent to return the
+      state information to the origin server.
+
+      To store state, the origin server includes a Set-Cookie header in an
+      HTTP response.  In subsequent requests, the user agent returns a
+      Cookie request header to the origin server.  The Cookie header
+      contains cookies the user agent received in previous Set-Cookie
+      headers.  The origin server is free to ignore the Cookie header or
+      use its contents for an application-defined purpose.
+
+The description is quite technical, so let's look at their example:
+
+      == Server -> User Agent ==
+      Set-Cookie: SID=31d4d96e407aad42
+
+      == User Agent -> Server ==
+      Cookie: SID=31d4d96e407aad42
+
+In this example, the server is an HTTP server, and the User Agent is a browser. The server responds to a request with the `Set-Cookie` header. This header sets the value of the `SID` cookie to `31d4d96e407aad42`.
+
+Next, when the user visits another page on the same server, the browser sends the cookie back to the server, including the `Cookie: SID=31d4d96e407aad42` header in its request.
+
+Cookies are stored in the browser. The browser doesn't care about what's in the cookies you set. It just stores the data and sends it along on future requests to your server. You can think of them as a hash—and indeed, as we'll see later, Rails exposes cookies with a method that behaves much like a hash.
+
+So how would we use a cookie to store a reference to the user's shopping cart? Let's say that we create a cart the first time a user adds something to their cart. Then, in the response, we might include the header,
+
+      == Server -> User Agent ==
+      Set-Cookie: cart_id=273
+
+Only with the `cart.id` of the cart we just saved.
+
+When the user comes back to our site, their browser will include the cookie in their reply:
+
+      == User Agent -> Server ==
+      Cookie: cart_id=273
+
+We can look at this HTTP header, get the `cart_id` from it, and look it up using the `ActiveRecord` find method we know and love.
+
+#### Security concerns
+Cookies are stored as plain text in a user's browser. Therefore, the user can see what's in them, and they can set them to anything they want.
+
+If you open the developer console in your browser, you can see the cookies set by the current site. In Chrome's console, you can find this under `Resources > Cookies`. You can delete any cookie you like. For example, if you delete your `user_session` cookie on `github.com`, you will find that you've been logged out.
+
+You can also edit cookies, for example with [this extension][edit_this_cookie].
+
+This presents a problem for us. If users can edit their `cart_id` cookie, then they can see other users' shopping carts.
+
+Fortunately, Rails has a solution to this. When you set cookies in Rails, you usually don't manipulate the HTTP headers directly. Instead, you use the `session` method. The `session` method is available anywhere in the Rails response cycle, and it behaves like a hash:
+
+```ruby
+  # set cart_id
+  session[:cart_id] = @cart.id
+
+  # load the cart referenced in the session
+  @cart = session[:cart_id]
+```
+
+You can store any simple Ruby object in the session. In fact, we don't need a `Cart` model at all—we can just store a list of items in the session!
+
+Rails manages all session data in a single cookie, named `_YOUR_RAILS_APP_NAME_session`. It *serializes* all the key/value pairs you set with `session`, converting them from a Ruby object into a big string. Whenever you set a `key` with the `session` method, Rails updates the value of its session cookie to this big string.
+
+When you set cookies this way, Rails signs them to prevent users from tampering with them. Your Rails server has a key, configured in `config/secrets.yml`.
+
+```
+development:
+  secret_key_base: kaleisgreat  # probably not the most secure key ever
+```
+
+Somewhere else, Rails has a method, let's call it `sign`, which takes a `message` and a `key` and returns a `signature`, which is just a string:
+
+```ruby
+# sign(message: string, key: string) -> signature: string
+def sign(message, key):
+  # cryptographic magic here
+  return signature
+end
+```
+
+It's guaranteed that given the same message and key, sign will produce output. Also, without the key, it is practically impossible to know what `sign` would return for a given message. That is, signatures can't be forged.
+
+Rails creates a signature for every cookie it sets, and appends the signature to the cookie.
+
+When it receives a cookie, Rails verifies that the signature matches the content (that is, that `sign(cookie_body, secret_key_base) == cookie_signature`).
+
+This prevents cookie tampering. If a user tries to edit their cookie and change the `cart_id`, the signature won't match, and Rails will silently ignore the cookie and set a new one.
+
+Cryptography is a deep rabbit hole. At this point, you don't need to worry about the specifics of how cryptography works, just that Rails and other frameworks use it to ensure that session data which is set on the server can't be edited by users.
+
+#### Tying it all together
+In our `items_controller.rb`, we might have an `add_to_cart` method, which is called when the user adds something to their cart. It might work something like this:
+
+```ruby
+# Routed from POST /items/:id/add_to_cart
+def add_to_cart
+  # Get the item from the path
+  @item = Item.find(params[:id])
+  
+  # Load the cart from the session, or create a new empty cart.
+  cart = session[:cart] || []
+  cart << @item.id
+
+  # Save the cart in the session.
+  session[:cart] = cart
+end
+```
+
+That's it! It's common to wrap this up in a helper method:
+
+```ruby
+class ApplicationController < ActionController::Base
+  helper_method :current_cart
+  
+  def current_cart
+    session[:cart] ||= []
+  end
+end
+```
+
+So now our controller looks like this:
+
+```ruby
+# Routed from POST /items/:id/add_to_cart
+def add_to_cart
+  # Get the item from the path
+  @item = Item.find(params[:id])
+  
+  # Load the cart from the session, or create a new empty cart.
+  current_cart << @item.id
+end
+```
+
+This way, we can use `current_cart` in our views and layouts too. For example, we may want to show the user how many items are in their cart as part of the layout.
+
+Cookies are foundational for the modern web.
+
+Most sites use cookies, either to let their users log in, to keep track of their shopping carts, or record other ephemeral session data. Almost nobody thinks these are bad uses of cookies: nobody really believes that you should have to type in your username and password on every page, or that your shopping cart should clear if you reload the page.
+
+But cookies just let you store data in a user's browser, so by nature, they can be used for more controversial endeavors. 
+
+For example, Google AdWords sets a cookie and uses that cookie to track what ads you've seen and which ones you've clicked on. The tracking information helps AdWords decide what ads to show you.
+
+This is why, if you click on an ad, you may find that the ad follows you around the Internet. It turns out that this behavior is as effective as it is annoying: people are far more likely to buy things from ads that they've clicked on once.
+
+This use of cookies worries people and the EU [has created legislation around the use of cookies][eu_law].
+
+Cookies, like any technology, are a tool. In the rest of this unit, we're going to be using them to let users log in. Whether you later want to use them in such a way that the EU passes another law is up to you.
+
+## Resources
+
+  * [HTTP RFC Section 9 — Methods][rfc_http_methods]
+  * [RFC 6265 — HTTP State Management Mechanism (the cookie spec)][rfc_cookies]
+  * [Rails – Accessing the Session][rails_session]
+  * [Has and belongs to many][habtm]
+  * [EU Cookie Directive][eu_law]
+
+[rfc_http_methods]: http://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html "HTTP RFC 9 — Method Definitions"
+[rfc_cookies]: http://tools.ietf.org/html/rfc6265 "HTTP State Management Mechanism"
+[edit_this_cookie]: https://chrome.google.com/webstore/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg?hl=en
+[rails_session]: http://guides.rubyonrails.org/action_controller_overview.html#accessing-the-session
+[habtm]: http://guides.rubyonrails.org/association_basics.html#the-has-and-belongs-to-many-association
+[eu_law]: https://en.wikipedia.org/wiki/HTTP_cookie#EU_cookie_directive
+
+## Login Required
+Sometimes you want to require that a user is logged in to access a route. Here's how.
+
+Let's say we have a `DocumentsController`. Its `show` method looks like this:
+```ruby
+def show
+  @document = Document.find(params[:id])
+end
+```
+Now let's add a new requirement: documents should only be shown to users when they're logged in. From a technical perspective, what does it actually mean for a user to log in?  As we saw in the last section, when a user logs in all we are doing is using cookies to add their `:user_id` to their `session`.
+
+The first thing you might do is to just add some code into `DocumentsController#show`:
+```ruby
+def show
+  return head(:forbidden) unless session.include? :user_id
+  @document = Document.find(params[:id])
+end
+```
+
+The first line is a return guard. Unless the session includes `:user_id`, we return an error. `head(:forbidden)` is a controller method that returns the specified HTTP status code—in this case, if a user isn't logged in, we return `403 Forbidden`.
+
+We're using the phrase `unless session.include?` rather than `unless session[:user_id]`, because a user_id of 0 is still a valid user id, but would evaluate falsey, and reject the request.
+
+This code works fine, so you use it in a few places. Now your DocumentsController looks like this:
+```ruby
+class DocumentsController < ApplicationController
+  def show
+    return head(:forbidden) unless session.include? :user_id
+    @document = Document.find(params[:id])
+  end
+
+  def index
+    return head(:forbidden) unless session.include? :user_id
+  end
+
+  def create
+    return head(:forbidden) unless session.include? :user_id
+    @document = Document.create(author_id: user_id)
+  end
+
+  def update
+    return head(:forbidden) unless session.include? :user_id
+    @document = Document.find(params[:id])
+    # code to update a document
+  end    
+end
+```
+
+That doesn't look so DRY. I really wish there were a way to ask Rails to run a check before any controller action.
+
+Fortunately, Rails gives us a solution: [`before_action`](http://guides.rubyonrails.org/action_controller_overview.html#filters). We can refactor our code like so:
+
+```ruby
+class DocumentsController < ApplicationController
+  before_action :require_login
+  
+  def show
+    @document = Document.find(params[:id])
+  end
+
+  def index
+  end
+
+  def create
+    @document = Document.create(author_id: user_id)
+  end
+
+  private
+
+  def require_login
+    return head(:forbidden) unless session.include? :user_id    
+  end
+end
+```
+
+Let's look at the code we've added:
+```ruby
+before_action :require_login
+```
+
+This is a call to the ActionController class method `before_action`. `before_action` registers a filter. A filter is a method which runs before, after, or around, a controller's action. In this case, the filter runs before all DocumentsController's actions, and kicks requests out with `403 Forbidden` unless they're logged in.
+
+What if we wanted to let anyone see a list of documents, but keep the `before_action` filter for other `DocumentsController` methods? We could do this:
+```ruby
+class DocumentsController < ApplicationController
+  before_action :require_login
+  skip_before_action :require_login, only: [:index]
+
+  # ...
+end
+```
+
+This class method, tells Rails to skip the `require_login` filter only on the `index` action.
+```ruby
+skip_before_action :require_login, only: [:index]
+```
+
+### Sessions Controller
+We've covered how cookies can be used to store data in a user's browser. One of the most common uses of cookies is for login. In this lesson, we'll cover how to use the Rails session to log users in.
+
+Nearly every website in the world uses what I am going to call the "wristband" pattern. A lot of nightclubs use this pattern as well. You arrive at the club. The bouncer checks your ID. They put a wristband on your wrist (or stamp your hand). They let you into the club. If you leave and come back, the bouncer doesn't look at your ID, they just look for your wristband. If you buy a drink, the bartender doesn't need to see your ID, since your wristband proves you're old enough to buy alcohol.
+
+You arrive at [gmail.com](http://mail.google.com). You submit your username and password. Google's servers check to see if your credentials are correct. If they are, Google's servers issue a cookie to your browser. If you visit another page on gmail, or anywhere on google.com for that matter, your browser will show the cookie to the server. The server verifies this cookie, and lets you load your inbox.
+
+Let's look at what the simplest possible login system might look like in Rails.
+The flow will look like this:
+   * The user GETs `/login`
+   * The user enters their username. There is no password.
+   * The user submits the form, POSTing to `/login`.
+   * In the create action of the `SessionsController` we set a cookie on the user's browser by writing their username into the session hash.
+   * Thereafter, the user is logged in. `session[:username]` will hold their username.
+
+Let's write a `SessionsController` to handle these routes. This controller has two actions, `new` and `create`, which we'll map in `routes.rb` to `get` and `post` on `/login`.
+
+Typically, your `create` method would look up a user in the database, verify their login credentials, and then store the authenticated user's id in the session. We're not going to do any of that right now. Our sessions controller is just going to trust that you are who you say you are.
+
+```ruby
+class SessionsController < ApplicationController
+	def new
+		# nothing to do here!
+	end
+
+	def create
+		session[:username] = params[:username]
+		redirect_to '/'
+	end
+end
+```
+
+There's no way for the server to log you out right now. To log yourself out, you'll have to delete the cookie from your browser.
+
+We'll make a very small login form for `new.html.erb`,
+```html
+<form method='post'>
+  <input name='username'>
+  <input type='submit' value='login'>
+</form>
+```
+
+Ordinarily, we would use `form_for @user`, but in this example, we don't have a user model at all! When the user submits the form, they'll be logged in!
+
+The log out flow is even simpler. We add a `SessionsController#destroy` method, which will clear the username out of the session.
+```ruby
+def destroy
+  session.delete :username
+end
+```
+The most common way to route this action is to `post '/logout'`. This means that our logout link will actually be a submit button that we style to look like a link.
+
+It's tempting, but don't attach this to a `get` route. HTTP specifies that `get` routes don't change anything—logging out is definitely changing something. You don't actually want someone to be able to put a link to `http://www.yoursite.com/logout` in an email or message board post. It's not a security flaw, but it's pretty annoying to be logged out because of mailing list hijinks.
+
+At its base, login is very simple: the user provides you with credentials in a POST, you verify those credentials and set a token in the `session`. In this example, our token was literally the username the user typed. In a more complex app, it would most likely be their user id.
+
+Read more on [Rails Tutorial Chapter 8 — Log in, log out](https://www.railstutorial.org/book/basic_login)
+
+### Using has_secure password
+It's quite difficult to manage passwords securely. About once a month, there is another big hack in the news, and all the passwords and credit cards from some poor site show up on BitTorrent.
+
+Rails provides us with tools to store passwords relatively securely so that when hackers break into your servers they don't gain access to users' actual passwords.
+
+Let's imagine a `SessionsController#create` method that does very simple authentication. It goes like this:
+
+```ruby
+def create
+  @user = User.find_by(username: params[:username])
+  return head(:forbidden) unless params[:password] == @user.password
+  session[:user_id] = @user.id
+end
+```
+
+We load the user row, check to see if the provided password is equal to the password stored in the database, and, if it is, set `user_id` in the `session`.
+
+This is tremendously insecure because you then have to store all your users' passwords in the database, unencrypted.
+
+NEVER DO THIS!!!!!
+
+Even if you don't care about the security of your site, people have a strong tendency to reuse passwords. That means that the inevitable security breach of your site will leak passwords which some users also use for Gmail. Your `users` table probably has an `email` column. This means that, if I'm a hacker, getting access to your database has given me the Internet equivalent of the house keys and home address for some (probably surprisingly large) percentage of your users.
+
+So how do we store passwords if we can't store passwords?
+We store their hashes. A *hash* is a number computed by feeding a string to a *hash function*. Hash functions have the property that they will always produce the same number given the same input. You could write one yourself. Here's a very simple one:
+```ruby
+# dumb_hash(input: string) -> number
+def dumb_hash(input)
+  input.bytes.reduce(:+)
+end
+```
+
+This `dumb_hash` function just finds the sum of the bytes that comprise the string. It is a hash function since it satisfies the criterion that the same string always produces the same result. We could imagine using this function to avoid storing passwords in the database. Our `User` model and `SessionsController` might look like this:
+```ruby
+# app/models/user.rb
+class User < ActiveRecord::Base
+  def password=(new_password)
+    self.password_digest = dumb_hash(new_password)
+  end
+  
+  def authenticate(password)
+    return nil unless dumb_hash(password) == password_digest
+    self
+  end
+  
+  private
+  
+  def dumb_hash(input)
+    input.bytes.reduce(:+)
+  end
+end
+
+# app/controllers/sessions_controller.rb
+class SessionsController < ApplicationController
+  def create
+    user = User.find_by(username: params[:username])
+    authenticated = user.try(:authenticate, params[:password])
+    return head(:forbidden) unless authenticated
+    @user = user
+    session[:user_id] = @user.id
+  end
+end
+```
+**Note:** [`try`](http://api.rubyonrails.org/classes/Object.html#method-i-try) is an ActiveSupport method. `object.try(:some_method)` means 
+`if object != nil then object.some_method else nil end`.
+
+In this world, we have saved the password hashes in a `password_digest` column in the database. We are not storing the passwords themselves.
+
+You can set a user's password by saying `user.password = *new_password*`. Presumably, our `UsersController` would do this, but we're not worrying about it for the moment.
+
+`dumb_hash` is, as its name suggests, a pretty dumb hash function to use for this purpose. It's a poor choice because similar strings hash to similar values. If my password was 'Joshua', you could log in as me by entering the password 'Jnshub'. Since 'n' is one less than 'o' and 'b' is one more than 'a', the output of `dumb_hash` would be the same.
+
+This is known as a *collision*. Collisions are inevitable when you're writing a hash function, since hash functions usually produce either a 32-bit or 64-bit number, and the space of all possible strings is much larger than either `2**32` or `2**64`.
+
+Fortunately, smart people who have thought about this a lot have written a lot of different hash functions which are well-suited to different purposes. And nearly all hash functions are designed with the quality that strings which are similar but not the same hash to significantly different values.
+
+Ruby internally uses [MurmurHash](https://en.wikipedia.org/wiki/MurmurHash), which produces better results for this:
+
+    > 'Joshua'.hash
+     => -3766180385262328513
+
+    > 'Jnshub'.hash
+     => 827642026211689321
+
+But Murmur still isn't ideal, because while it does not produce collisions so readily, it is still not difficult to produce them if that's what you're trying to do.
+
+Instead, Rails uses BCrypt. BCrypt is designed with these properties in mind:
+  1. BCrypt hashes similar strings to very different values.
+  2. It is a *cryptographic hash*. That means that, if you have an output in mind, finding a string which produces that output is designed to be "very difficult." "Very difficult" means "even if Google put all their computers on it, they couldn't do it."
+  3. BCrypt is designed to be slow — it is intentionally computationally expensive.
+
+The last two features make BCrypt a particularly good choice for passwords. (2) means that, even if an attacker gets your database of hashed passwords, it is not easy for them to turn a hash back into its original string. (3) means that, even if an attacker has a dictionary of common passwords to check against, it will still take them a considerable amount of time to check for your password against that list.
+
+But what if our attackers have done their homework?
+
+Say I'm a hacker. I know I'm going to break into a bunch of sites and get their password databases. I want to make that worth my while.
+
+Before I do all this breaking and entering, I'm going to find the ten million most common passwords and hash them with BCrypt. I can do around 1,000 hashes per second, so that's about three hours. Maybe I'll do the top five hundred million just to be sure.
+
+It doesn't really matter that this is going to take long time to run — I'm only doing it once. Let's call this mapping of strings to hash outputs a ["rainbow table"](https://en.wikipedia.org/wiki/Rainbow_table).
+
+Now, when I get your database, I just look and see if any of the passwords there are in my rainbow table. If they are, then I know the password.
+
+The solution to this problem is *salting* our passwords. A salt is a random string prepended to the password before hashing it. It's stored in plain text next to the password, so it's not a secret. But the fact that it's there makes an attacker's life much more difficult: it's very unlikely that I constructed my rainbow table with your particular salt in mind, so I'm back to running the hash algorithm over and over as I guess passwords. And, remember, BCrypt is designed to be expensive to run.
+
+Let's update our `User` model to use BCrypt:
+```ruby
+# Gemfile:
+gem 'bcrypt'
+
+# app/models/user.rb
+class User < ActiveRecord::Base
+  def password=(new_password)
+    salt = BCrypt::Engine::generate_salt
+    hashed = BCrypt::Engine::hash_secret(new_password, salt)
+    self.password_digest = salt + hashed
+  end
+
+  # authenticate(password: string) -> User?
+  def authenticate(password)
+    # Salts generated by generate_salt are always 29 chars long.
+    salt = password_digest[0..28]
+    hashed = BCrypt::Engine::hash_secret(password, salt)
+    return nil unless (salt + hashed) == self.password_digest
+  end
+end
+```
+
+Our `users.password_digest` column really stores two values: the salt and the actual return value of BCrypt. We just concatenate them together in the column and use our knowledge of the length of salts — `generate_salt` always produces 29-character strings — to separate them.
+
+After we've loaded the User, we find the salt which we previously stored in their `password_digest` column. We run the password we were given in `params` through BCrypt along with the salt we read from the database. If the results match, you're in. If they don't, no dice.
+
+You don't have to deal with all this yourself. Rails provides a method called `has_secure_password` that you can use on your ActiveRecord models to handle all this. It looks like this:
+
+```ruby
+class User < ActiveRecord::Base
+  has_secure_password
+end
+```
+
+You'll need to add `gem 'bcrypt'` to your Gemfile if it isn't already.
+
+[`has_secure_password`](http://api.rubyonrails.org/classes/ActiveModel/SecurePassword/ClassMethods.html) adds two fields to your model: `password` and `password_confirmation`. These fields don't correspond to database columns! Instead, the method expects there to be a `password_digest` column defined in your migrations.
+
+`has_secure_password` also adds some `before_save` hooks to your model. These compare `password` and `password_confirmation`. If they match (or if `password_confirmation` is `nil`), then it updates the `password_digest` column pretty much exactly like our example code before did.
+
+These fields are designed to make it easy to include a password confirmation box when creating or updating a user. All together, our very secure app might look like this:
+
+```ruby
+# app/views/user/new.html.erb
+<%= form_for :user, url: '/users' do |f| %>
+  Username: <%= f.text_field :username %>
+  Password: <%= f.password_field :password %>
+  Password Confirmation: <%= f.password_field :password_confirmation %>
+  <%= f.submit "Submit" %>
+<% end %>
+
+# app/controllers/users_controller.rb
+class UsersController < ApplicationController
+  def create
+    user = User.new(user_params).save
+  end
+
+  private
+
+  def user_params
+    params.require(:user).permit(:username, :password, :password_confirmation)
+  end
+end
+
+# app/controllers/sessions_controller.rb
+class SessionsController < ApplicationController
+  def create
+    @user = User.find_by(username: params[:username])
+    return head(:forbidden) unless @user.authenticate(params[:password])
+    session[:user_id] = @user.id
+  end
+end
+
+# app/models/user.rb
+class User < ActiveRecord::Base
+  has_secure_password
+end
+```
+
+Vide [Review of authentication](https://www.youtube.com/watch?v=gB7lYvfL4J4) 
+
+### OmniAuth
+Passwords are terrible. For one thing, you have to remember them. Or you have to use a password manager, which comes with its own problems. Unsurprisingly, some percentage of users will just leave and never come back the moment you ask them to create an account.
+
+And then on the server, you have to manage all these passwords. You have to store them securely. Rails secures your passwords when they are stored in your database, but it does not secure your servers, which see the password in plain text. If I can get into your servers, I can edit your Rails code and have it send all your users' passwords to me as they submit them. You'll also have to handle password changes, email verification, and password recovery. Inevitably, your users accounts will get broken into. This may or may not be your fault, but when they write to you, it will be your problem.
+
+What if it could be someone else's problem?
+
+Like Google, for example. They are dealing with all these problems somehow (having a huge amount of money helps). For example, when you log into Google, they are looking at vastly more than your username and password. Google considers where you are in the world (they can guess based on [your IP address][ip_geolocation], the operating system you're running (their servers can tell because they [listen very carefully to your computer's accent when it talks to them][ip_fingerprinting]), and numerous other factors. If the login looks suspicious — for instance, you usually log in on a Mac in New York, but today you're logging in on a Windows XP machine in Thailand — they may reject it or ask you to solve a [captcha][CAPTCHA].
+
+[Omniauth][omniauth] is a gem for Rails that lets you use multiple authentication providers on your site. You can let people log in with Twitter, Facebook, Google, or with a username and password.
+
+Here's how it works from the user's standpoint:
+
+  1. I try to access a page which requires me to be logged in. I am redirected to the login screen.
+  2. It offers me the options of creating an account or logging in with Google or Twitter.
+  3. I click "Login with Google". This momentarily sends me to `$your_site/auth/google`, which quickly redirects to the Google signin page.
+  4. If I'm not signed in to Google, I sign in. More likely, I am already signed in to Google, so Google asks me if they should let `$your_site` know who I am. I say yes.
+  5. I am (hopefully quickly) redirected to `$your_site/auth/google/callback` and, from there, to the page I initially tried to access.
+
+Let's see how this works in practice:
+
+#### Omniauth with Facebook
+The Omniauth gem allows us to use the OAuth protocol with a number of different providers. All we need to do is add the Omniauth gem *and* the provider-specific Omniauth gem (e.g., `omniauth-google`) to our Gemfile. In this case, add `omniauth` and `omniauth-facebook` to your Gemfile, and then `bundle`. If we were so inclined, we could add additional Omniauth gems to our heart's desire, offering login via multiple providers in our app.
+
+Next, we'll need to tell Omniauth about our app's OAuth credentials.
+Create `config/initializers/omniauth.rb`. It will contain this:
+```ruby
+Rails.application.config.middleware.use OmniAuth::Builder do
+  provider :facebook, ENV['FACEBOOK_KEY'], ENV['FACEBOOK_SECRET']
+end
+```
+The `ENV` constant refers to a global hash for your entire computer environment. You can store any key value pairs in this environment, so it's a very useful place to store credentials that we don't want to be managed by Git or stored on GitHub (especially if your GitHub repo is public). The most common error we see from students here is that when ENV["PROVIDER_KEY"] is evaluated in the initializer it returns `nil`. Then later when you try to authenticate with the provider you'll get some kind of 4xx error because the provider doesn't recognize your app.
+
+To recieve these credentials, each provider's process is different. You'll essentially need to register your app with the provider, and they'll give you a set of keys specific to your app.
+
+For Facebook:
+Log in to [the Facebook developer's panel](https://developers.facebook.com). Create an app, copy the key (it's called "App ID" on Facebook's page) and the secret, and set them as environment variables in the terminal:
+
+```bash
+export FACEBOOK_KEY=<your_key>
+export FACEBOOK_SECRET=<your_key>
+```
+
+Here's a [quick video](https://youtu.be/1yryyKB7Edk) as this often trips people up (including experienced folks). Make sure you do the last two steps of setting your URL and valid domains. If you don't, Facebook will think you're making a request from an invalid site and will never let the user log in.
+
+Running these commands will make these key-value pairs appear in the ENV hash in Ruby in that terminal. A more lasting way to do this is using the Figaro or Dotenv gems.
+
+Jump into the console to check that you have set the keys properly. If `ENV["FACEBOOK_KEY"]` and `ENV["FACEBOOK_SECRET"]` return your keys you're all set!
+
+We now need to create a link that will take the user to Facebook to login.  Create a link anywhere you'd like that sends the user to "/auth/facebook". We'll need a route, a controller, and a view. I'll only show the view.
+
+```erb
+<!-- app/views/static/home.html.erb -->
+
+<%= link_to("login with facebook!", "/auth/facebook") %>
+```
+
+**Hot-Tip:** Log out of Facebook before you do this portion so you can see the full flow.
+
+Let's visit this page in the browser and click on the link.
+Clicking on the link clearly sends a GET request to your server to "/auth/facebook", but in the browser we end up at "https://www.facebook.com/login.php?skip_api_login=1&api_key=1688265381390456&signed_next=1&next=https%3A%2F%2Fwww.facebook.com%2Fv2.5%2Fdialog%2Foauth%3Fredirect_uri%3Dhttp%253A%252F%252Flocalhost%253A3000%252Fauth%252Ffacebook%252Fcallback%26state%3Dc7e7feeea98f875e7a77d76f7385ea2960db3dc23a397c4b%26scope%3Demail%26response_type%3Dcode%26client_id%3D1688265381390456%26ret%3Dlogin&cancel_url=http%3A%2F%2Flocalhost%3A3000%2Fauth%2Ffacebook%2Fcallback%3Ferror%3Daccess_denied%26error_code%3D200%26error_description%3DPermissions%2Berror%26error_reason%3Duser_denied%26state%3Dc7e7feeea98f875e7a77d76f7385ea2960db3dc23a397c4b%23_%3D_&display=page"
+
+This URL has a whole bunch of parameters all URL [encoded](http://ascii.cl/url-encoding.htm) (which is why they look so strange).  At this point we are at Facebook's site because somewhere in our app Omniauth sent the browser a redirect to that url (which the gem intelligently autogenerated for us).
+
+Once we're at Facebook and the user logs in, Facebook will send the browser ANOTHER redirect with the URL Omniauth told it about in the previous URL. Omniauth always wants Facebook to redirect us back to our server to the route "/auth/whatever_provider/callback".  Along with that request the provider will also send back a whole bunch of information for us.
+
+The URL in your browser should look something like this mess: "http://localhost:3000/auth/facebook/callback?code=AQA_CrhVYnuufhQid-3vS1NvI5rZfk4uPJwFZIymA90JeUR7NDFFy0bHQjbtneLkymqqZlmFbjcg2A0y5zRmaCy0D7k9H46F3j9pm9slzBIN9fM4Q54zAdiVZo2k6XtiMPZ_AG2xEZ8MyiTtbbQOBdaK57PY7lr7iLuFeaVUCUnZC69ddzcq_tLILEkjagSyWXi8WGGshbnIwy9C6d98hnoxl6AJjIi4TC3FScEAxKQ9vH1tXntQ9YvTLNWlWsWUcbefEq1RlywNi3IqGsLnDgyyRcHph0u4-TpnaqZPxHSNdcWCgnYfHK_bSO-R_a3H4Oo&state=60fb843af784e411ea7b5f809e34dd29d5e4eda891d0c4c1#_=_"
+
+You should now see a routing error, `No route matches [GET] "/auth/facebook/callback"`.
+
+Let's add something to handle that redirect:
+```ruby
+# config/routes.rb
+
+get '/auth/facebook/callback' => 'sessions#create'
+
+# Note that the controller and action you use don't matter, but it's most logical to use the SessionsController because we're going to log the user in by creating a session.
+```
+
+Now we create a `SessionsController`. Our goal here is to either create a new user or find the user in our database and log them in.  Facebook sends us a bunch of information back, and Omniauth parses it for us and puts it in the request environment: `request.env['omniauth.auth']`. We can use the information in there to log the user in (if they have an existing account) or create a new user.
+
+Here's a sample of the auth hash Facebook sends us:
+```ruby
+{
+  :provider => 'facebook',
+  :uid => '1234567',
+  :info => {
+    :email => 'joe@bloggs.com',
+    :name => 'Joe Bloggs',
+    :first_name => 'Joe',
+    :last_name => 'Bloggs',
+    :image => 'http://graph.facebook.com/1234567/picture?type=square',
+    :urls => { :Facebook => 'http://www.facebook.com/jbloggs' },
+    :location => 'Palo Alto, California',
+    :verified => true
+  },
+  :credentials => {
+    :token => 'ABCDEF...', # OAuth 2.0 access_token, which you may wish to store
+    :expires_at => 1321747205, # when the access token expires
+    :expires => true # this will always be true
+  },
+  :extra => {
+    :raw_info => {
+      :id => '1234567',
+      :name => 'Joe Bloggs',
+      :first_name => 'Joe',
+      :last_name => 'Bloggs',
+      :link => 'http://www.facebook.com/jbloggs',
+      :username => 'jbloggs',
+      :location => { :id => '123456789', :name => 'Palo Alto, California' },
+      :gender => 'male',
+      :email => 'joe@bloggs.com',
+      :timezone => -8,
+      :locale => 'en_US',
+      :verified => true,
+      :updated_time => '2011-11-11T06:21:03+0000'
+    }
+  }
+}
+```
+Let's log the user in! (We've omitted the model-related code.)
+
+```ruby
+# app/controllers/sessions_controller.rb
+
+class SessionsController < ApplicationController
+
+  def create
+    user = User.find_or_create_by(:uid => auth['uid']) do |u|
+      u.name = auth['info']['name']
+      u.email = auth['info']['email']
+    end
+    session[:user_id] = user.id
+  end
+
+  def auth
+    request.env['omniauth.auth']
+  end
+end
+```
+
+That completes the whole OAuth login flow!
+Implementing the OAuth protocol yourself is extremely complicated. Using the Omniauth gem along with any Omniauth-provider gem(s) allows users to log in to your site easily, streamlining the process. However, it still trips a lot of people up! Make sure you understand each piece of the flow, what you expect to happen, and any deviance from the expected result. The end result should be getting access to the user's data from the provider in your `SessionsController`, where you can decide what to do with it. Typically, you'll create a new `User` in your database using their provider data (if they are not already an existing user) and/or log them in.
+
+* Watch the [Omniauth Video Review](https://github.com/learn-co-curriculum/omniauth-review-lecture-in-todomvc)
+* More about [Managing Environment Variables](https://launchschool.com/blog/managing-environment-configuration-variables-in-rails)
+
+[ip_geolocation]: https://en.wikipedia.org/wiki/Geolocation
+[ip_fingerprinting]: https://en.wikipedia.org/wiki/TCP/IP_stack_fingerprinting
+[CAPTCHA]: https://en.wikipedia.org/wiki/CAPTCHA
+[yak]: https://en.wiktionary.org/wiki/yak_shaving
+[omniauth]: https://github.com/intridea/omniauth
 
 
 
