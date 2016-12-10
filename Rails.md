@@ -407,7 +407,7 @@ Will build out the following HTML
 </form>
 ```
 
-## Edit/Update actions
+#### Edit/Update actions
 As you may have noticed, there is a trend in Rails conventions where the logic for rendering a form is separate from the action that manages the database record alteration. 
 
 For example:
@@ -451,6 +451,51 @@ def update
 end
 ```
 The `raise` method will cause the application to pause and print out the params on an error page. You could also see the params if you called `puts params.inspect`; using `puts` would simply require you to track down the data in the Rails server `log`.
+
+#### "Get" action
+We can create a get action triggered from the view, that will send to the index action of the students controller (conventional route) a `get` request.
+```erb
+<%= form_tag students_path, method: :get do %>
+	<%= text_field_tag :query, params[:query] %>
+	<%= submit_tag "Search", name: nil %>
+<% end %>
+
+<% @students.each do |student|  %>
+  <%= render partial: 'student', locals: {student: student} %>
+<% end %>
+```
+The partial is defined as
+```erb
+<ul>
+  <li>
+    Name: <%= student.name %>
+  </li>
+  <li>
+    Birthday: <%= student.birthday.strftime("%m/%d/%Y") if student.birthday %>
+  </li>
+  <li>
+    Hometown: <%= student.hometown.capitalize if student.hometown %>
+  </li>
+</ul>
+```
+In the controller here's the code that will handle the params
+```ruby
+  def index
+    @students = Student.search(params[:query])
+    render 'index'
+  end
+```
+The `search` method is delegated to the model, because it deals with the database.
+```ruby
+  def self.search(query)
+  	if query.present?
+  		# self.all.select { |student| student.name.match(/#{query}/i) }
+      where('NAME like ?', "%#{query}%")
+  	else
+  		self.all
+  	end
+  end
+```
 
 ## Using form_for to refactor
 If you know how to utilize the `form_tag` method for creating forms in Rails you may wonder why you need to learn a new form building process. Let's imagine that you've been tasked with creating the world's first pet hamster social network, and one of the requirements is that the hamster profile page needs to have about 100 different form fields that can be edited. 
@@ -3338,4 +3383,591 @@ And a regular form to create a post
 <% end %>
 ```
 
+## Layouts and Templates in Rails
+Imagine that you're tasked to build an online store app with Rails. You would probably have a few different views in this app, for example:
+- A list of products
+- A detail view that shows more info for a selected product
+- A shopping cart
+Across all these views you would want a consistent look. This consistent look perhaps contains something like a logo, navigation links, a search bar, and a footer at the bottom that contains some info about the shop.
 
+You start building the list of products, and you end up with an action template that looks something like this. It has a nav component, a list of products, and a footer.
+
+
+```erb
+<!-- app/views/products/index.html.erb -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flatiron Store</title>
+  <%= stylesheet_link_tag    'application', media: 'all', 'data-turbolinks-track' => true %>
+  <%= javascript_include_tag 'application', 'data-turbolinks-track' => true %>
+  <%= csrf_meta_tags %>  
+</head>
+<body>
+    <div class="navigation">
+      <ul>
+        <a href="/products">Products</a>
+        <a href="/cart">Cart</a>
+      </ul>
+    </div>
+
+    <h1>The Product List</h1>
+
+    <ul>
+      <% @products.each do |job| %>
+        <li><%= link_to 'Show', job %></li>
+      <% end %>
+    </ul>  
+
+    <div class="footer">
+      <p>This shop promises the lowest prices in widgets!</p>
+    </div>    
+</body>
+</html>
+```
+
+Great, so you have a list of products now! Any shop should have that, shouldn't it? Next, you decide to build the view that will show the product details when customers click on a link for that product.
+
+You finish sorting out the view's structure with a nav and footer. You open up `app/views/products/index.html.erb`, select all of the code, and copy it onto your clipboard. Now you are ready to paste it into your new template and customize it to show product info.
+
+Luckily, you don't need to copy content from one template file to the next because layouts in Rails are enabled by default. When you generate a new Rails app, it generates a layout for you.
+
+When you render a template for an action without specifying a different layout to use, **by default Rails will use the LAYOUT found at this location: `app/views/layouts/application.html.erb`.**
+
+```erb
+<!-- app/views/layouts/application.html.erb -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flatiron Store</title>
+  <%= stylesheet_link_tag    'application', media: 'all', 'data-turbolinks-track' => true %>
+  <%= javascript_include_tag 'application', 'data-turbolinks-track' => true %>
+  <%= csrf_meta_tags %>
+</head>
+<body>
+
+<%= yield %>
+
+</body>
+</html>
+```
+
+There are 2 things to consider: templates and content (yield or partials).
+
+**`yield` is what Rails uses to decide where in the layout to render the CONTENT for the action, inside of the TEMPLATE**. If you don't put a `yield` in your layout, the layout itself will render just fine, but any additional content coded into the action templates will not be correctly placed within the layout.
+
+At its simplest level, this is what happens when a request is made to your Rails application:
+
+1. Rails finds the **template** for the corresponding action based either on convention or any other options passed to the `render` method in your controller action.
+2. Similarly, it then finds the correct layout to use, either through naming/directory conventions or from specific options that you provided.
+3. Rails uses the action template to generate the **content specific to the action**. (Note that the template might be composed of partial views, which you'll learn about a bit later.)
+4. It then looks for the layout's `yield` statement and inserts the action's template there.
+
+So this means that, for every request handled by Rails, at most one layout and action template will be used. The action template can call out to other templates, called partials, to render itself.
+
+Rails uses a simple convention to find the correct layout for your request. If you have a controller called `ProductsController`, Rails will see whether there is a layout for that controller at `layouts/products.html.erb`. Similarly, if you have a controller called `AdminController`, it'll look for a layout at `layouts/admin.html.erb`. **If it can't find a layout specific to your controller, it'll use the default layout at `app/views/layouts/application.html.erb`.**
+
+With the exception of the admin section of a site, most applications use the default layout for everything, so there's no need to have a layout for each controller. You want to have a consistent look and feel throughout your site, using a different layout only if the situation really warrants it.
+
+### Overriding Conventions
+
+If you need to override the conventions explained above, you can easily do so. For example, if you have a controller called `ShoppingCartController` and want to use the layout at `layouts/products.html.erb`, you have two options:
+
+1. If you want to use the products layout for every action, simply specify that you want to use the products layout by invoking the `layout` method in your controller, passing it a string that it can use to find the desired layout:
+
+  ```ruby
+  class ShoppingCartController < ApplicationController
+    layout "products"
+  end
+  ```
+
+2. If you want to use the products layout only for a particular action, simply use the `render` method in the controller action, specifying the layout you want it to use like this:
+
+  ```ruby
+  class ShoppingCartController < ApplicationController
+    def list
+      render :layout => "static"
+    end
+  
+    # the rest of the actions will use standard conventions
+  end
+  ```
+
+If you want to render your action template without a layout, you can do the following:
+
+```ruby
+class ShoppingCartController < ApplicationController
+  def list
+    render :layout => false
+  end
+
+  # the rest of the actions will use standard conventions
+end
+```
+
+**Note:** It's pretty unusual to not render the layout in a standard action.  However, once you start using AJAX (JavaScript), it's quite common. Keep this in the back of your mind when you get to JavaScript.
+
+## Partials
+As you know, while coding we are generally trying to not repeat our code. If we see a repeated chunk of code in different methods, we sometimes extract that chunk of code into its own method, which we can then reference in multiple places. We can apply a similar tool to reduce repetition in HTML. Partials are view-level files that only form one part of an HTML page. By using a partial, we can remove repeated pieces of HTML and add better organization to the code in our views.
+
+This is the code in the `posts#new` form:
+```erb
+<!-- app/views/posts/new.html.erb -->
+
+<%= form_tag posts_path do %>
+  <label>Post title:</label><br>
+  <%= text_field_tag :title %><br>
+
+  <label>Post Description</label><br>
+  <%= text_area_tag :description %><br>
+
+  <%= submit_tag "Submit Post" %>
+<% end %>
+```
+And this is the code in the `posts#edit` form:
+```erb
+<!-- app/views/posts/edit.html.erb -->
+
+<h3>Post Form</h3>
+
+<%= form_tag post_path(@post), method: "put" do %>
+  <label>Post title:</label><br>
+  <%= text_field_tag :title %><br>
+
+  <label>Post Description</label><br>
+  <%= text_area_tag :description %><br>
+
+  <%= submit_tag "Submit Post" %>
+<% end %>
+```
+
+Except for the first line of the form, the code is pretty much the same! The labels and field tags are the same. All of that duplication is not good in code. Duplication means twice the amount of code to maintain, twice the opportunity for bugs, and two slightly different forms when our interface should be consistent.
+
+
+Instead of duplicating all of that code, we just want to write it once in our partial and call it from both our edit and show views. 
+
+First, let's create a new file in `app/views/posts/` called `_form.html.erb`. To indicate that this file is a partial (and only part of a larger view), an underscore is prefixed to the filename.
+
+Second, let's remove the repeated code in `app/views/posts/edit.html.erb`. The file should look like this:
+
+```erb
+<h3>Post Form</h3>
+
+<%= form_tag post_path(@post), method: "put" do %>
+<% end %>
+```
+Note that we left in the non-duplicated code. Now, let's also remove the duplicated code in the `app/views/posts/new.html.erb` file. The file should look like this:
+
+```erb
+<%= form_tag posts_path do %>
+<% end %>
+```
+We left the code that is unique to each view and removed the duplicated code inside the `form_tag` blocks.
+
+Third, we'll place the duplicated code in a new file called `app/views/posts/_form.html.erb`. The file should look as follows:
+```erb
+<label>Post title:</label><br>
+<%= text_field_tag :title %><br>
+
+<label>Post Description</label><br>
+<%= text_area_tag :description %><br>
+
+<%= submit_tag "Submit Post" %>
+```
+
+Fourth, we need to render the code into the `posts/edit` and `posts/new` pages by placing `<%= render "form" %>` where we want the code in the partial to be rendered. Notice that, while the file name of our partial starts with an underscore, when we reference it there is no underscore. 
+
+Notice that we don't specify the folder that the partial lives in, such as `<%= render 'posts/form' %>`. The reason we didn't need this (even though it would have worked if we had included it) is that both the `posts/new` and `posts/edit` files are referencing a partial housed in the same folder in which they reside, `app/views/posts`. When referencing a partial from a different folder, we must include the folder name as well (e.g., `<%= render 'posts/form' %>` as opposed to `<%= render 'form' %>`).
+
+Our `posts/new` file should now look like this:
+```erb
+<!-- app/views/posts/new.html.erb -->
+
+<%= form_tag posts_path do %>
+ <%= render 'form' %>
+<% end %>
+```
+
+And our `posts/edit` file like this:
+```erb
+<!-- app/views/posts/edit.html.erb -->
+
+<h3>Post Form</h3>
+
+<%= form_tag post_path(@post), method: "put" do %>
+  <%= render 'form' %>
+<% end %>
+```
+
+And that's it –– we're all done!
+
+### Rendering a partial from a different folder
+
+Let's take a look at our `authors/show.html.erb` file:
+
+```erb
+<%= @author.name %>
+<%= @author.hometown %>
+```
+
+And now look at the code in `posts/show.html.erb`:
+
+```erb
+<%= @post.author.name %>
+<%= @post.author.hometown %>
+
+<h1><%= @post.title %></h1>
+<p><%= @post.description %></p>
+```
+
+See the repetition? In both places, we are using the `Author` object to call the `.name` and `.hometown` methods. The first thing we have to fix is the slight difference between the templates. Let's make the beginning portion of the `posts/show` template match the `authors/show` template.
+
+```erb
+<!-- app/views/posts/show.html.erb -->
+
+<%= @author.name %>
+<%= @author.hometown %>
+
+<h1><%= @post.title %></h1>
+<p><%= @post.description %></p>
+```
+
+Then, let's make a new partial called `app/views/authors/_author.html.erb` and place the repeated code in the file. It should look like the following:
+
+```erb
+<!-- app/views/authors/_author.html.erb -->
+
+<%= @author.name %>
+<%= @author.hometown %>
+```
+
+Now we can just render this partial in our `authors/show` page by doing the following:
+
+```erb
+<!-- app/views/authors/show.html.erb -->
+
+<%= render 'author' %>
+```
+
+Let's try making the same change to our `posts/show` page:
+
+```erb
+<!-- app/views/posts/show.html.erb -->
+
+<%= render 'author' %>
+
+<h1><%= @post.title %></h1>
+<p><%= @post.description %></p>
+```
+
+Uh oh, something went wrong. This won't work because, if we don't specify the partial's parent folder, Rails assumes that the partial lives in the same folder as the view that's calling it. In this case, it looks for a file in the `posts` directory called `_author.html.erb` and doesn't find it. We need to tell Rails to go outside the folder by being explicit about the folder and file name that it should render. We can do that by changing the above code to the following:
+
+```erb
+<!-- app/views/posts/show.html.erb -->
+
+<%= render 'authors/author' %>
+
+<h1><%= @post.title %></h1>
+<p><%= @post.description %></p>
+```
+
+We're almost there! One more problem is that our partial assumes it has access to an instance variable called `@author`. The partial won't function without it! We'll need to modify the `PostsController` to have it set that instance variable.
+
+Change the `posts#show` action in the controller to look like the following:
+
+```ruby
+# app/controllers/posts_controller.rb
+
+def show
+  @post = Post.find(params[:id])
+  @author = @post.author
+end
+```
+
+And now we are done! Great job!
+
+## Partial with Locals
+Partials help us break our code up into reusable chunks. They also often have implicit dependencies that can lead to bugs. To make the implicit explicit, use locals whenever your partials depend on data to work.
+
+Partial code from other directories may look OK at first, but it poses some problems.  When we render the partial authors/author, we are not being explicit about that partial's dependencies.
+A dependency is data that the code requires in order to work (like passing a variable into a method).  In this case, the dependency of the author partial is the instance variable @author.  Without that instance variable, the code won't work.  Unfortunately, that dependency is defined far away in the controller.
+
+Let's see how local variables make our code more explicit. This is what the entire show view looks like:
+```erb
+<!-- app/views/posts/show.html.erb -->
+
+<h1>Information About the Post</h1>
+<%= render partial: "authors/author", locals: {post_author: @author} %>
+<%= @post.title %>
+<%= @post.content %>
+```
+
+Notice a few things.  First, we are no longer passing the render method a string; we're passing a hash with two key-value pairs. 
+- The first key-value pair tells Rails the name of the partial to render. 
+- The second key-value pair contains a key of `locals` pointing to a hash of variables to pass into the partial.  Within that nested hash, the key is the name of the variable and its value is the value you'd like it to have in the partial.
+
+When we use locals, we need to make sure that the variables we refer to in our partial have the same names as the keys in our locals hash.
+
+In our example partial, `app/views/author/_author.html.erb`, we need to change our code from:
+```erb
+<ul>
+  <li> <%= @author.name %></li>
+  <li> <%= @author.hometown %></li>
+</ul>
+```
+
+to
+`app/views/author/_author.html.erb`
+```erb
+<ul>
+  <li> <%= post_author.name %></li>
+  <li> <%= post_author.hometown %></li>
+</ul>
+```
+
+In other words, the way we use locals with a partial is similar to how we pass arguments into a method.  In the locals hash, the `post_author:` key is the argument name, and the value of that argument, `@author`, is the corresponding value stored as `post_author` and passed into the method.
+With locals, we can completely eliminate the `@author = @post.author` line in the `posts#show` controller action, instead only accessing that data where we need it, in the partial.
+
+Let's remove that line of code in our controller and in the view pass through the author information by changing our code to the following:
+
+`app/controllers/posts_controller`
+```ruby
+  ...
+  def show
+    @post = Post.find(params[:id])
+  end
+
+```
+
+`app/views/posts/show.html.erb`
+```erb
+Information About the Post
+<%= render partial: "authors/author", locals: {post_author: @post.author} %>
+<%= @post.title %>
+<%= @post.content %>
+```
+
+This code is much better.  We are being more explicit about our dependencies, reducing lines of code in our codebase, and reducing the scope of the author variable.
+
+## Rendering collections
+Up until now our only way to render collections was somewhat manually. We could iterate over an array and render the partial for each object in the array. Let's see how Rails can abstract this into a nicer syntax.
+
+Currently, our posts#index view is manually rendering the partial in a loop.
+```erb
+<% @posts.each do |post| %>
+  <%= render :partial => "post", {:locals => {:post => post}} %>
+<% end %>
+```
+Rails offers a great way to render a collection using a partial by passing the collection option to the render method.
+```erb
+<%= render :partial => "post", :collection => @posts %>
+```
+Another even more abstract method Rails gives us to do this is passing an array directly to the render method.
+```erb
+<%= render @posts %>
+```
+This approach is a bit more abstract. Under the hood Rails uses the convention that you will have a partial with the name of the models in the collection. Rails will even render a collection of heterogeneous models ([customer, order, customer]) calling the correct partial for each one.
+
+What happens if the collection you pass to your render call is empty? If you don't handle this exception the render method will return nil and nothing will appear on the screen. A useful trick is to use the || operator to print something to the screen to alert the user to this.
+```erb
+<%= render(@posts) || "There are no blog posts!" %>
+```
+Note: When dealing with an empty collection, you'll need to use () to wrap that collection.
+
+[Video Review](https://www.youtube.com/watch?v=XpthyOc767U)
+
+## Separation of concerns
+Separation of Concerns is a design principle that helps us keep code logically organized by ensuring that each part of an application concerns itself with a specific job.
+
+Remember the restaurant analogy? In a restaurant, there is a separation of concerns among the staff. A server takes your order, a cook prepares your order, a food runner brings it to your table, and a busser cleans up after you — and all of them work together to provide the cohesive experience of eating out.
+
+We could put all of our code in one file, but then the file is in the same spot as that overworked cook — doing so much that nobody knows what it's supposed to be doing. In a tiny application with only one developer, this might work for a while, but as the application and the team grow everyone needs to know where to go to find certain kinds of code.
+With that in mind, let's look again at the components of the MVC pattern:
+- Models: Provide the business logic of the application and access and store data. Models do most of the 'heavy lifting' of manipulating data and enforcing the 'rules' of the application. This is also sometimes called domain logic because it's all the stuff that's specific to the domain of the application. Sticking with the restaurant analogy, the business logic governs things like recipes and prices and how old you have to be to order a margarita.
+- Views: Provide the presentation logic of the application and allow for user interaction. Views only care about showing a user formatted data and giving them ways to interact with it. If business logic tells us what food the restaurant has and how much it costs, presentation logic puts all that together into a menu that looks great and helps a customer choose what to eat (and also entices them to order that margarita).
+- Controllers: Provide communications between the models and the views and help control the flow of data.
+
+To put that into context with Rails MVC, picture a blog application. The view is only concerned with the presentation of blog posts. That's what it knows how to do, and that's all it knows how to do. The model is concerned with the content of all of the posts. The controller is concerned with which blog post you want to see. By keeping them separate, we get to do things like create a single view that can be used to display any post by having the controller ask for a specific post from the model.
+By knowing which component is responsible for which concern, we can know where to go to find or add code based on what it does. If we need to write code to hit the database and search for specific blog posts, that seems like business logic and belongs in the model. If we need to write code to display those search results in a nice way and make sure the post date is formatted properly, that's presentation logic and belongs in the view.
+
+We know the view is responsible for presentation logic, but what happens when our application grows and some presentation logic needs to be shared across more than one view? That's where helpers come in, and we'll be tackling those in the next lesson.
+
+### Refactoring Views with helpers
+Let's imagine we're working on a blog application.
+We've already added the presentation logic to show a blog post:
+
+```erb
+<!-- app/views/posts/show.html.erb -->
+
+<h1><%= @post.title %></h1>
+<p><%= @post.description %></p>
+```
+
+However, our readers really want to know *when* the post was posted or edited. Fair enough.
+
+We know our `Post` model has a timestamp field called `updated_at`, so we decide to display that.
+
+```erb
+<!-- app/views/posts/show.html.erb -->
+
+<h1><%= @post.title %></h1>
+<p>Last updated: <%= @post.updated_at %></p>
+<p><%= @post.description %></p>
+```
+
+**Note:** reading about `strftime` in the [docs](http://ruby-doc.org/core-2.2.0/Time.html#method-i-strftime) is great, but playing with it live is even more fun, so check out [For a Good Strftime](http://www.foragoodstrftime.com/).
+
+Okay, armed with `strftime` and having read the ancient runes that help us understand the different format directives (e.g. `%A`, `%p`, etc.), we end up with this:
+
+```erb
+<!-- app/views/posts/show.html.erb -->
+
+<h1><%= @post.title %></h1>
+<p><%= @post.updated_at.strftime("Last updated %A, %b %e, at %l:%M %p") %></p>
+<p><%= @post.description %></p>
+```
+
+**Top-tip:** Notice how we included the text and punctuation in the argument to `strftime`. It will very nicely ignore anything that isn't one of the format directives and pass it through as part of the final string. This is helpful because it saves us from the awkward business of having to try to parse out the time string and concatenate parts of it together with other strings in order to create more readable output.
+
+If we try copying this code to display the time everywhere we need to use the time to show it to our users, we could copy paste, but it would become not-DRY. We have to remember (or, worse, search for) every place we wrote that code to display the last updated date and time, and then we have to make the *same* change in all of those places. 
+
+DRY is a software design principle that, like Separation of Concerns, helps us make decisions about how to organize our code. The formal, very dry statement of DRY is: "Every piece of knowledge must have a single, unambiguous, authoritative representation within a system."
+
+**//Flat-fact"** The opposite of DRY is WET, which may or may not stand for "We Enjoy Typing" or "Write Everything Twice."
+
+What about the model? We only ever get `updated_at` from the model, so it's tempting to do something like:
+
+```ruby
+# app/models/post.rb
+
+def last_updated
+  updated_at.strftime("Last updated %A, %b %e, at %l:%M %p")
+end
+```
+
+and then use it like `@post.last_updated` on the view. That would certainly solve our DRY problem, but if we think back on MVC and Separation of Concerns, we've created a new problem. Model code isn't concerned with *presentation logic*.
+
+Rails provides us with a great way to extract common presentation logic from multiple views: helpers! Helpers are methods that are available to your views and encapsulate a common bit of code. If you've used a `link_to` or a `text_field` then you've already come across helpers. Rails has a ton of them built-in to help keep you from having to repeat all the code necessary to build a link to a given route, display an image, or create a form.
+
+We can also create our own helpers to solve our own problems.
+
+Helpers are generally organized by controller. If you use `rails g scaffold` or `rails g controller`, Rails will create a helper for your controller and put it in the `app\helpers` directory. If we look in our helpers directory, we'll see `application_helper.rb`, `authors_helper.rb`, and `posts_helper.rb`. This matches what we have in our `controllers` directory — `application_controller.rb`, `authors_controller.rb`, and `posts_controller.rb`.
+
+Let's use Separation of Concerns to decide where to make our helper. Displaying the date of the last time the post was updated isn't an application-wide concern; it's only a post concern. So let's put it in the `PostsHelper`.
+
+```ruby
+# app/helpers/posts_helper.rb
+
+def last_updated(post)
+  post.updated_at.strftime("Last updated %A, %b %e, at %l:%M %p")
+end
+```
+
+Why are we passing `post` as an argument to the helper? If you look back at our three views, you'll see that sometimes we're dealing with an instance variable (`@post`), and sometimes we're dealing with a local variable (`post`). Our helper doesn't know anything that we don't directly tell it, so it can't assume a specific variable name. We will need to tell it which post we want it to act on.
+
+Now that we have our helper, let's DRY up those views.
+
+```erb
+<!-- app/views/posts/show.html.erb -->
+
+<h1><%= @post.title %></h1>
+<p><%= last_updated @post %></p>
+<p><%= @post.description %></p>
+```
+
+```erb
+<!-- app/views/posts/index.html.erb -->
+
+<% @posts.each do |post| %>
+  <div>
+    <%= post.title %> - <%= last_updated post %>
+  </div>
+<% end %>
+```
+
+```erb
+<!-- app/views/posts/edit.html.erb -->
+
+<%= form_for(@post) do |f| %>
+  <label><%= last_updated @post %></label><br>
+  <label>Post title:</label><br>
+  <%= f.text_field :title %><br>
+
+  <label>Post Description</label><br>
+  <%= f.text_area :description %><br>
+
+  <%= f.submit %>
+<% end %>
+```
+
+Our blog also has an author page that lists the posts by that author. What do we do if we want to also show the last updated time on that page? The answer is: the same thing we just did!
+
+```erb
+<!-- app/views/authors/show.html.erb -->
+
+<h1><%= @author.name %></h1>
+<p>Posts:</p>
+<% @author.posts.each do |post| %>
+  <div><%= post.title %> - <%= last_updated post %></div>
+<% end %>
+```
+
+Helpers are *organized* by controller, but they aren't *restricted* to a single controller. Just like you can use a Rails `link_to` helper in any view, you can also use any of your own helpers in any view. Our `last_updated` helper is still a `Post` concern (so we know to look for it in the `PostsHelper`), but if an author page or any other page needs to use it they can. Just like our models, views, and controllers, helpers are separated by concern to help us keep our codebase organized.
+
+What about things that arent the concern of a single controller and are applicable to the entire application? For these cases, we have the `application_helper`. This helper is created automatically with your Rails project and is where you keep helpers that are related to the application itself rather than any given model or controller.
+
+In applications where users can log in, the application helper will often have a method to expose a `current_user`, something which gets used on almost every view in the system.
+
+For our blog application, we decide we want to dynamically change the `<title>` of each page based on what the user is looking at. On an author's show page, it might be the author name. On a blog post page, it might be the post's title. Since we already know we're going to be repeating the same basic snippet of code across many views, we're going to jump right to creating a helper.
+
+The page `title` isn't strictly the concern of a `Post` or an `Author`, even though it may use data from either of those things. Since it's a broader concern than just one controller/model, it's a prime candidate for the `ApplicationHelper`.
+
+```ruby
+# app/helpers/application_helper.rb
+
+def title(text)
+  content_for :title, text
+end
+```
+
+**Note:** We use the Rails `content_for` helper within our custom helper here. Helpers on helpers on helpers! What this will do is send our `text` to the place in our application layout that is expecting some content for the `:title`.
+
+```erb
+<!-- app/views/layouts/application.html.erb -->
+
+<head>
+  <title><%= yield :title %></title>
+</head>
+```
+
+You can read more about `content_for` in the [Layouts and Rendering](http://guides.rubyonrails.org/layouts_and_rendering.html#using-the-content-for-method) RailsGuide.
+
+Now that we have our `title` helper, we can use it everywhere to change the page title based on the content.
+
+```erb
+<!-- app/views/authors/show.html.erb -->
+
+<% title @author.name %>
+
+<h1><%= @author.name %></h1>
+<p>Posts:</p>
+<% @author.posts.each do |post| %>
+  <div><%= post.title %> - <%= last_updated post %></div>
+<% end %>
+```
+
+```erb
+<!-- app/views/posts/show.html.erb -->
+
+<% title @post.title %>
+
+<h1><%= @post.title %></h1>
+<p><%= last_updated @post %></p>
+<p><%= @post.description %></p>
+```
+
+And just like that, we are using an application helper to dynamically set the page title on our post and author pages!
+
+[Refactoring Views into Partials and Helpers](https://www.youtube.com/watch?v=UYhkBd2Mnl0)
