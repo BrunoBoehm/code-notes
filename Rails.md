@@ -1944,7 +1944,14 @@ The universe is in balance. We're programmers, so this really disturbs us. Let's
 
 Active Record has a migration method for doing exactly this.
 ```
-create_join_table :posts, :tags
+$ rails g migration create_join_table_post_tag post tag
+
+def change
+    create_join_table :posts, :tags do |t|
+      # t.index [:post_id, :tag_id]
+      # t.index [:tag_id, :post_id]
+    end
+end    
 ```
 This will create a table called posts_tags.
 
@@ -2820,7 +2827,7 @@ class PeopleController < ApplicationController
 end
 ```
 
-But it's best to know how to build the `addresses_attributes=` and not to use the `accepts_nested_attributes`. Though you can use `field_for` (that will create for your the person[addresses_attributes][1]...` structure in the form. It leaves more liberty and won't break when it gets a bit more complex.
+But it's best to know how to build the `addresses_attributes=` and not to use the `accepts_nested_attributes`. Though you can use `field_for` (that will create for your the `person[addresses_attributes][1]...` structure in the form. It leaves more liberty and won't break when it gets a bit more complex.
 `fields_for` will instantiate a form for each of the objects you instantiate in the controller `new` action (`@person.addresses.build(address_type: "Spacedress")`). Be careful because when we use `fields_for` it will give you a hash of attributes (`{"0" => ..., "1" => ...}`) and not an array anymore.
 You can transform your array methods doing a hack
 ```ruby
