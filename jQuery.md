@@ -928,8 +928,505 @@ function listIterate(){
 
 We defined a `listIterate` function. The body of the function calls `.map` on `$("li")`, which returns an array of jQuery objects representing all the list items. The important thing to note is that we have `return` in this method twice. The first `return` sets the new array as the return value of the `listIterate` function. The second `return` tells `.map` to add the text of the list item to the new array and move on to the next element in the array.
 
+## Prevent Default
+What happens when you submit a form? Think about when you sign up for an online service, such as an Amazon account, or log into your Facebook or email accounts. What happens in the browser when you submit those forms? As soon as the form is submitted, the page in the browser refreshes. This happens every single time. This is known as the default browser behavior.
+
+While this is obviously the behavior we would want to have most of the time, there are times when you maybe don't want a page refresh. Maybe you have client-side validations that check to make sure the form input is correct and the user doesn't enter valid input. Maybe you're building a single page application (like the calculator we built, or a to-do list), and refreshing the page would clear the data from the page.
+
+Both of those circumstances involve stopping jQuery from performing the default behavior. We can do that by using the `preventDefault` function.
+
+### Default Behavior
+
+Let's say we have the following form with a div below it:
+
+```html
+<form>
+  <input type="text" id="name">
+  <input type="submit" value="submit">
+</form>
+<div id="hello">
+</div>
+```
+
+And the following `submit` event that says hello to the user based on the name they entered. The greeting is added to the `div` with the ID `hello`. 
+
+```js
+$('form').on('submit', function(event){
+  var name = $('#name').val();
+  $("#hello").text("Hello, " + name);
+});
+```
+
+When you actually enter and submit the form, instead of seeing the greeting, you'll see the page refresh.
+
+### jQuery Event Object
+So how do we use `preventDefault`? We need to refactor our code slightly:
+
+```js
+$('form').on('submit', function(event){
+  var name = $('#name').val();
+  $("#hello").text("Hello, " + name);
+  event.preventDefault();
+});
+```
+
+In the above code, we had to pass an `event` to the anonymous function. This `event` is the jQuery event object. Every time an event is bound to an element, this jQuery event object is created to represent that event.
+
+In `js/script.js` go ahead and comment out all the code except for the code directly below the comment `//examine event object`. That code should have `debugger`. Refresh `index.html` in the browser and fire your click event. When you're dropped in the debugger console, go ahead and take a look at `event`.
+
+You should see something like this:
+
+```js
+event
+> n.Event {originalEvent: Event, type: "submit", timeStamp: 1453912261129, jQuery211012266199523583055: true, which: undefined…}
+```
+
+`event.currentTarget;` will return the HTML `form` because that is the element the submit event is bound to. `event.type;` returns `"submit"`.
+
+```js
+$(document).ready(function(){
+  
+  // browser refreshes on submit
+  // $('form').on('submit', function(){
+  //   var name = $('#name').val();
+  //   $("#hello").text("Hello, " + name);
+  // });
+
+  //examine event object
+  // $('form').on('submit', function(event){
+  //   var name = $('#name').val();
+  //   $("#hello").text("Hello, " + name);
+  //   debugger;
+  //   event.preventDefault();
+  // });
+
+  // stop page refresh
+  $('form').on('submit', function(event){
+    var name = $('#name').val();
+    $("#hello").text("Hello, " + name);
+    event.preventDefault();
+  });
+
+});
+```
+
+Now that we know what `event` represents, let's talk about what we do with that object. We have to pass `event` as an argument to the anonymous callback function.
+```js
+$('form').on('submit', function(event){
+ //code
+});
+```
+
+Now that we have `event` accessible inside the function, we can use it to call `preventDefault`:
+
+```js
+event.preventDefault();
+```
+
+This stops the event from performing its default behavior. Go into `js/script.js` and comment out all the code except the lines directly below the `// stop page refresh` comment. Now refresh `index.html` in the browser and submit the form. You should see your greeting appear!
+
++ [jQuery Event Object](https://api.jquery.com/category/events/event-object/).
+
+To make a small todo list app
+```html
+<!doctype html>
+<head>
+  <script src="js/jquery-2.1.1.min.js"></script>
+  <script src="js/todo.js"></script>
+</head>
+<body>
+  <h1> TO DO LIST</h1>
+
+  <h3> Your List</h3>
+  <div id="list">
+    <ol>
+    </ol>
+  </div>
+  <h3> Add Items To Your List</h3>
+  <form>
+    <label form="item" name="item"><input type="text" id="item">
+    <input type="submit" value="submit">
+  </form>
+
+</body>
+```
+
+And in the `js/todo.js` script file:
+```js
+$(document).ready(function(){
+  // call functions here
+  addItem();
+});
+
+// define functions here
+function addItem() {
+	$("form").on("submit", function(e) {
+		// debugger;
+		var item = $('#item').val();
+		$('#list ol').append('<li>' + item + '</li>');
+		e.preventDefault();
+	});
+}
+```
+
+## Stop Propagation
+Let's say you're building a course registration site for Flatiron. You need to build a list of available courses and include some details about each course.
+
+You need to build it so that when you click a course the details about the course disappear and reappear. Each course would need to have a click event that toggles the details. Flatiron also wants to be able to remove courses if they're not offered that semester, so there will need to be a button that removes that course (an `x`).
+
+We'd end up with some HTML like this:
+
+```html
+<ul class="courses">
+  <li class="course">
+    Ruby
+      <span class='delete'>x</span>
+    <div class="detail">
+      Learn Ruby. It loves you. Be happy.
+    </div>
+  </li>
+  <li class="course">
+    JavaScript
+      <span class='delete'>x</span>
+    <div class="detail">
+      Learn JavaScript to build powerful full stack web apps.
+    </div>
+  </li>
+  <li class="course">
+    iOS
+      <span class='delete'>x</span>
+    <div class="detail">
+      Everyone loves a good iPhone app.
+    </div>
+  </li>
+</ul>
+```
+
+And let's say we create those click events:
+
+```js
+$('.course').on('click', function(){
+  $(this).find('.detail').slideToggle();
+});
+
+$('.course .delete').on('click', function(){
+  alert("about to delete");
+});
+```
+
+The first click event toggles the details on and off the screen. The second click event just alerts `"about to delete"`. Go ahead and first click `Ruby` in the browser to hide the details. Then click the `x` to "delete" the item. You should see the alert appear, as we expected. But wait, why do the details toggle on the screen? How did that event happen?
+
+In jQuery, all click events "bubble up" the DOM. The `document` object knows about every event that is triggered on a page. This means that in our example above, the `span` with the `x` is a child of the `li` with the class `course`. When we click the `x`, that click event bubbles up the DOM and the parent element, the `li`, knows a click event has been triggered, which in turn triggers the `li`'s click event.
+
+What in the world? Why is that behavior we would want? In most cases you wouldn't at all. Imagine if you had a large series of nested elements all with click events. Firing the click event of the innermost child would trigger the click events of every single parent.
+
+So how the heck do we stop that from happening? With `stopPropagation()`. Let's go ahead and refactor our jQuery:
+
+```js
+$('.course').on('click', function(){
+  $(this).find('.detail').slideToggle();
+});
+
+$('.course .delete').on('click', function(event){
+  alert("about to delete");
+  event.stopPropagation();
+});
+```
+
+You'll notice we didn't change anything to the click event on the class `course`. But we did make some changes to the delete button. We passed `event` to the anonymous function and then called the `stopPropagation()` function on the event object. This function stops the click event from bubbling up the DOM.
+
+Go ahead and comment out all the code in `js/script.js` except the code under the comment `//stop propagation`. Refresh the page in the browser. Click a course name to hide the details, and then click the `x`. The alert should still appear, but this time the details should remain hidden.
+
++ [jQuery Docs](https://api.jquery.com/event.stoppropagation/)
++ [Mozilla Developer Network](https://developer.mozilla.org/en-US/docs/Web/API/Event/stopPropagation)
+
+## AJAX and callbacks
+
+### APIs
+In JavaScript, we can use `XMLHttpRequest` directly to access remote data or web APIs, but it requires us to do a lot of lower-level wiring to get everything working. Now we're going to take a look at the Ajax capabilities of jQuery, which abstracts the XHR code into a nice, higher-level package.
+
+We interact with web APIs through a set of URLs. Each URL defines a resource that we request or take action on.
+
+Rather than just talk about it, let's get our hands dirty and explore an API. To do this, we're going to use a tool called Postman. Postman is an easy to use Chrome extension that lets us make different web requests. It easily allows us to interact with web APIs. For our exercise, we are going to work with the GitHub API to retrieve information about the jQuery GitHub repository. To get started we need to setup Postman.
+
+Great!  Now you're all set up to make your own API requests. As you know, jQuery is a large open source project with many contributors. Those contributors make a hefty amount of commits. The GitHub API allows us to retrieve the list of commits made to the jQuery repository.
+
+At this point Postman should be loaded and ready to go:
+
+* Enter **https://api.github.com/repos/jquery/jquery/commits** in the URL textbox.
+* Click the **Send** button.
+
+Once the request finishes, Postman will display the results. Does this format look familiar?  If you said JSON (JavaScript Object Notation), then give yourself a pat on the back. What we're looking at is a JSON list of all the commits made to the jQuery repository. Each hash in the array has an author key. Do you recognize any of the committers?  If not, let's try to narrow the results returned from the GitHub API.
+
+GitHub exposes a way for us to do this using HTML parameters. By changing the URL slightly to include the `author` parameter, we can ask the GitHub API to return only the commits made by John Resig (bonus points if you know who this is).
+
+For the purpose of this lesson, we are mostly concerned with web APIs. But the term API actually has a more broad meaning.
+
+> In computer programming, an application programming interface (API) is a set of routines, protocols, and tools for building software and applications. - Wikipedia
+
+In its simplest form, an API in relation to object-oriented programming is a class and the list of methods we define for that class. When creating a class, we are defining a guidebook on how to interact with other parts of the code. We get to decide which methods and variables are public or private, essentially controlling how to interact with the class.
+
+When we apply this concept to the web, we get web APIs like the GitHub and Twitter API. From our Postman experiment, we saw how GitHub provides a way for us to interact with the data on their system. Just like how a class provides a set of public methods to interact with, web APIs provide us with URLs.
+
+The list of URLs that GitHub provides on https://developer.github.com/v3 act as the public methods into their system. The developers that created the API control which resources they want to share and who has access to them. In the end it's all just the same data available on GitHub.com. The big difference is that the GitHub API forgoes the HTML/CSS/JavaScript that makes up GitHub.com and serves up pure data, which is the only thing our applications need.
+
+### AJAX
+Wouldn't it be nice if page refreshes didn't exist? What if we could do multiple things at once from a single web page? In a perfect world we could type into a search textbox and have searches performed in the background as we type. That world is here, and it's called Ajax! Asynchronous JavaScript and XML (Ajax) is a technique that is used in web applications. It provides a way to retrieve content from a server and display it without having to refresh the entire page.
+
+Modern dynamic applications provide a better user experience by allowing users to manipulate data on the server and see the results without having to refresh the page. This is the power of Ajax in action. In the background, requests are made to a web API using JavaScript. As developers we can then choose to alter the displayed HTML based on the responses from the web API.
+
+When you've used `XMLHttpRequest` directly to query an API like GitHub to dynamically update your page, you've been using Ajax. With jQuery, we have a set of Ajax-related functions to make that even easier.
+
+Let's try an example. You have an `index.html` file with a basic structure. Let's add a reference to jQuery so we can use it.
+
+```html
+<body>
+  <p id="sentences">
+    Loading our page...
+  </p>
+  <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+  <script src="script.js"></script>
+</body>
+```
+
+There's also a `sentence.html` file. Let's add some data to it.
+
+```html
+<p>Ajax is a brand of cleaning products, introduced by Colgate-Palmolive in 1947 for a powdered household and industrial cleaner.</p>
+<p>It was one of the company's first major brands.</p>
+```
+
+Now in our `script.js`, let's use the jQuery `get()` function to make a `GET` request to our `sentence.html` data.
+
+**Note:** Remote data can come from anywhere — even your own server! Remote just means it isn't directly included in the current page.
+
+```js
+// We should wait for the page to load before running our Ajax request
+$(document).ready(function(){
+  // Now we start the Ajax GET request. The first parameter is the URL with the data.
+  // The second parameter is a function that handles the response.
+  $.get("sentence.html", function(response) {
+    // Here we are getting the element on the page with the id of sentences and
+    // inserting the response
+    $("#sentences").html(response);
+  });
+});
+```
+
+Let's load up `index.html` and see what happens!
+Okay. Not a whole lot.
+
+We actually need to serve this page from an HTTP server rather than load
+it directly in our browser. At the console, run the following command:
+
+```bash
+$ python -m SimpleHTTPServer
+```
+
+This starts a simple server that will serve our files over HTTP. You need to start a server instead of just opening up `index.html` in the browser because of the browser enforced same-origin policy. To prevent security risks, the browser enforces a same origin policy. A different origin can be interpreted as a different domain, different protocol, and a different port.
+
+When you open up  `index.html` by right clicking on the file, the site opens with `file://`. Same-origin policy only allows HTTP, data, chrome, chrome-extension, HTTPS, chrome-extension-resource protocols. Ajax uses HTTP requests and thus must interact with HTTP protocol in the browser.
+
+Browse to [http://localhost:8000](http://localhost:8000/) and watch as the Ajax request is made and the new data is added to our web page. Pretty cool! This might all happen too quick to really notice anything, so you may want to have your terminal window side by side with the browser window. This way you can see the request hit our server.
+
+We used the power of Ajax to load data from `sentence.html`. This same idea can be applied to calling the GitHub API or another remote resource.
+
+### Callbacks
+If we look at our last example, the Ajax request completed very quickly, but this won't always be the case. If we request data from a slow server over a slow internet connection, it might take multiple seconds to get a response. Using a callback allows our code to make our request and continue doing other things until the request completes.
+
+Ajax follows an asynchronous pattern, which makes Ajax requests *non-blocking*. This means we don't sit around and wait for the request to finish before running the rest of our code. We set callbacks and then fire and forget. When the request is complete, the callbacks are responsible for deciding what to do with the returned data.
+
+To make this concept stick, let's look at a real world example. When you put food into a microwave, you don't stand there and wait for the food to finish cooking. Okay, well, I do. Just in case.
+
+But even if you stand there, you can do other things. You probably pick up your phone, look at Instagram, read some text messages, and, of course, work on [Learn](https://learn.co). Basically, you are doing other things while the microwave takes care of cooking your food.
+
+When the food is cooked, the microwave beeps, and you remove the food and eat it. This final step of removing the food and eating it is exactly how our callbacks work. One thing to note: as we wait for our food, we don't check if it's done every 5 seconds (again, I do because I'm very hungry, but I don't *have* to). We wait until the beep tells us it's done. Checking every 5 seconds is called *polling*, and it's a lot less efficient than waiting for the beep, which is our *callback*.
+
+So far, we have been dealing with successful API requests. But things don't always go according to plan. What happens if the API we are using doesn't respond? Or if we attempt to retrieve a resource that doesn't exist?
+
+This can happen when API requests are based on user input. Let's go back to the GitHub API where we are retrieving commits. Imagine we want to retrieve a specific commit using a SHA.
+
+Postman:
+`https://api.github.com/repos/jquery/jquery/commits?sha=8f447576c918e3004ea479c278c11677920dc41a`
+> Returns success.
+
+Postman error:
+`https://api.github.com/repos/jquery/jquery/commits?sha=fake-SHA`
+> Returns a 404 not found.
+
+A good developer will make sure to handle these unexpected events gracefully when using Ajax. We can provide multiple callbacks when using jQuery: one to handle a successful response and one to handle when an error occurs.
+
+Let's add this inside our document ready function. Then, open the inspector, and reload the page.
+
+```js
+$(document).ready(function() {
+	$.get("sentence.html", function(response) {
+		$("#sentences").html(response);
+	});
+
+	$.get("this_doesnt_exist.html", function(data) {
+		doSomethingGood();
+	}).fail(function(error) {
+  		console.log('Something went wrong: ' + error);
+	});
+});
+```
+
+We chained an additional call to `fail` on the end of our request. We passed a callback function to the method that will run only if an error occurs. In our example, we logged the error to the console, but in a real world situation you might want to try to fix the issue or inform the user.
+
+Note that it doesn't matter what you call `data` and `error` in the above examples — the only thing that matters is the order of the arguments. In the callback to `get()`, the first argument is going to be the data that the server sent back, so it makes sense to call it `data` — but we could just as well call it `response`. Similarly, the first argument to `fail()`'s callback is an error object, so we should probably give it a descriptive name like `error` (but we don't have to).
+
+This is another example of how we could use jQuery to perform an Ajax request.
+
+```js
+var url = "https://api.github.com/repos/rails/rails/commits?sha=82885325e04d78fb7ec608a4670164d842d23078";
+
+$.get(url)
+  .done(function(data) {
+    console.log("Done");
+    console.log(data);
+  });
+```
+
+Note: The callback that gets passed into `.done`  gets `data` as an argument. `data` represents the response returned from the API. jQuery handles passing in that `data` object to the callbacks. This is essential to our fire and forget technique. We don't have to sit around and wait for the API to give us a response. Instead, we tell jQuery that when it receives a response to please pass it along to our callbacks so they can handle it accordingly.
+
+* [Application programming interface](http://en.wikipedia.org/wiki/Application_programming_interface)
+* [jQuery.get()](http://api.jquery.com/jquery.get/)
+
+### Example with Handlebars
+```js
+// index.js
+
+function handlebarsSetup() {
+  //put any handlebars setup in here
+  Handlebars.registerPartial("userDetails", $("#user-details-partial").html())
+}
+
+$(document).ready(function (){
+  handlebarsSetup();
+  searchRepositories();
+});
 
 
+function searchRepositories() {
+	$("form a").on("click", function(event) {
+		var searchTerm = $("input").val();
+
+		$.get('https://api.github.com/search/repositories?q=' + searchTerm, function(data) {
+			var source = $("#results-template").html()
+			var template = Handlebars.compile(source);
+			displaySuccess(searchTerm);
+			$('#results').html(template(data))
+		}).fail(function(error) {
+			displayError();
+		});
+	});
+}
+
+
+function showCommits(repo) {
+	// reads the data-attributes of the link
+	var owner = repo.dataset.owner
+	var repository = repo.dataset.repository
+	$.get(`https://api.github.com/repos/${owner}/${repository}/commits`, function(data) {
+		var source = $('#commits-template').html();
+		var template = Handlebars.compile(source);
+		$('#details').html(template(data));
+	}).fail(function(error) {
+		displayError();
+	});
+}
+
+function displaySuccess(term) {
+	// $("#errors").text("Here is what we found for " + term + "!");
+	$("#errors").text(`Here is what we found for ${term}!`);
+}
+
+function displayError() {
+	$("#errors").text("I'm sorry, there's been an error. Please try again.");
+}
+```
+and for HTML
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Ajax Lab</title>
+
+    <style>
+      .flexbox-container {
+        display: -ms-flex;
+        display: -webkit-flex;
+        display: flex;
+      }
+      .flexbox-container > div {
+        width: 50%;
+        padding: 10px;
+        background-color: grey;
+      }
+      .flexbox-container > div:first-child {
+        margin-right: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <form>
+      <input type="text" id="searchTerms"> <a href="#">Search Repositories</a>
+    </form> 
+    <hr>
+    <main id="main">
+      <div id="errors"></div>
+    </main>
+    <div class="flexbox-container">
+      <div>
+        <h3>Repositories</h3>
+        <div id="results"></div>
+      </div>
+      <div>
+        <h3>Details</h3>
+        <div id="details"></div>
+      </div>
+    </div>
+    <script src="jquery-3.1.0.min.js"></script>
+    <script src="handlebars.js"></script>
+    <script src="index.js"></script>
+
+    <script id="results-template" type="text/x-handlebars-template">
+      {{#each items }}
+        <div class="entry">
+          <h2>{{name}}</h2>
+          <div class="body">
+              <p>{{ description }}</p>
+              <p><a href="{{html_url}}">Learn more about {{name}}</a></p>
+              <p><a href="#" data-repository="{{ name }}" data-owner="{{ owner.login }}" onclick="showCommits(this)">Show commits</a></p>
+          </div>
+        </div>
+      {{/each}} 
+    </script>
+
+    <script id="commits-template" type="text/x-handlebars-template">
+      {{#each this }}
+        <div class="entry">
+          <h3>Commit {{ sha }}</h3>
+          <div class="body">
+              <p>{{ commit.message }}</p>
+              <p><a href="{{ commit.url }}">Go to commit</a></p>
+              <div>{{> userDetails author }}</div>
+          </div>
+        </div>
+      {{/each}}
+    </script>
+
+    <!-- Needs to be registered in index.js -->
+    <script id="user-details-partial" type="text/x-handlebars-template">
+      <h4><a href="{{ url }}">{{ login }}</a></h4>
+      <img width="32px" height="32px" src="{{ avatar_url }}">
+      <hr>
+    </script>    
+
+  </body>
+</html>
+```
 
 
 
