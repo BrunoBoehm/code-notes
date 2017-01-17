@@ -1427,6 +1427,688 @@ and for HTML
   </body>
 </html>
 ```
+More about [Handlebars](http://handlebarsjs.com/).
+
+## JS order of operations
+Knowing when a line of code will run is easy if those lines are written like this:
+
+```javascript
+console.log(1);
+console.log(2);
+console.log(3);
+```
+
+We start from line #1 and execute each statement in order. If we run this code we'll see the following in our console:
+
+```
+1
+2
+3
+```
+
+Nothing special right? Each console statement is executed one after another. When we introduce callbacks, the order of operation changes. If we were to take our previous example and place the `console.log(2)` inside of the callback of an Ajax request:
+
+```javascript
+console.log(1);
+$.getJSON("https://api.github.com/repos/rails/rails/commits", function(response){
+  console.log(2);
+});
+console.log(3);
+```
+
+The console output would change to this:
+
+```
+1
+3 // The 3 is printed before the 2!!
+2
+```
+
+What happened, why are things out of order now?! The answer is simple, `console.log(2)` won't run until the `$.getJSON` completes. Our code executes in order except when we reach the Ajax request. The order now looks like this:
+
+- `console.log(1)` executes.
+- We create an Ajax request with `$.getJSON`.
+  + Our callback contains `console.log(2)` but `console.log(2)` isn't executed just yet.
+- `console.log(3)` executes.
+- Our Ajax request completes and `console.log(2)` executes.
+
+As we learned in previous lessons, not all Ajax requests complete successfully. Sometimes things go wrong and errors happen. When we add both success and error callbacks, order of operations is a little more confusing. In this next example, we run `console.log("Success")` only if the Ajax request completes successfully but if it fails, we only run `console.log("Fail")`.
+
+```js
+console.log(1);
+$.getJSON("https://api.github.com/repos/rails/rails/commits", function(response){
+  // This is our success callback which is called automatically
+  console.log("Success");
+}).fail(function(response){
+  // We have to explicitly configure the fail/error callback for getJSON to handle it
+  console.log("Fail");
+});
+console.log(2);
+```
+In our new code, both the success and error callbacks will only be executed after `console.log(1)` and `console.log(2)`. Nothing new there but which callback is executed is dependent on how the Ajax request completes. If the Ajax request fails, the callback provided for error is executed. If the Ajax request is successful, the callback provided for success will be executed. Let's take a look at how our new code runs:
+
+- The `console.log(1)` executes.
+- We make an Ajax request with `$.getJSON`.
+  + Our success callback contains `console.log("Success")`.
+  + Our error callback contains `console.log("Fail")`.
+- `console.log(2)` executes.
+- Our Ajax request finishes.
+  + If our request succeeded then `console.log("Success")` is executed.
+  + If our request failed then `console.log("Fail")` is executed.
+
+## Lazy Loading
+[Lazy Loading](http://en.wikipedia.org/wiki/Lazy_loading) is a way that web pages increase the speed at which their pages load by only loading some of the content that they want. They then add more content as the client scrolls down.
+
+To see this in action, take a look at [Boxed.com](https://www.boxed.com/products/category/6/household). Scroll to the bottom of the page and notice that the site adds four items to the DOM each time you scroll down.
+
+Lazy loading is a smart way to increase load times of pages. Let's say you work for a funny t-shirt company that has two-thousand designs that clients can choose from. If a client visits your site and clicks  "View All Designs", their browser takes a *while* to render the page because the browser has to render two-thousand images to their page, one for each design. This is not so good.
+
+You could fix this by loading only the first thirty designs when the user clicks "View All". Then, as they scroll towards the bottom of the page, you could add thirty new shirts to the page. You would then have the JavaScript repeat this process until all the designs have been loaded.
+
+## jQuery's `ajax` function
+
+jQuery's [ajax](http://api.jquery.com/jquery.ajax/) function makes an asynchronous HTTP request. 
+
+For instance, if I wanted to see the Netflix's share price, I could use the MarkIt API. The url for fetching a stock quote via MarkIt is `http://dev.markitondemand.com/Api/v2/Quote/jsonp?symbol=< stock symbol here>`. Netflix has a symbol of `NFLX`. Therefore, to get its quote info, you would visit [http://dev.markitondemand.com/Api/v2/Quote/jsonp?symbol=NFLX](http://dev.markitondemand.com/Api/v2/Quote/jsonp?symbol=NFLX). 
+
+Here's an example AJAX request that adds Netflix's last stock price to the div `#netflix-price`.
+
+```html
+<html>
+  <head>
+    <title>Netflix</title>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+  </head>
+  <body>
+    <h1>Netflix Stock Price</h1>
+    <div id="netflix-price"><i class="fa fa-spinner fa-spin"></i> Fetching Data...</div>
+    <script>
+    
+      var url = "http://dev.markitondemand.com/Api/v2/Quote/jsonp?symbol=NFLX";
+
+      $.ajax({
+        url: url,
+        contentType: 'application/json',
+        dataType: 'jsonp',
+        success: function(data) {
+          var price = data["LastPrice"];
+          $("#netflix-price").html("$" + price);
+        }
+      });
+
+    </script>
+  </body>
+</html>
+```
+
+To see the above code in action, run `rackup` and visit [http://localhost:9292/example](http://localhost:9292/example).
+
+### Example with easy loader for cars
+In a ruby app, with `index.erb`
+```erb
+<html>
+  <head>
+    <title>Cars</title>
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <script src="/js/jquery.min.js"></script>
+  </head>
+  <body>
+    <div class="jumbotron">
+      <div class="container">
+        <h1>Car Model Lazy Load</h1>
+      </div>
+    </div>
+    <div class="container">
+      <div id="cars">
+
+        <div class="row">
+          <div class="col-md-4 car">
+            <h2>Chevrolet</h2>
+            <p><strong>Model:</strong> Tahoe</p>
+            <p><strong>Year:</strong> 2012</p>
+          </div>
+          <div class="col-md-4 car">
+            <h2>Toyota</h2>
+            <p><strong>Model:</strong> Camry</p>
+            <p><strong>Year:</strong> 2002</p>
+          </div>
+          <div class="col-md-4 car">
+            <h2>Mercedes-Benz</h2>
+            <p><strong>Model:</strong> E-Class</p>
+            <p><strong>Year:</strong> 1998</p>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-4 car">
+            <h2>GMC</h2>
+            <p><strong>Model:</strong> Acadia</p>
+            <p><strong>Year:</strong> 2013</p>
+          </div>
+          <div class="col-md-4 car">
+            <h2>Ford</h2>
+            <p><strong>Model:</strong> Fusion</p>
+            <p><strong>Year:</strong> 2011</p>
+          </div>
+          <div class="col-md-4 car">
+            <h2>Chrysler</h2>
+            <p><strong>Model:</strong> 300</p>
+            <p><strong>Year:</strong> 2005</p>
+          </div>
+        </div><!-- row -->
+
+        <!-- more cars should get added here -->
+        <!-- even more cars should get added here -->
+        <!-- et cetera -->
+
+      </div><!-- car div -->
+      <br>
+      <div class="row">
+        <div class="col-md-4 col-md-offset-4 center">
+          <button class="btn btn-success" id="load-cars">Load more cars</button>
+        </div>
+      </div><!-- row -->
+      <br>
+      <br>
+    </div><!-- container -->
+    <script src="js/cars.js"></script>
+    <script src="js/on-click.js"></script>
+  </body>
+</html>
+```
+
+This calls and `on-click.js` file
+```js
+"use strict";
+
+$(document).ready(function() {
+  // add click listener here
+  // it should call on fetchJSON()
+  $("#load-cars").on("click", function() {
+  	fetchJSON();
+  });
+});
+```
+
+That in turn calls `cars.js`
+```js
+"use strict";
+
+// this is the base API url
+var baseUrl = "http://mimeocarlisting.azurewebsites.net/api/cars/";
+var currentPage = 3;
+
+function formatCars(carsJSON) {
+  // this function shold return a string of properly formatted html
+  // refer to app/views/index.erb lines 16 - 22 for an example of how
+  // to format three cars, each in a div with a class "col-md-4", in a 
+  // div with a class "row"
+  var html = '<div class="row">';
+  $.each(carsJSON, function(index, car) {
+  	html += '<div class="col-md-4 car">';
+  	html += 	'<h2>' + car.Make + '</h2>';
+  	html += 	'<p><strong>Model: </strong>' + car.Model + '</p>';
+  	html += 	'<p><strong>Year: </strong>' + car.Year + '</p>';
+  	html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function addCarsToDOM(carsJSON) {
+  // this function should pass carsJSON to formatCars() and then 
+  // add the resulting HTML to the div with an id of "cars"
+  debugger;
+  var html = formatCars(carsJSON);
+  $("#cars").append(html);
+}
+
+function fetchJSON() {
+  // this function will make the ajax call
+  // on success of the ajax call, it will pass the returned data
+  // to addCarsToDOM()
+  var url = baseUrl + currentPage + "/3";
+  currentPage += 1;
+  $.ajax({
+  	url: url,
+  	contentType: 'application/json',
+  	dataType: 'jsonp',
+  	success: function(carsJSON) {
+  		addCarsToDOM(carsJSON);
+  	}, 
+  	error: function(error) {
+  		$('body').text("Sorry, there was an error with the request. Please refresh the page.")
+  	}
+  });
+}
+```
+
+## APIs and JSON
+Passing data back and forth from our server is easy when that data is simple. Once we have to represent complex data it gets hard really quick. Think about it, how would you represent a model class in a way that both Ruby and JavaScript understand. JSON provides a simple, light weight format that will do just that.
+
+Data is a core part of programming. It can be represented in many different shapes and forms. We can create arrays and hashes to store the data. This is great for data that exists only in our application but what about data outside our application? We need some sort of standard, light weight way to represent our data.
+
+JSON stands for JavaScript Object Notation. In a nutshell, it's a way to represent data in a format that closely resembles JavaScript objects. It's very light weight and easy to read. This is great because not only will it save bandwidth, we can read it with a plain old text editor. On top of all this, JavaScript can parse this format with one super easy line of code, `JSON.parse`.
+
+What does JSON even look like? Let's take a look.
+
+```javascript
+{
+  "artist_name": "Hozier",
+  "track_name" : "Take Me to Church",
+  "album_name" : "Take Me to Church EP"
+}
+```
+Similar to how JavaScript objects are defined with `{}`, the same goes for JSON. Inside of the `{}` we have our key/value pairs. The artist name for this chunk of data is **Hozier** and the track name is **Take me to church**. We might even guess this represents a song. Let's put JSON to work with our Ajax requests.
+
+### Getting JSON With Ajax
+If we already know that the API we are using responds with JSON, we can use the jQuery function `$.getJSON`. This function performs an Ajax request and parses the response as JSON automatically. This means the callback receives a JavaScript object with the contents of the response data ready for us to use.
+
+This next example shows an Ajax request to the Spotify API for information about a specific song.
+
+```javascript
+var url = 'https://api.spotify.com/v1/tracks/1zHlj4dQ8ZAtrayhuDDmkY';
+var success_callback = function (songFromAPIRequest){
+  // The response has already been parsed for us.
+  alert("Song Name: " + songFromAPIRequest.name);
+};
+
+$.getJSON(url, success_callback);
+```
+We made a request to the API url and in our callback we created an alert dialog with the name of the song we got back. jQuery handled the request plus the parsing of the result so all we need to do is to figure out what to do with the data.
+
+### Changing Our Request With Parameters
+At some point, we will need to alter our request in order to change the data we receive. How we do this depends on the API we are calling but there is a good chance we will need to use url parameters. jQuery provides an easy way to do this by passing our parameters as a JavaScript object. Let's use the Spotify API to search for a song. We will specify 3 different criteria, `q` will be the search string, `type` will be the type of the thing we want to find and `limit` will be how many results we want.
+
+```javascript
+var url = 'https://api.spotify.com/v1/search';
+
+// These parameters will be made into url parameters by jQuery
+var url_params = {
+  q: "Take Me to Church",
+  type: "track",
+  limit: 10
+};
+
+var success_callback = function (searchResultsFromAPIRequest){
+  var tracks = searchResultsFromAPIRequest.tracks.items;
+  $.each(tracks, function(index, track) {
+    console.log("Song Found: " + track.name);
+  });
+};
+
+// The second parameter we are passing is the url parameters to use in the request
+$.getJSON(url, url_params, success_callback);
+```
+The result of the request will be the name of all the songs we found printed to the console. Under the covers, jQuery took our parameters and constructed a url to make the request with.
+
+```
+https://api.spotify.com/v1/search?qTake+Me+to+Church&type=track&limit10
+```
+
+Its also possible to create the url ourselves.
+
+```javascript
+// Here we manually create a url with all the url parameters
+var url = 'https://api.spotify.com/v1/search?q=Take+Me+to+Church&type=track&limit=10';
+
+var success_callback = function (searchResultsFromAPIRequest){
+  var tracks = searchResultsFromAPIRequest.tracks.items;
+  $.each(tracks, function(index, track) {
+    console.log("Song Found: " + track.name);
+  });
+};
+
+// No url parameters being passed since we already included them in the url
+$.getJSON(url, success_callback);
+```
+In the end, we get the same results but we have the option to choose our approach based on the situation. One final thing to consider is that our success callback won't actually be called if the JSON that gets return from the API is invalid. We will need to have a error callback to handle these types of problems.
+
+### Example with Github API
+Let's write some code together to show how this all works. We will be
+creating a simple markdown parser using the GitHub API.
+
+Copy the following code into `js/api_client.js`.
+```javascript
+var printStargazers = function(users) {
+  $.each(users, function(index, user) {
+    console.log(user.login + ' starred the Rails Repository');
+  });
+};
+```
+
+This function will print an array of users to the console. Next, copy the following code into `js/api_client.js`.
+
+```javascript
+  $.ajax({
+    url: 'https://api.github.com/repos/rails/rails/stargazers',
+    type: 'GET',
+  }).done(function(users) {
+    printStargazers(users);
+  });
+```
+This code makes a request to the GitHub API for all the users that starred the Ruby on Rails repository. The callback calls the `printStargazers` function. Let's try out our code so far. In your terminal run `python -m SimpleHTTPServer`. Browse to http://localhost:8000 and open Chrome developer tools. You should see a number of logs like this `dhh starred the Rails Repository`.
+
+Now let's try a POST request. Copy the following code into `js/api_client.js`.
+
+```javascript
+  var addHTML = function (html){
+    $('#search_results').html(html);
+  };
+
+  var bindCreateButton = function (){
+    $('#convert').click(function(event) {
+      var markdown = $('#markdown').val();
+      $.ajax({
+        url: 'https://api.github.com/markdown',
+        type: 'POST',
+        data: JSON.stringify({ text: markdown, mode: "markdown" })
+      }).done(function(response) {
+        addHTML(response);
+      });
+    });
+  };
+
+  $(document).ready(function(){
+    bindCreateButton();
+  });
+```
+Here we are sending markdown to the GitHub API to render into HTML. Once we get a response it adds the HTML to `<div id="search_results">`.
+
+# Object-Oriented Javascript
+You've already worked with objects in JavaScript, but so far we've only treated them like hashes. Now it's time to change frame of mind and start to view them as objects with properties and values, just like the objects we make in Ruby using classes.
+
+This frame of reference from Ruby is going to make dealing with objects in JavaScript that much easier. You already know what an object is, so now it's time to learn how JavaScript handles them.
+
+Let's create a user class and object in Ruby. The user will have a `name` and `email` attribute:
+
+```ruby
+class User
+  attr_accessor :name, :email
+
+  def initialize(name, email)
+    @name = name
+    @email = email
+  end
+end
+
+kevin = User.new("kevin", "kevin@aol.com")
+```
+
+Now let's recreate the same thing in JS:
+
+```js
+var kevin = {
+  name: "kevin",
+  email: "kevin@aol.com"
+}
+```
+
+How come when we create our `kevin` JavaScript object, it looks just like a hash but in Ruby our `kevin` object looks more like what we typically think of as an object?
+
+Objects in Javascript are a lot more versatile than they are in Ruby.  Essentially hashes in Javascript are objects, but they can also have functions attached to them (methods).  In Ruby we think of Objects and Hashes as fundamentally different ideas (technically Hashes in Ruby are objects).  However, in Javascript, we can use objects like Hashes, just as a set of key value pairs, or we can attach functions to them and use them more like we traditionally think of using objects in Ruby.  In Ruby objects contain both data and behavior and we'll soon learn to use our Javascript objects in the same manner.
+
+## Creating Objects in JS
+Simple variables are great for holding primitive data types, like strings and integers, but we often need a way to represent more complex data, associating many values to a single idea. In JavaScript, the `Object` is the basic associative data structure, and it works just like a dictionary. We can use these objects to associate data *values* with unique *keys*, giving us a human-readable representation of a logical collection of data.
+
+We can construct objects in JavaScript using the literal constructor:
+`{}` and giving it some properties. Let's make a few sandwiches:
+
+```js
+var blt = {
+  bread: "white",
+  crust: false,
+  meat: "bacon",
+  condiments: "mayo",
+  veggies: ["lettuce", "tomato"],
+  cheese: "none"
+}
+
+var turkeyClub = {
+  breadType: "sourdough",
+  crust: true,
+  meat: ["turkey", "bacon"],
+  condiments: "mayo",
+  veggies: ["lettuce", "tomato"],
+  cheese: "cheddar"
+}
+
+var grilledCheese = {
+  breadType: "white",
+  crust: false,
+  meat: "none",
+  condiments: "none",
+  veggies: "none",
+  cheese: "cheddar"
+}
+
+```
+
+Great. Three sandwiches. Plenty to share so we don't get into a... situation. You probably felt like this got tedious, however, and we only made three sandwiches. We're *[repeating ourselves](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)* a lot, copying and pasting (or, even worse, re-typing!) all of the same keys for our objects.
+
+When we talk about objects in terms of data structures it's simple. The language provides us with an `Object` type that helps us encapsulate data into key/value pairs.
+
+What we want to do now though is talk about objects in terms of *object-oriented programming*, which goes beyond simple data structures.
+
+In object-oriented programming, we use objects to represent logical and often physical concepts, such as students, books, and even delicious sandwiches. In object-oriented programming (OOP), our objects should not only allow us to *encapsulate* data (i.e. gather and store values that are attributes of the object, such as `meat` and `condiments` in a `sandwich`), but also allow us to *reuse* the data structure without constantly redefining it.
+
+In other words, we should only have to define the properties of a sandwich one time and then be able to create as many different sandwiches as we want without repeating ourselves. Is there a way to use JavaScript to create a template for a sandwich object that we can use to construct many different sandwiches?
+
+### Constructor Function
+Of course there is! It's called a *constructor function*, and its job, as you might guess from the very on-the-nose name, is to construct new objects. We use the constructor function pattern to essentially build a *prototype* for what an object will look like, including all the properties.
+
+**Advanced:** We call the constructor function a *pattern* because it's not a concept that's built-in to the JavaScript language, but rather a design pattern that has evolved in to common usage as an accepted standard way to instantiate an object. Patterns can be small, task-oriented recipes, such as this constructor function, or they can be big, architecture-oriented guidelines, such as the MVC pattern at the root of a framework like Ruby on Rails or AngularJS. You can read more about design patterns [here](http://www.oodesign.com/).
+
+Let's build a constructor function for our sandwich objects:
+
+```js
+function Sandwich(bread, crust, meat, condiments, veggies, cheese) {
+  this.breadType = bread;
+  this.crust = crust;
+  this.meat = meat;
+  this.condiments = condiments;
+  this.veggies = veggies;
+  this.cheese = cheese;
+}
+```
+
+You'll notice the name of the constructor function `Sandwich` starts with a capital letter. This is important. While the capitalization of a function does not affect how it behaves, it serves as an important signal to our fellow programmers that this function should ONLY be used as a constructor. Adhering to this *convention* is a good way to communicate intent to other developers who may have to maintain this code.
+
+Next, we define the function to accept a whole bunch of parameters. When we create objects with this constructor function, we'll pass in the value of the properties we want our object to have.
+
+**Top-tip:** You'll notice inside the body of the constructor function we're using `this` in front of each of the property names. In this case, `this` will refer to the current object being created, and it's how we differentiate between the *property* `crust` and the local variable `crust` that we got from the function arguments.
+
+### Creating an Instance From a Constructor Function
+Now that we have a constructor function, let's create our sandwiches:
+
+```js
+var blt = new Sandwich("white", false, "bacon", "mayo", ["lettuce", "tomato"], "none");
+
+var turkeyClub = new Sandwich("sourdough", true, ["turkey", "bacon"], "mayo", ["lettuce", "tomato"], "cheddar");
+
+var grilledCheese = new Sandwich("white", false, "none", "none", "none", "cheddar");
+```
+
+Notice that when we call these functions, we always call them with the `new` keyword. JavaScript needs us to use the `new` keyword to instantiate a new instance of an object. Without it, we're just invoking the function and setting it to the value of a variable, and since the function doesn't return anything, our variable will be `undefined`.
+
+All functions in JavaScript can be invoked with the `new` keyword, but we only want to do it with functions that are intended to be used as constructor functions. The way we let ourselves and others know when to use the `new` keyword is by making constructor functions start with capital letters! If we forget the `new` keyword we'll run into all sorts of problems.
+
+How do we know that these are objects and that they were all created using the same constructor function?  We can look at the `constructor` property, which gets set automatically during the initialization of the object.
+
+```js
+blt.constructor;
+// returns the Sandwich constructor function
+turkeyClub.constructor;
+//returns the Sandwich constructor function
+grilledCheese.constructor;
+//returns the Sandwich constructor function
+```
+
+### Reading Property Values
+So now that we used the constructor function, how do we read the properties of an object?
+
+You can access the properties just like you did when we were treating objects as hashes:
+
+```js
+blt["breadType"];
+//returns white
+turkeyClub["meat"]
+// returns ["turkey", "bacon"]
+grilledCheese["crust"]
+//returns false
+```
+
+Or, you can use the dot-notation you're familiar with from Ruby:
+
+```js
+blt.breadType;
+//returns white
+turkeyClub.meat;
+// returns ["turkey", "bacon"]
+grilledCheese.crust;
+//returns false
+```
+
+### Reassigning Property Values
+Let's say you actually like to eat your grilled cheese with a slice of bacon and tomato, we would need to change the values of the `meat` and `veggies` properties:
+
+```js
+grilledCheese["meat"] = "bacon";
+grilledCheese.veggies = "tomato";
+```
+
+## Object Methods and Classes
+Objects have both data and behavior. Data comes in the form of properties that store information, such as the `length` of an array, or the `name` of a Person. But objects also can have properties that store behavior, or functions, such as the `slice()` method of an array. When a function is a property of an object, it is known as a *method* of that object.
+
+### Adding Methods to an Object
+Let's create a constructor function for some `User` objects.
+
+```js
+function User (name, email){
+  this.name = name;
+  this.email = email;
+}
+```
+
+How do we give our JavaScript user objects the ability to say hello?
+
+We already know how to create functions.  Now we need to attach a function to an object as a property.
+
+```js
+function User (name, email){
+  this.name = name;
+  this.email = email;
+  this.sayHello = function(){
+    console.log("Hello, my name is " + this.name);
+  }
+}
+```
+
+We've now added the `sayHello` method to our `User` constructor function. Because a method is just a function that is attached to an object via a property, `sayHello` is a method. We call `User` a function, and not a method, because it's a standalone function and not a property of any object.
+
+It's a semantic distinction. All methods are also functions. We just use "method" as a convention when we communicate that lets other people know that we mean a function that is part of an object.
+
+It's important to note that we use `this` twice in relation to the `sayHello` method. We use it once: `this.sayHello`, where `this` is referencing the object we'll create (as long as we invoke the function with the `new` keyword).  The `this` keyword is probably the most confusing concept in JS so for now let's just assume it works like Ruby's `self` and refers to the instance of the object we're refering to.
+
+Let's make a few users:
+```js
+carl = new User("Carl", "sparkles@aol.com");
+
+betsy = new User("Betsy", "betsy@flatironschool.com")
+
+george = new User("George", "george@me.com")
+```
+
+We can have the users greet us too:
+```js
+carl.sayHello();
+// prints "Hello, my name is Carl" to the console
+betsy.sayHello();
+// prints "Hello, my name is Betsy" to the console
+george.sayHello();
+// prints "Hello, my name is George" to the console
+```
+
+But there's a problem here. When we build the method directly into the constructor function like this, we're using a lot of space in memory. Every single time a `User` object is created and stored in memory, the `sayHello` function is created and stored in memory with it. What if you're Facebook and have 1.19 billion active users a month? If you were to instantiate all those users at once, you'd be recreating that function in memory 1.19 billion times! (incidentally this is how Ruby does it)
+
+### Add Method to Prototype
+Javascript objects have something called a Prototype.  For now, we won't get into an extremely detailed discussion of what Prototypes are, but we will use them as a place to keep our "instance" methods.  In Javascript, when you call a property, the interpreter will look on the instance of the object for a property, and when it finds none, it will look at the Object's Prototype for that property.  If we've attached a function as the property of that name it will call that function in a similar way that Ruby's method lookup chain works.
+
+```js
+function User (name, email){
+  this.name = name;
+  this.email = email;
+}
+
+User.prototype.sayHello = function(){
+  console.log("Hello, my name is "+ this.name);
+}
+
+var sarah = new User("sarah", "sarah@aol.com");
+
+sarah.sayHello();
+```
+
+For all intents and purposes, we've created a JS class following a common pattern that combines the use of constructor functions with extending behavior via the object's prototype. This works, but is incredibly verbose, and you always run the risk of forgetting to add methods to the prototype instead of directly to the constructor.
+
+It would be nice if there were an approach that allowed us to construct true *classes* while still taking advantage of the prototypal nature of JavaScript. 
+
+## ES6 Classes
+ECMAScript 6 introduces the concept of a `class` to JavaScript that
+provides a handy shortcut for organizing our objects.
+
+It's important to note that the `class` keyword doesn't actually turn
+JavaScript into a class-based object-oriented paradigm. It's just
+*syntactical sugar*, or a nice abstraction, over the prototypal
+object creation we've been doing.
+
+Let's convert our user to a class.
+```js
+class User {
+  constructor(name, email) {
+    this.name = name;
+    this.email = email;
+  }
+
+  sayHello() {
+    console.log("Hello, my name is "+ this.name);
+  }
+}
+
+var sarah = new User("Sarah", "sarah@aol.com");
+sarah.sayHello();
+```
+
+Instead of our `User` constructor function, we now have a `class User`. Within the body of the class, we can define a special function named `constructor` to be our constructor function. In the end, we still instantiate a `new User` the same way.
+
+We also define our `sayHello` function directly in the body of the class. However, unlike defining it in the constructor function, we can verify that `sayHello` is defined on the User prototype by examining `User.prototype`.
+
+### ES6 Class Inheritance With extends
+We can also easily inherit from ES6 classes without having to go through the trouble of assigning `prototype` via `Object.create`.
+
+Say we want to create a `Teacher` class for our school system that inherits from `User`. We can just define a new class and use the `extends` keyword.
+
+```js
+class Teacher extends User {
+    sayHello() {
+      super.sayHello()
+      console.log("I am a teacher");
+    }
+}
+
+var t = new Teacher("Tom", "tom@geocities.edu")
+t.sayHello()
+```
+
+Here, we've *extended*, or inherited from `User` when creating the new `Teacher` class. We also created an *override* to the `sayHello` method so that it would reflect our teacher object better.
+
+If you look at the line `super.sayHello()`, what we're doing there is calling the `sayHello` method of the *superclass*, or class our class inherits from. We wanted to preserve the behavior that was already there and then add to it, so rather than repeat the code, the `super` object gives us access to it programmatically.
+
++ [Mozilla Developer Network](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object)
++ [MDN: Classes](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Classes)
+
+
 
 
 
