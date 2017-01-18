@@ -598,9 +598,338 @@ From here, there are a lot of different ways we could configure our grid to resp
 - [Responive Web Design](https://en.wikipedia.org/wiki/Responsive_web_design)
 - [media queries](https://developer.mozilla.org/en-US/docs/Web/CSS/Media_Queries/Using_media_queries)
 
+## Gems selection
+We've been using gems like crazy at this point, from RSpec for testing to Rails for ... Rails-ing. Almost any general problem we need to solve has already been solved by someone else and released as a gem, allowing Ruby and Rails developers to reach incredible levels of productivity because we get to skip all that wheel-reinventing that Java programmers do all day.
+
+**//Flat-fact:** Reinventing wheels is actually what Java programmers do as a side hustle while they're waiting for compiles.
+
+Working in Ruby is such a joy not just because of the language itself, but also because of the people who freely give back to their fellow developers in the form of gems.
+
+The wealth of gems available for everyone to use in their projects is one of the things that sets Ruby apart from other languages, but it can also lead to *Gem Madness* - a condition where gem-crazed developers look for a gem to solve every problem without considering if a gem is really needed. Before we go looking for a gem to solve a problem, we should take a little time to decide if the problem we want to solve is really so big that we need a gem, or if we might be able to figure out (or Google) a way to just write the code ourselves.
+
+We can actually look for gems right on our command line. Try this out in your console:
+
+`gem search ^twitter$ -d`
+
+The `gem search` command can take a regular expression and can be very handy if you know the name (or part of the name) of a gem and want to find it quickly.
+
+[Ruby Toolbox](https://www.ruby-toolbox.com/) is a site that aggregates and categorizes gems, and ranks them according to stats like total downloads, releases, and active commits.
+
+Ruby Toolbox is *comprehensive*, which is a fancy way of saying "it's kind of a lot." Great if you're looking for something a little more obscure or really want to explore all the options, but sometimes we want a more curated list of which gems are popular in the community.
+
+Enter [Awesome Ruby](https://github.com/markets/awesome-ruby) and [Awesome Rails Gems](https://github.com/hothero/awesome-rails-gem), two open-source, community-maintained lists of the most popular gems for Ruby and Rails by category.
+
+### Qualities To Look For When Choosing A Gem
+Adding a gem to your project means you are taking on a *dependency* on outside code. If that gem has security problems, your project has security problems. If that gem has bugs, your project has bugs. If that gem (or one of the gems it depends on) doesn't keep up with newer versions of Rails, you might be stuck dealing with compatibility problems.
+
+So let's look at some strategies for selecting high quality, reliable, and safe gems for our project.
+
+This is one time when we want to care about popularity contests. The more popular a gem is, the more likely it is to be maintained, to keep up with security issues and new Rails versions.
+
+Beyond that, the more popular a gem is, the more likely you are to be able to find help if you run into problems. Popular gems have a lot of questions and answers on StackOverflow. People like to blog about popular gems so they can get those sweet, sweet clicks. All that adds up to you feeling confident that you can use that gem.
+
+Some ways to test the popularity are:
+
+1. Look it up on Ruby Toolbox. See how many downloads there are, how recently it's been committed to, and how many versions there are.
+2. See if it's on the Awesome Ruby or Awesome Rails lists mentioned above.
+3. Google the gem name and see what's there and, importantly, how recent it is. Try things like "gem name tutorials" and "gem name errors."
+4. Search StackOverflow for the gem and read what people say about it.
+5. Seach GitHub for usage of the gem. You'll need to read the gem's documentation or code and pick out a class or method to search for. For example, searching GitHub for `has_attached_file`, which is a primary method in the [Paperclip](https://github.com/thoughtbot/paperclip) gem, yields over 100K results, so it's obviously in wide use.
+
+We want our gems to be popular, but we also need them to be well-maintained. A well-maintained gem will be far less likely to cause you problems down the road.
+
+Some ways to determined if a gem is well-maintained are:
+
+1. Read the code. Is it put together in the way you'd expect? Can you understand it? Does it follow Ruby idioms and styles?
+2. Look for documentation. Is it well-documented? The README, at a bare minimum, should tell you how to get the gem up and running. Even better is a wiki with examples and sample code.
+3. Look at issues and pull requests. How long do they stay open? How active are the committers in addressing issues and PRs? Are there problems with a specific version that haven't been resolved? **Hint:** This could also be an opportunity to do some open source contributing!
+4. Look for tests. Is there a `/test` or `/spec` directory? How many tests are there? Is there a link to a continuous integration build result? Examining the tests is always a great way to learn how the gem works and how well it's put together.
+
+## Paperclip & ImageMagick
+In our blog application, we want to be able to show the author's headshot, so we're going to turn to the popular gem [Paperclip](https://github.com/thoughtbot/paperclip) to help us out. We could certainly write our own code to handle the image uploads, but as we'll see, Paperclip offers so much in terms of integrating with our ActiveRecord models, configuring storage options, and processing images after upload.
+
+To set up Paperclip, first we need to install the [ImageMagick](http://www.imagemagick.org/script/index.php) dependency. Paperclip uses ImageMagick to resize images after upload.
+
+On OS X, the preferred way to install ImageMagick is with [Homebrew](http://brew.sh/):
+
+`brew install imagemagick`
+
+Once we have ImageMagick, let's add Paperclip to our Gemfile:
+
+```ruby
+# Gemfile
+
+#...
+gem "paperclip"
+```
+
+Run `bundle install` to finish it up. If your Rails server is already running, remember to restart it so that it has access to the new gem.
+
+### Setting up the upload
+Now that we have Paperclip installed, let's jump right into adding avatar images to our `Author` model.
+
+First, we need to wire up our model to use Paperclip's `has_attached_file` method, and tell it what attribute name we want to use to access the attached file. In this case, we'll go with `avatar`.
+
+```ruby
+# models/author.rb
+
+class Author < ActiveRecord::Base
+  has_many :posts
+  has_attached_file :avatar
+  validates_attachment_content_type :avatar, content_type: /\Aimage\/.*\z/
+end
+ ```
+
+The `validates_attachment_content_type` validator is provided by Paperclip, and ensures that we get an image file when we expect one. This validator is required by default.
+
+Now we need to add the `avatar` field to our table via a migration. Paperclip provides a generator for us, so we can run:
+
+`rails g paperclip author avatar`
+
+This will generate a migration that looks something like:
+
+```ruby
+class AddAttachmentAvatarToAuthors < ActiveRecord::Migration
+  def self.up
+    change_table :authors do |t|
+      t.attachment :avatar
+    end
+  end
+
+  def self.down
+    remove_attachment :authors, :avatar
+  end
+end
+```
+
+**Note:** Paperclip provides two new methods for use in migrations: `add_attachment` and `remove_attachment`. Because these are custom attachment methods, Rails won't know how to automatically reverse an `add_attachment` migration, so you need `up` and `down` methods in the migration rather than simply using `change`.
+
+Run `rake db:migrate` to add the column.
+
+Now we need to set up the form view to give us a way to upload an avatar. Let's add that to the author form partial:
+
+```erb
+# views/authors/_form.html.erb
+
+<%= form_for @author, html: {multipart: true} do |f| %>
+  <%= f.label :avatar %>
+  <%= f.file_field :avatar %><br>
+  <%= f.label :name %>
+  <%= f.text_field :name %><br>
+  <%= f.label :bio %>
+  <%= f.text_area :bio %>
+  <%= f.submit %>
+<% end %>
+```
+
+Adding `html: { multipart: true }` as a parameter to `form_for` will generate a form that knows it will be submitting both text and binary data to the server. Then we use the `file_field` helper to generate the appropriate input and "choose" button to attach the file.
+
+Finally, we need to update our strong params in the controller to allow the new `avatar` field to be used for mass assignment:
+
+```ruby
+# authors_controller.rb
+
+# ...
+
+  private
+
+  def author_params
+    params.require(:author).permit(:bio, :name, :avatar)
+  end
+```
+
+Now if we run our server with `rails s` and browse to `/authors/new`, we should be able to create an author with an avatar.
+
+### Displaying the avatar
+We've attached the avatar, but now we need to display it to the user. Here's where Paperclip really starts to shine.
+
+Let's add the avatar to our author `show` view:
+
+```erb
+# views/authors/show.html.erb
+
+<h1><%= @author.name %></h1>
+<%= image_tag @author.avatar.url %>
+<p><%= @author.bio %></p>
+<p>Posts:</p>
+# ...
+```
+
+Simple as that! Paperclip provides the `url` method on our `avatar` so that no matter where it's stored, we can always use it in an `image_tag`. Now we're starting to see why using Paperclip is more efficient than doing it ourselves.
+
+Let's also add the avatar to the author `index` view, so we can see them in the list.
+
+```erb
+# views/authors/index.html.erb
+
+#...
+  <% @authors.each do |author| %>
+    <li>
+    <%= image_tag author.avatar.url %>
+    <%= link_to author.name, author_path(author) %><br>
+    <%= author.bio %>
+    </li>
+  <% end %>
+#...
+```
+
+### Setting Default Avatars
+In another stroke of awesomeness, Paperclip gives us an elegant way of dealing with missing avatars that doesn't involve us having to go into every view that displays an avatar and write a bunch of logic.
+
+Let's go back to our model and tell `has_attached_file` what the default is when no file has been attached:
+
+```ruby
+# author.rb
+
+class Author < ActiveRecord::Base
+  has_many :posts
+  has_attached_file :avatar, default_url: ':style/default.png'
+  validates_attachment_content_type :avatar, content_type: /\Aimage\/.*\z/
+end
+```
+
+You can store default images to match each style, e.g. in this case we would have a thumbnail default as well as an original default. You just need the supporting folders in your `app/assets/images` directory to match the style names ("original" is the default, unprocessed style).
+
+**Note:** We have to place an image named `default.png` in our `app/assets/images/thumb` and `app/assets/images/original` folders (already provided), that part doesn't automatically happen via Paperclip (Image)Magick.
+
+Reload `/authors`. No more broken images!
+
+### Generating Thumbnails With Paperclip
+Depending on how big an author's photo is, our `index` page might have wildly different-sized images in the list.
+
+We can easily constrain those with CSS, but what we really want to do is create a thumbnail to be used in the list so we aren't loading a bunch of giant images and slowing things down.
+
+```ruby
+# author.rb
+
+class Author < ActiveRecord::Base
+  has_many :posts
+  has_attached_file :avatar, default_url: ':style/default.png', styles: { thumb: "100x100>" }
+  validates_attachment_content_type :avatar, content_type: /\Aimage\/.*\z/
+end
+```
+
+And just like that, Paperclip will process the image and create a thumbnail style for us. To use it in the view, simply pass the symbol for the style to the `url` method:
+
+```erb
+# views/authors/index.html.erb
+
+#...
+  <% @authors.each do |author| %>
+    <li>
+    <% image_tag author.avatar.url(:thumb) %>
+    <%= link_to author.name, author_path(author) %><br>
+    <%= author.bio %>
+    </li>
+  <% end %>
+#...
+```
+
+If we go to `/authors/new` and create an author, then return to `/authors`, we'll see that the thumbnail has been generated for the new author, but now one or more of our existing author's thumbnails is a broken image.
+
+That's because we added images to those authors before we defined the `:thumb` style, so we need to tell Paperclip to update our existing images with the new style. Fortunately, Paperclip provides a rake task for exactly
+that.
+
+In the terminal, run `rake paperclip:refresh:missing_styles`, then refresh that `/authors` page and we should have thumbnails for everyone.
+
+## Kaminari
+We're going to be using the Kaminari gem to paginate our blog posts so that each page is more manageable.
+
+Kaminari is a Japanese word meaning "thunder", and the obvious link between that and this lesson is that the [Kaminari](https://github.com/amatsuda/kaminari) gem makes pagination a
+slam dunk.
+
+To get started, we'll add Kaminari to our Gemfile:
+
+`gem 'kaminari'`
+
+Then run `bundle install` to get it installed.
+
+Now let's run `rails g kaminari:config` to generate a configuration file for Kaminari. You can find the file in `config/initializers`. Let's look inside:
+
+```ruby
+# config\initializers\kaminari_config.rb
+
+Kaminari.configure do |config|
+  # config.default_per_page = 25
+  # config.max_per_page = nil
+  # config.window = 4
+  # config.outer_window = 0
+  # config.left = 0
+  # config.right = 0
+  # config.page_method_name = :page
+  # config.param_name = :page
+end
+```
+
+These are the defaults. The one we're interested in is `default_per_page`, which sets up how many results will be in each page. Let's change that to 10 (don't forget to un-comment it).
 
 
-------------------------
+```ruby
+# config\initializers\kaminari_config.rb
+
+Kaminari.configure do |config|
+  config.default_per_page = 10
+# ...
+```
+Restart your Rails server to make sure the new gem and initializer are picked up.
+
+Okay. Now let's get into the controller and set our query up to use Kaminari.
+
+```ruby
+# controllers\posts_controller.rb
+
+# ...
+  def index
+    @posts = Post.order(created_at: :desc).page(params[:page])
+  end
+# ...
+```
+
+Here we're getting posts by most recent and then using the `page` method of Kaminari to get a "page" (ten, in our case) of results. We're passing `params[:page]` to the `page` method so that we can control *which* page we get. And if `params[:page]` is `nil`, we'll get the first page, so it works by default.
+
+If you reload your `/posts` page, you should see that we're now limited to ten results, which is much more manageable!
+
+But how do we get to the next page of results?
+
+Kaminari provides us with plenty of helpers to output navigation controls. Let's start by adding regular pagination controls with the `paginate` helper:
+
+```erb
+# views\posts\index.html.erb
+
+<h1>Blog Posts!</h1>
+<%= paginate @posts %>
+
+<% @posts.each do |post| %>
+# ...
+```
+
+Reload the page and we now have the ability to go next, previous, first, last, or by page number.
+
+If we want to add a little more contextual information, we can use the `page_entries_info` helper, like this:
+
+```erb
+<h1>Blog Posts!</h1>
+<%= page_entries_info @posts %>
+<%= paginate @posts %>
+<% @posts.each do |post| %>
+# ...
+```
+
+And we can further customize our display, like, displaying only two page numbers on either side of the current page by passing in a value for `window`:
+
+```erb
+<h1>Blog Posts!</h1>
+<%= page_entries_info @posts %>
+<%= paginate @posts, window: 2 %>
+<% @posts.each do |post| %>
+# ...
+```
+
+More customization options for `paginate` can be found in the Kaminari [README](https://github.com/amatsuda/kaminari).
+
+## ActiveAdmin
+
+
 
 ## Workers
 ### Long-running tasks in Rails 
@@ -776,18 +1105,7 @@ If you watch the tab running Sidekiq, you'll see something like:
 
 That's how you know the job has started, and you can start refreshing the page.
 
-
-
-
-
-
-
-
-
-
-
-JUMPING TO...
-
+# Consuming APIs
 ## What's an API
 Let's say you're building an app that allows users to find the nearest coffee shop that is most likely to have an open table where they can sit and work on their novel.
 You need to be able to search for coffee shops and find out things like how many people have recently gone there.
