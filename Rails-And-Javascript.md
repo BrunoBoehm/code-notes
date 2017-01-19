@@ -1204,7 +1204,443 @@ The `v` parameter we passed in was a version parameter that the Foursquare API r
 Versioning is an important tool in API use. When an API changes, either because of new features or changed endpoints, not all API clients will be able to keep up with those changes immediately: any application using the API would run the risk of being broken until they updated their code.
 By versioning the API, you can guarantee that anyone using the current version can keep using it, and upgrade to the new version when they can. You leave the old endpoints in place (e.g. `https://api.foursquare.com/v1/venues`) and roll out a new one under a new version namespace (e.g. `https://api.foursquare.com/v2/venues`).
 
+## APIs and Faraday
+Let's use the [search](https://developer.foursquare.com/docs/venues/search) venue API to find a place to grab some coffee. Read through the documentation and use Postman to construct an API call to find coffee shops near you.
 
+We want to pass parameters of `near` and `query`, along with our `client_secret`, `client_id`, and `v` parameters.
 
+If we did it right, we should get a JSON response with an array of `venues`, each of which should conform to the [venue](https://developer.foursquare.com/docs/responses/venue) documentation.
+
+We're going to use [Faraday](https://github.com/lostisland/faraday) to access the Foursquare API from our Rails application. The basic app is set up, and you can code along as we add the feature to search for nearby coffee shops.
+
+Faraday is an HTTP client library that abstracts and standardizes some lower-level HTTP functions and makes it easy to build requests and get responses from an API.
+
+**Advanced:** In this lesson, and indeed in most cases, you'll use the built-in [Net::HTTP](http://ruby-doc.org/stdlib-2.3.0/libdoc/net/http/rdoc/Net/HTTP.html) library for HTTP functions. However, other libraries offer different advantages in categories like performance ([Patron](http://toland.github.io/patron/)) or multi-threading capability ([Typhoeus](https://github.com/typhoeus/typhoeus#readme)). Using a library like Faraday, that wraps and abstracts these lower-level libraries, allows you to maintain the same client code even if you change the underlying library later.
+
+Add Faraday to the `Gemfile` and run `bundle install`:
+
+```ruby
+gem 'faraday'
+```
+
+Our `searches/search.html.erb` is already set up to post a `:zipcode` param to our `searches_controller`, so let's get in there and add the Foursquare API call with Faraday:
+
+```ruby
+# searches_controller.rb
+  def foursquare
+    Faraday.get 'https://api.foursquare.com/v2/venues/search' do |req|
+      req.params['client_id'] = client_id
+      req.params['client_secret'] = client_secret
+      req.params['v'] = '20160201'
+      req.params['near'] = params[:zipcode]
+      req.params['query'] = 'coffee shop'
+    end
+    render 'search'
+  end
+```
+
+Let's break this down. We use `Faraday.get(url)` to make a `request` to the API endpoint.
+
+We know we need to set some `params` from our tests in Postman, and Faraday gives us an easy way to do this by passing a block to the `get` method and adding any parameters we need through the request object via a hash of `params`, very similar to the way we use params in Rails.
+
+To keep it simple, we're just going to render the `search` template again with the result.
+
+**Hint:** Remember to replace `client_id` and `client_secret` with your own ID and secret!
+
+Let's run our Rails server and navigate to `/search`, and make a search!
+
+Okay. Anticlimactic.
+
+![jess welp](http://i.giphy.com/5q2TF9Kz4g6iI.gif)
+
+### The Response Object
+
+When we're working with Faraday, any time we make a *request* (such as `Faraday.get`), the returned object represents a *response*. The two most interesting parts of the response object are the `body`, which is where the server response, such as error messages or JSON results will be, and the `status`, which is the [HTTP code](https://en.wikipedia.org/wiki/List_of_HTTP_status_codes) the server returns from the request.
+
+So let's make a change and get that response into a variable we can use:
+
+```ruby
+# searches_controller.rb
+  def foursquare
+    @resp = Faraday.get 'https://api.foursquare.com/v2/venues/search' do |req|
+      req.params['client_id'] = client_id
+      req.params['client_secret'] = client_secret
+      req.params['v'] = '20160201'
+      req.params['near'] = params[:zipcode]
+      req.params['query'] = 'coffee shop'
+    end
+    render 'search'
+  end
+```
+
+And in our template, let's take a look at that response `body`.
+
+```erb
+# views/searches/search.html.erb
+<h1>Search for Coffee Shops Near Me</h1>
+<%= form_tag '/search' do %>
+  <%= label_tag :zipcode %>
+  <%= text_field_tag :zipcode %>
+  <%= submit_tag "Search!" %>
+<% end %>
+<div>
+  <%= @resp.body%>
+</div>
+```
+
+Let's run another search and see what we get.
+
+Great! A lot of JSON! That's progress.
+
+### Parsing The Response
+
+We know we're getting back JSON, and we can see from the [documentation](https://developer.foursquare.com/docs/venues/search) that we can expect a response that includes an array of `venues`.
+
+Looking at this response `body`, we see something like this:
+
+`{"meta":{"code":200,"requestId":"56c0be42498e71008fcc8cc1"},"response":{"venues":[{"`
+
+Okay, we see the `response` node, and we see it has a `venues` node, so that looks right. We also see a `meta` node that gives us some information that's, well, metadata on our request. We'll look at this more later.
+
+So lets get those `venues` out of this JSON object and into a thing we can use in Ruby. We'll do that with the built-in `JSON.parse` method:
+
+```ruby
+# searches_controller.rb
+# ...
+    @resp = Faraday.get 'https://api.foursquare.com/v2/venues/search' do |req|
+      req.params['client_id'] = client_id
+      req.params['client_secret'] = client_secret
+      req.params['v'] = '20160201'
+      req.params['near'] = params[:zipcode]
+      req.params['query'] = 'coffee shop'
+    end
+
+    body_hash = JSON.parse(@resp.body)
+    @venues = body_hash["response"]["venues"]
+    render 'search'
+```
+
+So we parse the `body` of the response into a variable called `body_hash`, which is now a Ruby `Hash`. We can then access the `venues` under the `response` key.
+
+In our `search.html.erb`, we can change `<%= @resp.body %>` to `<%= @venues %>` and re-run our search, and we can see the venues are now represented as an `Array` of `Hash`es that we can further parse.
+
+We'll look at the documentation again and decide what fields we want, and come up with something like this:
+
+```erb
+# search.html.erb
+# ...
+<div>
+  <% if @venues %>
+    <ul>
+    <% @venues.each do |venue| %>
+      <li>
+        <%= venue["name"] %><br>
+        <%= venue["location"]["address"] %><br>
+        Checkins: <%= venue["stats"]["checkinsCount"] %>
+      </li>
+    <% end %>
+    </ul>
+  <% end %>
+</div>
+```
+
+We're now successfully using the Foursquare API to get coffee shops near the user!
+
+![schmidt pizza](http://i.giphy.com/OJ8hVSLYbpQ08.gif)
+
+### Handling Errors
+
+Okay, let's search again, but this time don't enter a zipcode. Oof. That's ugly.
+
+Now we could add some validation here and make sure that there's a zipcode, but we can't necessarily prevent every possible error with the API, because we aren't in control of the API.
+
+So we need to understand how the API reports errors, and then handle them.
+
+We said before that the two interesting pieces of the `response` object are the `body`, where all the data is, and the `status`. The status contains the HTTP code.
+
+In most cases, a good API call will result in a status of `200`, which is the HTTP equivalent of the thumbs-up emoji.
+
+If we make this request in Postman without a value in the `near` parameter, we'll get something like this:
+
+```javascript
+{
+  "meta": {
+    "code": 400,
+    "errorType": "param_error",
+    "errorDetail": "Must provide parameter ll",
+    "requestId": "56c0cccd498e39675a357932"
+  },
+  "response": {}
+}
+```
+
+And there will be a message that says `Status 400 bad request`. A status code of 400 is the HTTP equivalent of this:
+
+![New Girl Facepalm](http://i.giphy.com/A1UF1VKksVOIo.gif)
+
+So we have a `status` of 400, a `meta` node with some error information, and a `response` node that's empty, which makes sense, because we haven't made a good request.
+
+Using this information, we can add some error handling to our application.
+
+```ruby
+# searches_controller.rb
+  @resp = Faraday.get 'https://api.foursquare.com/v2/venues/search' do |req|
+    req.params['client_id'] = client_id
+    req.params['client_secret'] = client_secret
+    req.params['v'] = '20160201'
+    req.params['near'] = params[:zipcode]
+    req.params['query'] = 'coffee shop'
+  end
+
+  body = JSON.parse(@resp.body)
+  if @resp.success?
+    @venues = body["response"]["venues"]
+  else
+    @error = body["meta"]["errorDetail"]
+  end
+  render 'search'
+```
+
+**Note:** We could have checked for `@resp.status == 200` as well, but Faraday provides us with a nice abstraction in `.success?`, which abstracts the low-level HTTP details into something readable and *intention-revealing*, which is a hallmark of good code.
+
+And in our view, let's handle the possibilities:
+
+```erb
+# search.html.erb
+# ...
+<div>
+  <% if @error %>
+    <p><%= @error %></p>
+  <% elsif @venues %>
+    <ul>
+    <% @venues.each do |venue| %>
+      <li>
+        <%= venue["name"] %><br>
+        <%= venue["location"]["address"] %><br>
+        Checkins: <%= venue["stats"]["checkinsCount"] %>
+      </li>
+    <% end %>
+    </ul>
+  <% end %>
+</div>
+```
+
+Now we're using the API's error response to display what went wrong. We might decide that the default error message is not as friendly as we'd like, and choose to display a friendlier message to our users. That's one of many considerations when using an API - how much to alter the data you receive, but it's also one of the best things about using an API, because you get to make those choices.
+
+**Top-tip:** Remember, not all APIs will structure their responses the same way. Always read the documentation!
+
+### Handling Timeouts
+
+One thing you must always be aware of when accessing resources across the internet on servers out of your control is the possibility of a request timeout.
+
+Request timeouts can happen for any number of reasons, from network outages to code on the API server that just takes too long to execute.
+
+To handle the timeout error, we just need to `rescue Faraday::TimeoutError` in our controller.
+
+Luckily, we can also force a timeout by setting the request's `timeout` value. Normally you'd set this to a higher number than the default if the resource you were requesting was consistently too slow, however, if we set it to `0`, we can make it timeout to test our error handling:
+
+```ruby
+# searches_controller.rb
+# ...
+  begin
+    @resp = Faraday.get 'https://api.foursquare.com/v2/venues/search' do |req|
+        req.params['client_id'] = client_id
+        req.params['client_secret'] = client_secret
+        req.params['v'] = '20160201'
+        req.params['near'] = params[:zipcode]
+        req.params['query'] = 'coffee shop'
+        req.options.timeout = 0
+      end
+      body = JSON.parse(@resp.body)
+      if @resp.success?
+        @venues = body["response"]["venues"]
+      else
+        @error = body["meta"]["errorDetail"]
+      end
+
+    rescue Faraday::TimeoutError
+      @error = "There was a timeout. Please try again."
+    end
+    render 'search'
+```
+
+If we run our search again, we should see our timeout error.
+
+Now let's delete that `req.options.timeout = 0` line, because we would never want to actually force a timeout on every request.  Now we have a Foursquare API search that successfully finds coffee shops near the user, handles response errors, and guards against timeouts!
+
+## Using OAuth With APIs
+We're going to expand on our Coffee Shop example to use OAuth with the Foursquare API to perform actions on behalf of an individual user.
+
+Until now, we've been authenticating to APIs at the *application* level using a Client ID/Secret pair with each request.
+
+As we learned, this level of application authentication is important in that it allows the API provider to ensure good behavior by any client application.
+
+Application-level authentication like this gives us access to application-level functions, for instance, venue search. This is an application-level function because you don't need to be any particular user to search for a coffee shop. In fact, if we look at the [venue search](https://developer.foursquare.com/docs/venues/search) API documentation, we see an entry: **Requires Acting User: No** at the top.
+
+Compare that to the documentation for [list friends](https://developer.foursquare.com/docs/users/friends), and we see that this function does require an acting user, which makes sense, because the application doesn't have friends, an individual user does.
+
+So, if we want to show our user what their friends are doing, we need a way of authenticating the user to Foursquare through our application.
+
+It's not enough for a user to be logged in to Foursquare and use our app, because Foursquare needs to know that we are acting on *behalf* of a user and that the user has *allowed* that action.
+
+We could write some code to log in on behalf of the user, but that would require us to ask the user for their Foursquare login credentials. Think about that as if you're the user. Are you going to give some random website your login and password for Foursquare? The very thought should make you very suspicious of our motives.
+
+Beyond the security issues, there's the problem of keeping things up to date. If we ask the user to log in to Foursquare on every request, that's a horrible experience.
+
+However, if we store the user's Foursquare login info, we have whole other problems.
+
+The first is that we'd have to store them unencrypted, in plain text, because Fourquare expects a person to log in with their unencrypted credentials. So we have another security problem. Now we have a database full of unencrypted Foursquare credentials waiting for anyone to get in there and grab them all.
+
+Beyond the security issue is a logistical one. If the user changes her password on Foursquare, we'll never know about it, and our app will break. Now she has to update her Foursquare credentials in *two* places, which is cumbersome to say the least.
+
+Okay, how do we authenticate a user without them entering their username and password into our application? [OAuth](https://en.wikipedia.org/wiki/OAuth).
+
+OAuth provides a way for one application to authenticate to another on behalf of a user by means of a revokable, expirable *token*. If our application has a Foursquare token for the user, and someone gets access to our database of tokens, all of them can be revoked and a hacker never gets access to individual user credentials.
+
+An OAuth token also provides a standard way for our application to tell Foursquare "hey, this user says we can do things for her", because part of implementing OAuth requires the user to take action on the provider (Foursquare, in this case), explicitly authorizing our application.
+
+### Authentication flow
+OAuth authentication workflow involved three steps at a high level.
+
+1. Request access from the provider site (often via redirect to a
+   special form)
+2. Redirect back to our site with a code
+3. Request a token from the provider using the code
+
+Take a look at the [Access token section of the Foursquare API Documentation](https://developer.foursquare.com/overview/auth), specifically the second subsection, under **Code (preferred)**. It describes how to do those three steps with Foursquare.
+
+#### Checking Authentication
+The first thing we want to do is figure out if a user has already authenticated to Foursquare in this session.
+
+Ultimately, users will be considered "logged in" if they have an access token stored in their session. So, let's create a private method `#logged_in?` in your `ApplicationController` that will return false if `session[:token]` is nil and true otherwise:
+
+```ruby
+# application_controller.rb
+
+private
+  def logged_in?
+    !!session[:token]
+  end
+```
+
+#### Redirect Users To Request Foursquare Access
+
+The first step in the OAuth flow is to direct the user to Foursquare to request access if we haven't already.
+
+According to the [docs](https://developer.foursquare.com/overview/auth), that URL looks like this:
+
+```
+https://foursquare.com/oauth2/authenticate
+    ?client_id=YOUR_CLIENT_ID
+    &response_type=code
+    &redirect_uri=YOUR_REGISTERED_REDIRECT_URI
+```
+
+Part of our URL includes passing a `redirect_uri` parameter, so we'll need to set that up. Update your [Foursquare app](https://foursquare.com/developers/apps) and add a Redirect URI. Let's set it to `http://localhost:3000/auth` and save the app.
+
+Because we're going to be using our client ID/secret a lot, instead of always typing it in, let's use a `.env` [file](https://github.com/bkeepers/dotenv) to hold our `FOURSQUARE_CLIENT_ID` and `FOURSQUARE_SECRET` values. Once that's set up, we'll be able to access these values as `ENV['FOURSQUARE_CLIENT_ID']` and `ENV['FOURSQUARE_SECRET']`, which is much easier to keep track of. Follow the instructions to set up Dotenv and add your app's client ID and secret. Don't forget to restart your server after you change any values in `.env`!
+
+**Top-tip:** Dotenv is a great way to keep configuration variables for development, but always remember to add `.env` to your `.gitignore` so you don't share your secrets with everyone else!
+
+Okay, that should handle everything we need to make this first request, so now we need to set up the redirect.
+
+Write another private method `#authenticate_user` that will redirect the user to `https://foursquare.com/oauth2/authenticate` _if_ the user is not already logged in. Then we'll set up a `before_action` to check authentication.
+
+```ruby
+# application_controller.rb
+before_action :authenticate_user
+
+private
+
+  def authenticate_user
+    client_id = ENV['FOURSQUARE_CLIENT_ID']
+    redirect_uri = CGI.escape("http://localhost:3000/auth")
+    foursquare_url = "https://foursquare.com/oauth2/authenticate?client_id=#{client_id}&response_type=code&redirect_uri=#{redirect_uri}"
+    redirect_to foursquare_url unless logged_in?
+  end
+
+  def logged_in?
+    !!session[:token]
+  end
+```
+
+Once you've implemented `#authenticate_user`, set the authentication as a `before_action` in your `ApplicationController`. In your `SessionsController`, skip the `before_action` with `skip_before_action :authenticate_user, only: :create`. Now, whenever users do not have an access token stored in their session, they will be redirected to the Foursquare authorization URL.
+
+Let's try it out. Start your Rails server and try to hit the `/search` page. You should get redirected to Foursquare! Hit the "Allow" button and let's see what happens.
+
+Error. Okay. That's good. That means it's working so far. Now we need to implement step two.
+
+#### Foursquare Redirects Back To Our Site With A Code
+
+When you registered your application, you set your redirect URL to `http://localhost:3000/auth`. This is where Foursquare is sending users after the login process. Now we need to handle that request.
+
+In your `routes.rb` file, add a route for `get '/auth', to: 'sessions#create'`. This will route that redirect to our `SessionsController` and a `create` action, which is where we'll get the token. So now let's implement that.
+
+#### Request A Token From Foursquare With The Code
+
+Back to our handy [documentation](https://developer.foursquare.com/overview/auth)! Foursquare redirects users with a code that can be accessed through `params` and exchanged for an access token with a second GET request. We'll need to provide our ID, secret, and the code we just got.
+
+We're going to use [Faraday](https://github.com/lostisland/faraday) to send this request in our controller action. If all goes well, according to the docs we can expect a JSON response with an `access_token`, so we'll parse that and put it in our `session[:token]`.
+
+```ruby
+# sessions_controller.rb
+skip_before_action :authenticate_user
+
+def create
+  resp = Faraday.get("https://foursquare.com/oauth2/access_token") do |req|
+    req.params['client_id'] = ENV['FOURSQUARE_CLIENT_ID']
+    req.params['client_secret'] = ENV['FOURSQUARE_SECRET']
+    req.params['grant_type'] = 'authorization_code'
+    req.params['redirect_uri'] = "http://localhost:3000/auth"
+    req.params['code'] = params[:code]
+  end
+
+  body = JSON.parse(resp.body)
+  session[:token] = body["access_token"]
+  redirect_to root_path
+end
+```
+
+**Top-tip:** Make sure to skip the `authenticate_user` `before_action` when you're creating a session, otherwise you'll end up in an infinite loop of trying to figure out who the user is, which is a very existential bug.
+
+#### Use the access token to access the API
+
+Now that users have their API tokens, they can make calls to all of the API endpoints as long as those tokens are included in the request. Back in our [Foursquare auth docs](https://developer.foursquare.com/overview/auth), under the **Requests** section, we see that all we have to do now is add a `oauth_token` parameter to any request with the user's token.
+
+Let's look again at the [friends](https://developer.foursquare.com/docs/users/friends) documentation and add a friends list to our application. First, let's add a route to `/friends`:
+
+```ruby
+# routes.rb
+# ...
+get '/friends', to: 'searches#friends'
+```
+
+And then handle that in our controller:
+
+```ruby
+# searches_controller.rb
+
+def friends
+  resp = Faraday.get("https://api.foursquare.com/v2/users/self/friends") do |req|
+    req.params['oauth_token'] = session[:token]
+    # don't forget that pesky v param for versioning
+    req.params['v'] = '20160201'
+  end
+  @friends = JSON.parse(resp.body)["response"]["friends"]["items"]
+end
+```
+
+**Top-tip:** Like many API providers, Foursquare gives you a way to try API calls right from the documentation. Try it with the [friends list](https://developer.foursquare.com/docs/explore#req=users/self/friends) to examine the response JSON.
+
+Finally, let's set up our view:
+
+```erb
+# views/searches/friends.html.erb
+<ul>
+  <% @friends.each do |friend| %>
+    <li><%= "#{friend['firstName']} #{friend['lastName']}" %></li>
+  <% end %>
+</ul>
+```
 
 
