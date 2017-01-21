@@ -2286,8 +2286,605 @@ If we reload and go to our first post, then click `Next`, we get that smooth AJA
 
 At least until we get to the last post.
 
+## Using `.to_json` and `respond_to``
+Last time out we created a `PostSerializer` and used it to serialize a `Post` to JSON. It worked great, but doing all that string concatenation and keeping track of the different quotes was kind of a nightmare. Imagine having to write serializers by hand for objects with more than four fields! This is something people do every day in Rails, so there has to be a better way, right?
 
+Of course there is. Rails provides the `to_json` method which will take our object and, well, convert it to JSON. Let's see it in action. In our controller, let's swap our call to the `PostSerializer` for a `to_json`.
 
+```ruby
+# posts_controller.rb
+# ...
+  def post_data
+    post = Post.find(params[:id])
+    render json: post.to_json
+  end
+```
+
+Okay, well, surely it can't be that simple. Let's load up our Rails server and browse to `/posts`. Click one of the "More" buttons, and, just like that, it updates the post body. We didn't have to change a thing. Think of it as a testament to how great a job we did writing our own serializer.
+
+Now if we click on the first post and use our `Next...` link, that should mostly work too.
+
+I say mostly, because it's not updating the author name. That's something we added in to our serializer, but by default, `to_json` only serializes the main object, not any associations. How can we change that?
+
+You can tell `to_json` what associated objects to include, using the `include` option.
+```ruby
+# posts_controller.rb
+# ...
+  def post_data
+    post = Post.find(params[:id])
+    render json: post.to_json(include: :author)
+  end
+```
+
+Now if we reload that post show page and click `Next`, the author should update as well.
+
+If we browse to `/posts/id/post_data`, we can see the raw JSON of our object. It should look something like this:
+
+```javascript
+{
+  id: 1,
+  title: "A Blog Post By Stephen King",
+  description: "This is a blog post by Stephen King. It will probably be a movie soon.",
+  created_at: "2016-02-22T00:29:21.022Z",
+  updated_at: "2016-02-22T00:29:21.022Z",
+  author_id: 1,
+    author: {
+      id: 1,
+      name: "Stephen King",
+      hometown: null,
+      created_at: "2016-02-22T00:29:20.999Z",
+      updated_at: "2016-02-22T00:29:20.999Z"
+    }
+}
+```
+
+It's great that `to_json` gives us all this, but we don't really need all of it.
+
+A good API endpoint should return *only* the data that is needed, nothing more. So how do we get rid of that stuff?
+
+It turns out `to_json` gives us ways to exclude data as well, using the `only` option, similar to how we'd specify certain routes for a resource.
+
+```ruby
+# posts_controller.rb
+# ...
+  def post_data
+    post = Post.find(params[:id])
+    #render json: PostSerializer.serialize(post)
+    render json: post.to_json(only: [:title, :description, :id],
+                              include: [ author: { only: [:name]}])
+  end
+```
+
+We can use `only` both on the main object and the included objects.
+
+**Top-tip:** Notice that we have to pass `author:` inside an array for `include` now that we are specifying additional options.
+
+Reloading the `/posts/id/post_data` page now gives us something more like this:
+```javascript
+{
+  id: 1,
+  title: "A Blog Post By Stephen King",
+  description: "This is a blog post by Stephen King. It will probably be a movie soon.",
+  author: {
+    name: "Stephen King"
+  }
+}
+```
+
+Which is exactly the data we need to get the job done.
+
+### Responding To Requests With Different Formats
+If we think about what we've been doing when we load `/posts/id/post_data`, we're really just requesting a `Post` resource, same as if we were on the Post `show` page. In fact, that's exactly what we're doing in AJAX on the Post `show` page, requesting the data for that page and replacing the values.
+
+Given what we know about REST, and about DRY (don't repeat yourself), it seems like the `post_data` route and action are redundant. If we just want to request the post resource for `show`, we should be able to do that in one place.
+
+In the desktop application world, we identify formats by *file extension*, so we know that `file.txt` is a plain text file, and `file.gif` is an awesome animated gif file.
+
+Rails provides us with a similar way to do this, [using `respond_to`](http://apidock.com/rails/ActionController/MimeResponds/InstanceMethods/respond_to).
+
+If we go into our `show` action and add a `respond_to` block, we can specify what to render depending on if the request is looking for HTML or JSON.
+
+```ruby
+# posts_controller
+# ...
+  def show
+    @post = Post.find(params[:id])
+    respond_to do |format|
+      format.html { render :show }
+      format.json { render json: @post.to_json(only: [:title, :description, :id],
+                              include: [author: { only: [:name]}]) }
+    end
+  end
+```
+
+Now if we browse to `/posts/id`, we get the HTML page as expected. HTML is the default format for any request. We could also browse to `/posts/id.html`, and get the same thing.
+
+But if we browse to `/posts/id.json`, we now get our serialized post in JSON form!
+
+Now let's update the code in our `show.html.erb` to use the `show` route.
+
+```erb
+# posts/show.html.erb
+# ...
+$(function () {
+  $(".js-next").on("click", function() {
+    var nextId = parseInt($(".js-next").attr("data-id")) + 1;
+    $.get("/posts/" + nextId + ".json", function(data) {
+      $(".authorName").text(data["author"]["name"]);
+      $(".postTitle").text(data["title"]);
+      $(".postBody").text(data["description"]);
+      // re-set the id to current on the link
+      $(".js-next").attr("data-id", data["id"]);
+    });
+  });
+});
+```
+
+Instead of doing a `$.get()` to `/posts/id/post_data`, we are now getting `/posts/id.json`. If we reload the page and click out `Next` button, everything still works and we don't have to change any of the code to extract the JSON values!
+
+## Using Active Model Serializer
+In the last iteration of our blog application, we saw that using `to_json` was an easy way to serialize objects to JSON without having to create our own serializer. However, if we look at our current controller code:
+
+```ruby
+# posts_controller.rb
+# ...
+  def show
+    @post = Post.find(params[:id])
+    respond_to do |format|
+      format.html { render :show }
+      format.json { render json: @post.to_json(only: [:title, :description, :id],
+                              include: [author: { only: [:name]}]) }
+    end
+  end
+```
+
+It's clear that even a little bit of customizing the output of `to_json` can get ugly real quick. Imagine if the post had `comments` and comments had `users` and pretty soon we're getting real deep in the weeds trying to keep track of all the `include`s and `only`s in a single line of `to_json`.
+
+Or imagine using `to_json` to render something like this venue response from the Foursquare API:
+
+```javascript
+{
+  meta: {
+    code: 200
+    requestId: "56cb5db4498e20e3892dd035"
+  }
+  notifications: [
+    {
+      type: "notificationTray"
+      item: {
+        unreadCount: 41
+      }
+    }
+  ]
+  response: {
+    venue: {
+      id: "40a55d80f964a52020f31ee3"
+      name: "Clinton St. Baking Co. & Restaurant"
+      contact: {
+        phone: "6466026263"
+        formattedPhone: "(646) 602-6263"
+      }
+      location: {
+        address: "4 Clinton St"
+        crossStreet: "at E Houston St"
+        lat: 40.72107924768216
+        lng: -73.98394256830215
+        postalCode: "10002"
+        cc: "US"
+        city: "New York"
+        state: "NY"
+        country: "United States"
+        formattedAddress: [
+          "4 Clinton St (at E Houston St)"
+          "New York, NY 10002"
+        ]
+      }
+    canonicalUrl: "https://foursquare.com/v/clinton-st-baking-co--restaurant/40a55d80f964a52020f31ee3"
+    categories: [
+    {
+      id: "4bf58dd8d48988d16a941735"
+      name: "Bakery"
+      pluralName: "Bakeries"
+      shortName: "Bakery"
+      icon: {
+        prefix: "https://ss3.4sqi.net/img/categories_v2/food/bakery_"
+        suffix: ".png"
+      }
+      primary: true
+    }
+    {
+      id: "4bf58dd8d48988d143941735"
+      name: "Breakfast Spot"
+      pluralName: "Breakfast Spots"
+      shortName: "Breakfast"
+      icon: {
+        prefix: "https://ss3.4sqi.net/img/categories_v2/food/breakfast_"
+        suffix: ".png"
+      }
+    }
+    {
+      id: "4bf58dd8d48988d16d941735"
+      name: "Café"
+      pluralName: "Cafés"
+      shortName: "Café"
+      icon: {
+        prefix: "https://ss3.4sqi.net/img/categories_v2/food/cafe_"
+        suffix: ".png"
+      }
+    }
+  ]
+// ...
+// this is just the first 5%. There's so much more.
+```
+
+Forget "ugly" or "cumbersome", it might be nearly impossible to keep track of all that inside a single `to_json` call, and it would certainly be frustrating to try to go in and change any of it later. And let's face it. With all that data to track, we're extremely likely to mistype something and introduce bugs.
+
+### ActiveModel::Serializer
+
+ActiveModel::Serializer, or AMS, provides a convention-based approach to serializing resources in a Rails-y way.
+
+What does that mean? At a basic level, it means that if we have a `Post` model, then we can also have a `PostSerializer` serializer, and by default, Rails will use our serializer if we simply call `render json: post` in a controller.
+
+How is that different than when we created our own `PostSerializer` by hand and used it in the controller? Firstly, we had to explicitly call our `PostSerializer.serialize` method to do the work, whereas the convention-based approach of AMS makes it an implicit call.
+
+But second, and more importantly, AMS doesn't require us to do the tedious work of building out JSON strings by hand. We'll see it in action shortly.
+
+You may have seen [JBuilder](https://github.com/rails/jbuilder) files pop up when scaffolding things in your Rails 4 applications.
+
+JBuilder is another serialization tool that was included by default in Rails 4. JBuilder takes the approach that the JSON serialization is more of a view function than a controller function, and as such, you could create something like:
+
+```erb
+# app/views/posts/show.json.jbuilder
+
+json.title @post.title
+json.description @post.description
+json.author do
+  json.name @post.author.name
+end
+```
+
+This is a nice and flexible way to do things, but as you can see, also somewhat repetitive just for a few attributes.
+
+You can split hairs as to whether or not rendering JSON is a view-level template responsibility or a controller-level responsibility - there's valid arguments either way (as there so often is in programming).
+
+In Rails 5, however, the goal was to allow developers to create lean, efficient, API-only Rails applications. M and C without the V. With the popularity of mobile apps and robust front-end frameworks like Ember.js and Angular.js, there was a need to strip Rails down to just what is needed to serve as an API, and ActiveModel::Serializer, not being tied to the View layer, is how the Rails team chose to move forward.
+
+We have our blog application from the previous lesson. Let's refactor it to use AMS.
+
+First we need to add the gem, as it's not built-in to Rails 4 yet.
+```ruby
+# Gemfile
+#...
+gem 'active_model_serializers'
+```
+
+Run `bundle install` to activate the gem. Now we need to generate an `ActiveModel::Serializer` for our `Post`. Thankfully, the gem provides a generator for that. Drop into your console and run:
+
+`rails g serializer post`
+
+**Note:** If you are using your old code, make sure to delete the existing `post_serializer.rb` from the `app/serializers` directory before running the generator.
+
+If we look at the generated `post_serializer.rb`, it should look something like this:
+
+```ruby
+class PostSerializer < ActiveModel::Serializer
+  attributes :id
+end
+```
+
+We want to get some more information out of it, so let's add a couple attributes.
+
+```ruby
+class PostSerializer < ActiveModel::Serializer
+  attributes :id, :title, :description
+end
+```
+
+To make use of our new serializer, we need to get rid of the `to_json` stuff in our controller:
+
+```ruby
+# posts_controller.rb
+ def show
+    @post = Post.find(params[:id])
+    respond_to do |format|
+      format.html { render :show }
+      format.json { render json: @post}
+    end
+  end
+```
+
+Remember that we said calling `render json: @post` would implicitly use the new ActiveModel::Serializer to render the post to JSON? Let's see it in action. Restart your Rails server and browse to `/posts/1.json` and look at the results. It should look like this:
+
+```javascript
+{
+  id: 1,
+  title: "A Blog Post By Stephen King",
+  description: "This is a blog post by Stephen King. It will probably be a movie soon."
+}
+```
+
+Worked like a charm! Nothing we didn't want, and our controller is back to a clear, non-messy state.
+
+### Rendering An Author
+
+What's missing that we had before? The author name. So how do we do that?
+
+Because AMS is modeled after the way Rails handles models and controllers, rather than build serialization of the author into the post, as we have in the past, we need to create a new `AuthorSerializer`.
+
+`rails g serializer author`
+
+And add the author name to the list of attributes:
+
+```ruby
+class AuthorSerializer < ActiveModel::Serializer
+  attributes :id, :name
+end
+```
+
+Now to test this out, let's modify our `authors_controller#show` action to handle a JSON request:
+
+```ruby
+class AuthorsController < ApplicationController
+  def show
+    @author = Author.find(params[:id])
+    respond_to do |f|
+      f.html { render :show }
+      f.json { render json: @author }
+    end
+  end
+end
+```
+
+And load up `/authors/1.json`. We should see something that looks like this:
+
+```javascript
+{
+  id: 1,
+  name: "Stephen King"
+}
+```
+
+But how do we add the author name to our post JSON?
+
+Again, we lean on those Rails conventions. If we add a `has_one :author` to our `PostSerializer`:
+
+```ruby
+class PostSerializer < ActiveModel::Serializer
+  attributes :id, :title, :description
+  belongs_to :author
+end
+```
+
+Reload `/posts/1.json`, and we will now see our author information.
+
+```javascript
+{
+  id: 1,
+  title: "A Blog Post By Stephen King",
+  description: "This is a blog post by Stephen King. It will probably be a movie soon.",
+  author: {
+    id: 1,
+    name: "Stephen King"
+  }
+}
+```
+
+And now if we reload our first post show page and click through our `Next` button we can see that everything works exactly the same as before!
+
+Now what if next we were building out our Author show page and wanted to render a list of an author's posts along with the author's information?
+
+Well, it's as simple as adding a `has_many :posts` to the `AuthorSerializer`!
+
+```ruby
+class AuthorSerializer < ActiveModel::Serializer
+  attributes :id, :name
+  has_many :posts
+end
+```
+
+### Rendering With Explicit Serializers
+ Let's suppose that when we display a Posts Author, we don't need all the information being rendered from the AuthorSerializer. Since our post JSON really just needs an author's name, we might want to do a simpler serialization of the author for those purposes.
+
+Let's make a new `PostAuthorSerializer`:
+`rails g serializer post_author`
+
+And let's add the bare minimum of what we need for the author to be embedded in a post:
+
+```ruby
+class PostAuthorSerializer < ActiveModel::Serializer
+  attributes :name
+end
+```
+
+But how do we get the `PostSerializer` to use this instead of the default? We have to *explicitly* give it a serializer to use rather than relying on the convention:
+
+```ruby
+class PostSerializer < ActiveModel::Serializer
+  attributes :id, :title, :description
+  belongs_to :author, serializer: PostAuthorSerializer
+end
+```
+
+Now we're telling AMS to render `:author` with `PostAuthorSerializer` instead of the default.
+
+So if we reload `/authors/1.json` we should see the author with their posts, and if we reload `/posts/1.json` we should see our post with just the simple author information.
+
+In this way, AMS is a powerful way to compose an API with explicit, easy-to-maintain serializers, rather than try to keep track of what things you do and don't want to render at the controller or view level.
+
+## Receiving API POSTs
+So far, we've been focused on enhancing how we read our blog, but what about creating blog posts? How can we apply what we've been doing with JSON and AJAX to make creating a post a better experience?
+
+In our `posts/new.html.erb`, we already have a form. If we click the button, it will submit as normal and the code in the controller's `create` action will do whatever it's set up to do.
+
+What we want to do is set it up so that we use this form, but use jQuery and AJAX to submit it, so that we can handle a JSON response and display the newly created blog post without redirecting to the post `show` page.
+
+Our first order of business is to prevent the default form submit action and do our own thing. To do this, we need to hook up an event handler to the form's `submit` event, and then block the form from doing an HTML submit as it normally would.
+
+```erb
+# posts/new.html.erb
+<%= form_for(@post) do |f| %>
+  <div class="field">
+    <%= f.label :title %><br>
+    <%= f.text_field :title %>
+  </div>
+  <div class="field">
+    <%= f.label :description %><br>
+    <%= f.text_field :description %>
+  </div>
+  <div class="actions">
+    <%= f.submit %>
+  </div>
+<% end %>
+
+<script type="text/javascript" charset="utf-8">
+  $(function () {
+    $('form').submit(function(event) {
+      //prevent form from submitting the default way
+      event.preventDefault();
+      alert("we r hack3rz");
+    });
+  });
+</script>
+```
+
+We keep our regular `form_for` and just add an event listener for `$('form').submit()` to our document `ready()`.
+
+Next, we stop the form from actually submitting by calling `event.preventDefault();`. This is super important, otherwise all our hard work will be undone.
+
+Finally, we'll just toss up an `alert` to make sure we're on the right path.
+
+If we reload `/posts/new` now, and submit the form, we should get our `alert`, but no page refresh and no new post created. We've successfully hijacked the form `submit`! This is as close as we may ever come to being l33t.
+
+We need to get the form values and POST them to `/posts`, which is the route for creating a new post.
+
+```erb
+# posts/new.html.erb
+# ...
+<script type="text/javascript" charset="utf-8">
+  $(function () {
+    $('form').submit(function(event) {
+      //prevent form from submitting the default way
+      event.preventDefault();
+
+      var values = $(this).serialize();
+
+      var posting = $.post('/posts', values);
+
+      posting.done(function(data) {
+        // TODO: handle response
+      });
+    });
+  });
+</script>
+```
+
+In here, we're making use of the very handy [jQuery `serialize()` method](http://api.jquery.com/serialize/), which takes our form data and serializes it for us. Sure, we could individually select each form element and build our own JSON data, but we've done enough of that in this unit, so we've earned this shortcut!
+
+Next we use jQuery `post()`, much like we've been using `get()` to retrieve data. We pass it the URL and our `values`.
+
+Finally, we're using the `posting` object to specify what should happen when the AJAX request is `done`. This is where we'll need to handle the response.
+
+**Advanced:** The jQuery `post()` method returns a [jqXHR](http://api.jquery.com/jQuery.ajax/#jqXHR) object, which we're storing in our `posting` variable. These `jqXHR` objects implement the [Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) interface, which is used for deferred or asynchronous operations.
+
+If we look at our running Rails server, we'll probably see something like this:
+
+```erb
+Started POST "/posts" for ::1 at 2016-02-23 01:48:39 -0500
+Processing by PostsController#create as */*
+  Parameters: {"utf8"=>"✓", "authenticity_token"=>"k2thnauWV/3diGaOesdnSZaygMsA7tR7N0qa/HVk4M2IO4Q0HCuOnTF43NgaAZr/2N/5iHyKu6boAB/fVb0sww==", "post"=>{"title"=>"123abc", "description"=>"easy as"}}
+```
+
+That looks just like a regular POST with regular `params`. Since Rails does the work of creating a `params` hash for us, it doesn't matter if it comes from the form or from an AJAX request.
+
+Okay, so we did create a post. But if we look in our controller, we're supposedly redirecting to our `post_path`. And if we look further into our running Rails server, we'll see that it *did* redirect after creating our post.
+
+When we do an AJAX request, we're expecting data to be returned so that we can deal with it on the client side. So when our controller redirected and rendered the post `show` page, it actually sent that data to the `.done()` method.
+
+You can see this in action by adding a `console.log(data)` inside the `.done()` function and then inspecting the response.
+
+```javascript
+//...
+  posting.done(function(data) {
+    // TODO: handle response
+    console.log(data);
+  });
+//...
+```
+
+You'll see the full HTML of the `show` page for that new post.
+
+#### A Side-note About HTTP Codes
+HTTP status codes exist to let the client know what kind of response they are getting, and what to do with it.
+
+The code for the kind of redirect that happens when we put `redirect_to` in our controller is `302`. When a browser makes a request, and gets a `302` code, it knows that it needs to follow the "redirect" to the given link and load that page next.
+
+**Advanced:** The `302` redirect is considered a *temporary*, or *found* redirect, as in, "You found the right thing, but now go to this URL." There's other `300` codes as well, and they all deal with redirects, such as the `301` redirect, which tells the requestor that the resource they are looking for has moved permanently. Check out the full list of HTTP codes [here](https://en.wikipedia.org/wiki/List_of_HTTP_status_codes#3xx_Redirection).
+
+AJAX requests don't follow redirects because they *can't*. If they did, then you would lose any code that happens in the `done()` function and just go to a new page that doesn't have that JavaScript code.
+
+So when an AJAX request sees a 302, it chooses not to follow the link and instead just takes whatever the rendered data is.
+
+Rails handles HTTP codes for us when we do HTML requests, but when we build JSON APIs, we need to be cognizant of using the appropriate codes to let the client know what to expect.
+
+### Rendering the Response
+What we really want to do is get a JSON representation of the post we just created so that we can use it to display the new post without redirecting or refreshing the page.
+
+Let's get into the controller, get rid of that redirect, and use the ActiveModel::Serializer that we already have.
+
+```ruby
+# posts_controller.rb
+# ...
+  def create
+    @post = Post.create(post_params)
+    render json: @post, status: 201
+  end
+```
+
+**Note:** We are specifying the `status: 201` for this request, rather than the standard `200`, which means `OK`. Technically, this is a successful request and could be considered `200`, but we want to specify what happened more granularly, and `201` means that the resource was `created`.
+
+With our controller code in place, we need to make some additions to our template to handle the response and display it on the page.
+
+```erb
+<%= form_for(@post) do |f| %>
+  <div class="field">
+    <%= f.label :title %><br>
+    <%= f.text_field :title %>
+  </div>
+  <div class="field">
+    <%= f.label :description %><br>
+    <%= f.text_field :description %>
+  </div>
+  <div class="actions">
+    <%= f.submit %>
+  </div>
+<% end %>
+
+<div id="postResult">
+  <h2 id="postTitle"></h2>
+  <p id="postBody"></p>
+</div>
+
+<script type="text/javascript" charset="utf-8">
+  $(function () {
+    $('form').submit(function(event) {
+      //prevent form from submitting the default way
+      event.preventDefault();
+
+      var values = $(this).serialize();
+
+      var posting = $.post('/posts', values);
+
+      posting.done(function(data) {
+        var post = data;
+        $("#postTitle").text(post["title"]);
+        $("#postBody").text(post["description"]);
+      });
+    });
+  });
+</script>
+```
+
+Very similar to what we've been doing when we use AJAX to `get()` a resource, we just parse the JSON and add it to the DOM. To keep it simple, we just have one `<DIV>` that has placeholders for the data, and we fill it in when we get that response.
 
 
 
