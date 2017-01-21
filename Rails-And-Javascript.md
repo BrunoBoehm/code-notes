@@ -1643,4 +1643,653 @@ Finally, let's set up our view:
 </ul>
 ```
 
+## Posting to APIs
+We're going to keep working with our Foursquare application and allow users to add tips to venues. The solution from the OAuth reading is included.
+
+**Note:** Don't forget to set up your `.env` file (or copy it from the previous lesson)!
+
+If we look at the [Add Tip documentation](https://developer.foursquare.com/docs/tips/add), we'll see that we need to make this request via POST. Up until now we've been making GET requests, because we're just asking for data. But once we start changing data on the server, we're in POST territory.
+
+According to the docs, we'll need to POST to `https://api.foursquare.com/v2/tips/add` with a `venueId`, some `text`, and, since it requires an acting user, our `oauth_token`. If you need a refresher on how to do OAuth with Foursquare, click the [learn more link](https://developer.foursquare.com/overview/auth) next to where it says **Requires Acting User**.
+
+Let's start with a form in our search results:
+
+```erb
+# search.html.erb
+<h1>Search for Coffee Shops Near Me</h1>
+<%= form_tag '/search' do %>
+  <%= label_tag :zipcode %>
+  <%= text_field_tag :zipcode %>
+  <%= submit_tag "Search!" %>
+<% end %>
+<div>
+  <% if @error %>
+    <p><%= @error %></p>
+  <% elsif @venues %>
+    <ul>
+    <% @venues.each do |venue| %>
+      <li>
+        <%= venue["name"] %><br>
+        <%= venue["location"]["address"] %><br>
+        Checkins: <%= venue["stats"]["checkinsCount"] %><br>
+        <%= form_tag '/tips' do %>
+          <%= hidden_field_tag :venue_id, venue["id"] %>
+          Add tip: <%= text_field_tag :tip %><%= submit_tag "Add Tip" %>
+        <% end %>
+      </li>
+    <% end %>
+    </ul>
+  <% end %>
+</div>
+```
+
+We need to keep track of the venue ID for when we create the tip, so we'll hold onto it in a `hidden_field_tag` on the tip form.
+
+**Note:** Now is a good time to delete the line that outputs `session[:token]`.
+
+Now we need to set up a route for our form to POST to, and a route to see our tips after we've added them:
+
+```ruby
+# routes.rb
+# ...
+resources :tips, only: [:index, :create]
+```
+
+Let's get into the `TipsController` and set up the `create` action:
+
+```ruby
+# tips_controller.rb
+#...
+  def create
+    resp = Faraday.post("https://api.foursquare.com/v2/tips/add") do |req|
+      req.params['oauth_token'] = session[:token]
+      req.params['v'] = '20160201'
+      req.params['venueId'] = params[:venue_id]
+      req.params['text'] = params[:tip]
+    end
+
+    redirect_to tips_path
+  end
+```
+
+This looks similar to other calls we've made, except we're doing `Faraday.post` instead of `Faraday.get`. We're passing in our values as `params` just like with a GET request (more on this in a minute), and we get a response.
+
+In this case, we want to show that it worked, so we're going to redirect to `tips_path` and show the user their tips.
+
+Read the [List Detail](https://developer.foursquare.com/docs/lists/lists) document and see if you can set up the `index` action of our `TipsController`.
+
+```ruby
+# tips_controller.rb
+def index
+  resp = Faraday.get("https://api.foursquare.com/v2/lists/self/tips") do |req|
+    req.params['oauth_token'] = session[:token]
+    req.params['v'] = '20160201'
+  end
+  @results = JSON.parse(resp.body)["response"]["list"]["listItems"]["items"]
+end
+# ...
+```
+
+Looks very similar to our `friends` action.
+
+It seems a little crazy that we have to dig so deep (`["response"]["list"]["listItems"]["items"]`) just to get to the actual tips list, but that is how deep they are nested in the response. You'll need to pay careful attention to the documentation and the response to make sure you're grabbing what you need from the response body.
+
+And let's round it out by displaying the tips in our `index.html.erb` template:
+
+```erb
+# tips/index.html.erb
+<h1>My Tips</h1>
+<ul>
+<% @results.each do |item| %>
+  <li><strong>><%= item["venue"]["name"] %></strong><br>
+    <%= item["tip"]["text"] %></li>
+<% end %>
+</ul>
+```
+
+Now we can load our Rails server, go to `/search`, search for coffee shops, add a tip to one we like, and see our tips!
+
+### POST Params vs POST Body
+
+The Foursquare API endpoints we've been using all have used *parameters* to pass data. For a GET request, those are querystring parameters. For a POST, they are `www-form-urlencoded` parameters - that is, they act as if we had created a `form` and clicked `submit`.
+
+Other API providers, like Github, may require that POST data instead be JSON-formatted text in the request `body`. A request has a `body` just like a response does.
+
+Fortunately, Faraday makes it easy to POST with JSON in the body of the request. Instead of doing:
+
+```ruby
+Faraday.post("https://url/to/api") do |req|
+  req.params['my_param'] = my_value
+end
+```
+
+You can do this:
+
+```ruby
+Faraday.post("https://url/to/api") do |req|
+  req.body = "{ "my_param": my_value }"
+end
+```
+
+All you have to do is assign the request `body` to a properly formatted JSON string!
+
+In Postman, there's a section under the URL entry that has a place where you can enter a **Body** as well, so you can test APIs that take params or JSON in the body equally well.
+
+## Refactoring: Service Objects
+If we think back to *Single Responsibility Principle*, and the purpose of the components of MVC, we can come to the conclusion that we're forcing our controllers to know too much about Foursquare and the business logic of the data we get from the API when controllers are really supposed to be shuffling data back and forth between models and views.
+
+We want to move our business logic out of our controllers, but how? We aren't going to use an `ActiveRecord` Model, because we're not dealing with our own database.
+
+We are, however, dealing with data from *someone's* database, and the business logic of consuming and transforming that data, so we need something else.
+
+**Service Objects**.
+
+A service object is an object that we can use to encapsulate the inner workings of some business or *domain* logic that isn't strictly the responsibility of a single `ActiveRecord` model.
+
+If you can imagine a complex CRM system, the act of creating a new customer might involve also setting up a sales pipeline, creating tasks and calendar items for a salesperson, and other related stuff. That all doesn't belong in the `Customer` model, but it also certainly doesn't belong in the `CustomersController`, so we would encapsulate it into a service object.
+
+Similarly, in our system, things like dealing with OAuth, or knowing how to query the Foursquare API don't belong in our controllers or models, so we need service objects.
+
+According to a [post by Tom Pewiński in Ruby Weekly](https://netguru.co/blog/service-objects-in-rails-will-help):
+
+> As I understand it, a Service Object implements the user’s interactions with the application. It contains business logic that coordinates other artefacts. You could say it is the core of the application.
+
+We're going to use service objects to execute our interactions with the external Foursquare API.
+
+### Refactoring Authentication
+#### Extracting A Service Object
+
+Currently, your `SessionsController` `create` action looks something like this:
+
+```ruby
+# sessions_controller.rb
+  def create
+    resp = Faraday.get("https://foursquare.com/oauth2/access_token") do |req|
+      req.params['client_id'] = ENV['FOURSQUARE_CLIENT_ID']
+      req.params['client_secret'] = ENV['FOURSQUARE_SECRET']
+      req.params['grant_type'] = 'authorization_code'
+      req.params['redirect_uri'] = "http://localhost:3000/auth"
+      req.params['code'] = params[:code]
+    end
+
+    body = JSON.parse(resp.body)
+    session[:token] = body["access_token"]
+    redirect_to root_path
+  end
+```
+
+Create the folder `app/services` and create a file `foursquare_service.rb` within that folder. Then define a `FoursquareService` class.
+
+```ruby
+# app/services/foursquare_service.rb
+
+class FoursquareService
+end
+```
+
+Now, let's move the API interaction from `SessionsController` into `FoursquareService`. Define a method called `#authenticate!`. Our arguments will be the client ID, client secret, and code that we need to authenticate with Foursquare:
+
+```ruby
+  def authenticate!(client_id, client_secret, code)
+    resp = Faraday.get("https://foursquare.com/oauth2/access_token") do |req|
+      req.params['client_id'] = client_id
+      req.params['client_secret'] = client_secret
+      req.params['grant_type'] = 'authorization_code'
+      req.params['redirect_uri'] = "http://localhost:3000/auth"
+      req.params['code'] = code
+    end
+    body = JSON.parse(resp.body)
+    body["access_token"]
+  end
+```
+
+Looks very familiar, right? We've just moved the code from the controller to the service object, almost as-is. The only real difference is we pass in the parameters from the controller.
+
+**Advanced:** This is an example of an ["Extract Method"](http://refactoring.com/catalog/extractMethod.html) refactoring. Anywhere you can simply cut code from one place into a new method is a place where you might be violating Single Responsibility Principle.
+
+#### Back to the Controller
+
+Now that we've started to set up our `FoursquareService` object, what do we need to do in our `SessionsController`? Instantiate a new `FoursquareService` object and call our `#authenticate!` method!
+
+```ruby
+# sessions_controller.rb
+def create
+  foursquare = FoursquareService.new
+  session[:token] = foursquare.authenticate!(ENV['FOURSQUARE_CLIENT_ID'], ENV['FOURSQUARE_SECRET'], params[:code])
+  redirect_to root_path
+end
+```
+
+Now our controller is much cleaner. All it has to know is that there's a `FoursquareService` that can provide an OAuth token.
+
+We pass in the client ID and secret via our `.env` environment variables because just as it's not the responsibility of the controller to know the internals of the Foursquare API, it's not the responsibility of the Foursquare service to know where to go to get system data.
+
+If we run our Rails server, everything should still work as expected. To verify, trying accessing `/search` in a private tab that won't have your session already stored.
+
+### Refactoring Friends
+
+We've cleaned up the OAuth flow for the `SessionsController` using a service object. Now let's look at doing similar for our `friends` action.
+
+Extract the Foursquare API call from the `friends` action in `SearchesController` and put it into a new `friends` method in the Foursquare service object.
+
+```ruby
+# services/foursquare_service.rb
+# ...
+  def friends(token)
+    resp = Faraday.get("https://api.foursquare.com/v2/users/self/friends") do |req|
+      req.params['oauth_token'] = token
+      req.params['v'] = '20160201'
+    end
+    JSON.parse(resp.body)["response"]["friends"]["items"]
+  end
+```
+
+Here we go as far as to return just the part of the JSON response that we need to build a friends list, rather than forcing the controller or view to know how to pull the right data. Since the method is named `friends`, it makes sense that it would just return a representation of the friends.
+
+Then in our controller, we can update the `friends` action to use the service object:
+
+```ruby
+# searches_controller.rb
+# ...
+  def friends
+    foursquare = FoursquareService.new
+    @friends = foursquare.friends(session[:token])
+  end
+```
+
+Now if we reload our `/friends` page, we should still see our friends!
+
+## Summary
+
+We've learned that service objects help us encapsulate business logic that doesn't belong in a controller or `ActiveRecord` model, allowing us to keep our controllers ["skinny"](http://robdvr.com/fat-models-skinny-controllers-skinny-models-skinny-controllers/) and observe the Single Responsibility Principle.
+
+We've also extracted controller code into our service object and refactored our controllers to use our new service.
+
+# Building APIs
+We've seen how to *consume* various APIs, now let's talk about *providing* one.
+
+The choice to build and provide an API boils down to one of two options:
+
+1. Your data is valuable to more than just your application, or your application has valuable integration points for other applications to provide new and interesting services, so you build an *external* API and open it up to third-party developers.
+2. Your data is only valuable to your company, but you access it in multiple ways (e.g. a web application, iOS application, and Android application all for your company), or you have a distributed/service architecture, or you're even just using a front-end framework with Rails as an API back-end, so you build an *internal* API to provide common access to all internally-managed clients.
+
+## External API Considerations
+External APIs are extremely valuable to the growth of the web. Because of external APIs you can watch your Uber driver approach, plot your course with Google maps, get a text when the driver is close, and pay without ever touching your wallet.
+
+Because an external API is intended to be used by a wide variety of developers, with whom you wouldn't have much direct contact, there are a lot of things to account for when building one.
+
+**Documentation:** An external API must be *extensively* documented to support your developer community. This includes not only functional specifications, but code samples, sometimes in multiple languages (human AND computer!).
+
+Sometimes you'll want to provide tools to live-test the API, such as Foursquare does. You might even provide libraries (such as a gem) for the languages you support.
+
+**Versioning:** We saw this with the Foursquare API. Versioning is an important consideration, and you have to make sure that you don't release code in such a way that it suddenly breaks applications that rely on your API.
+
+**Authentication and Security:** Allowing external access to your data is a serious thing, so your external API needs robust access control and security. We came across this when consuming the Foursquare and Github APIs. We had to register our application, pass ID and secret pairs to the API, and sometimes use OAuth tokens on behalf of a user - all security implementations that need to be set up and maintained by the API provider.
+
+**Quality of Service:** Once you have third-party developers relying on your API, there are expectations around quality, uptime, and response time.
+
+You also have to consider things like **rate limiting**, where you monitor access and only allow a certain number of API calls per application in a given timeframe.
+
+These are all important considerations if you plan to make your API public.
+
+## Internal API Considerations
+
+An internal API is a great way to provide access to data for multiple internal applications. While there are still many things to consider, the concerns for internal APIs are generally less strenuous because you are usually in control of all of the applications that will have access (or you can talk to the people who are in control).
+
+**Documentation:** Documentation is still important, but with an internal API you generally won't have to provide support for such a wide array of consumers, and the docs can be a little more utilitarian.
+
+**Versioning:** Versioning is still a consideration. Depending on your development process, it's possible that not all of your apps will be able to respond to changes at the same time, so you may still need versioning to support that. However, the consumers will all be known, so you won't have to worry as much about some rogue developer steadfastly holding on to the beta version of your API.
+
+**Authentication and Security:** Security is still a concern, of course, but again, you'll be in control of what applications can access your API.
+
+We don't want to store access keys or passwords on the client of your internal API in cookies or JavaScript, because then it wouldn't be secure. And depending on the use of the API, it might not make sense to do user-based authentication at all. So how do we ensure that only valid web applications are accessing our internal API?
+
+Browsers implement something called [Same Origin Security Policy](https://en.wikipedia.org/wiki/Same-origin_policy), which prevents a page from running a script to access data from a different origin.
+
+This is great because by default it means your API can't be accessed by another domain or website.
+
+But what if you want to give another domain access to your API? To do that, we can configure [Cross Origin Resource Sharing](https://en.wikipedia.org/wiki/Cross-origin_resource_sharing), or **CORS**. CORS allows us to specify that certain other sites are allowed access while still blocking others.
+
+**Note:** This type of access control is called *whitelisting*. That is, creating a list of allowed domains. This is the opposite of *blacklist* control, where you allow anything except for a list of explicitly blocked sites.
+
+We won't be doing much with this in this unit, but there are great tools like [rack-cors](https://github.com/cyu/rack-cors) out there to help.
+
+**Quality of Service:** You don't get to slack on this one with your internal APIs. In fact, there's a good chance that your internal API is mission-critical and handles more requests than an external API might.
+
+You might not need to worry about rate limiting, but performance, uptime, and response time are still extremely important no matter who's accessing your API.
+
+## Returning String Data
+As developers, we do our best to hide it, but all of the Internet is just a bunch of strings being passed around from place to place. We put formats around our strings so that we can render them in an agreed-upon way, but it's all just strings. All you have to do is drop into your terminal and try: `curl https://twitter.com`. curl is a tool to transfer data from or to a server, doing all sorts of URL manipulations and transfers, using one of the supported protocols (DICT, FILE, FTP, FTPS, GOPHER, HTTP, HTTPS, IMAP, IMAPS, LDAP, LDAPS, POP3, POP3S, RTMP, RTSP, SCP, SFTP, SMB, SMBS, SMTP, SMTPS, TELNET and TFTP).
+
+When the browser requests this URL, this is what it sees. Just one big string of markup (HTML) and data. Then it interprets the markup and turns it into Twitter. But on the console, with nothing to turn the HTML into something, we just see the string. So if the Internet is just strings, do we always need the markup?
+
+Okay, let's say we have a pretty basic post title and content here, with a teaser to only show the first bit of the post body. We want to give them a way to interact and ask for the whole post body, so we'll add a button to fill in the rest.
+
+We want to do this without redirecting to the post `show` path, so we're
+going to use an AJAX request to replace the truncated content with the
+full body.
+
+The first thing we'll need is a route and controller action to get the
+body of the post.
+```ruby
+# routes.rb
+# ...
+get '/posts/:id/body', to: 'posts#body'
+```
+
+And in our controller:
+```ruby
+# posts_controller.rb
+# ...
+  def body
+    post = Post.find(params[:id])
+    render plain: post.description
+  end
+```
+
+Note the `render plain:` call in the controller. **Normally, in a RESTful action, we allow the controller to implicitly render a template with the same name as the action**. Here, however, we want to *explicitly* render plain text, so we call `render` with the `:plain` option.
+
+**Note:** There are a lot of options for `render`, including plain text, files, or nothing at all. Read more about `render` in the [Layouts and Rendering](http://guides.rubyonrails.org/layouts_and_rendering.html#using-render) RailsGuide.
+
+Now that we have that action, we can hit it by browsing to `/posts/:id/body` and see that we are just rendering plain text. This route isn't useful at all to the HTML portion of the site, because it has no markup, so we have to consume it another way. That means we just wrote our first API endpoint! Okay, we have an API endpoint where we can get the rest of a post body. Now it's just a matter of providing a way for the user to request it, and getting the string response onto the page.
+
+Let's start by adding a button. In our `_post.html.erb` partial, we want to provide a button for each post to request the body.
+
+It has to be tied to each post so that we can know which post's body we're requesting, which means we'll need to make use of the `post.id` to pass along to our route.
+
+```erb
+# _post.html.erb
+<h1><%= post.id %>: <%= post.title %></h2>
+<div><%= truncate post.description %></div>
+
+<button class="js-more" data-id="<%= post.id %>">More...</button>
+```
+
+**Note:** We're using the [`truncate` helper](http://api.rubyonrails.org/classes/ActionView/Helpers/TextHelper.html#method-i-truncate) here to only show a portion of the potentially long `description` string. By default, `truncate` will cut off everything after 30 characters.
+
+We need a way to attach a `click()` event listener to the button in JavaScript. Since there will be multiple buttons on the page that need to respond to the click, we're using `class="js-more"` as an identifier, rather than an `id` attribute. Prefixing the `class` name with `js-` is a common way to communicate that this class is used as a JavaScript selector.
+
+We also need to tie the button to a `post`, since it has to ask for the right content, so we're using a [data-* attribute](https://developer.mozilla.org/en-US/docs/Web/Guide/HTML/Using_data_attributes) of `data-id` to hold the `post.id` for us.
+
+Now that we have that, let's wire up a `click()` listener to our `js-more` buttons and request the post body.
+
+We'll use `jQuery` to wire it up in [document `.ready()`](https://api.jquery.com/ready/) in our `index.html.erb` template. Why not the `_post` partial? We only want to do this code once, and the partial will be loaded as many times as we have posts, so putting it in the main template ensures we just use it one time.
+
+```js
+// can be also put in the application.js file
+$(function () {
+	$('.js-more').on('click', function() {
+		// debugger;
+		var id = $(this).data('id');
+		$.get("/posts/" + id + "/body", function(data) {
+			alert(data);
+		});
+	});
+});
+```
+We've set up a `click` listener for all our `.js-more` buttons, and used the `.get()` method to make an AJAX request to our `/posts/:id/body` route using the `id` we stored in the `data-id` attribute on the button.
+
+The last thing we need to do is swap out that `alert(data)` call with actually putting the response into the body of our post.
+
+If we look back at `_post.html.erb`, we see that our body is in a `<div>`. All we need to do is replace the inner text of that `<div>`. To do that, we need to identify it with the `post.id`.
+
+```erb
+# _post.html.erb
+<h1><%= post.id %>: <%= post.title %></h2>
+<div id="body-<%= post.id %>"><%= truncate post.description %></div>
+
+<button class="js-more" data-id="<%= post.id %>">More...</button>
+```
+
+Now we've identified the element as `body-id`, so each `div` will have a predictable `id`, like `body-1`, `body-2`, and so on.
+
+With that in place, we just need to update our JavaScript to find the right `div` by `id` and replace the text:
+
+```erb
+# posts/index.html.erb
+# ...
+<script type="text/javascript" charset="utf-8">
+$(function () {
+  $(".js-more").on('click', function() {
+    var id = $(this).data("id");
+    $.get("/posts/" + id + "/body", function(data) {
+      // Replace text of body-id div
+      $("#body-" + id).text(data);
+    });
+  });
+});
+</script>
+```
+
+We simply use the `#` selector to find the right `body-id`, and call `.text(data)` to replace the text of the `div` with what we got back from our API call.
+
+If we reload the page now, and click "More..." on our posts, we should see the truncated text replaced with the full text! We've just implemented and consumed your first internal API endpoint!
+
+What if we wanted all of the data from a post, and not just the body, from that API endpoint? What if we wanted to display the `show` page without doing a page refresh? Certainly we wouldn't want to make a bunch of separate requests to endpoints like `/post/:id/body` and `/post/:id/title` and `/post/:id/author`, would we? There has to be a better way!
+
+## DIY JSON Serializer
+Continuing with our blog application, we'll be improving our blog post API to provide more structure and more efficient data access. Make sure to run `rake db:seed` to set up some starting data!
+
+Last time, we created an endpoint for the single piece of data we wanted to access. That worked well enough, but doesn't scale. If we want to use AJAX to get all the data from a blog post, we'd be creating so many endpoints, and making so many GET requests.
+
+What we really need is one endpoint to make one request and get back structured data representing our blog post.
+
+If we're directly accessing a post from our web browser, the answer is simple. The controller renders a template that contains HTML and the data we need.
+
+We could still do this for an API endpoint, but then that HTML would probably get in our way. We want the data, not the formatting. This, like so many things, comes back to **Separation of Concerns. An API endpoint is only concerned with returning the data needed**; it's up to the API consumer, in this case our AJAX call, to decide how to display it.
+
+This is where **serialization** comes in. Serialization is the process by which **we take executable code, in our case a Ruby object, and represent it as a string that can be consumed anywhere** (remember, the Internet is just strings) and then reconstructed back into usable code.
+
+Remember that a Ruby *object* is an instance of a *class*, meaning it has been initialized and is running in memory. Serializing an object retains the *state*, or current values of all the object's attributes, when turning it into a string. This differs from a class definition because the class definition tells us what *any* object *could* look like, whereas a serialized object tells us what *one* object *does* look like. It's an important distinction.
+
+Most of what a modern web API does is gather and serialize objects to be passed to the consuming code as a string over HTTP. So how do we do this serialization?
+
+At one time, the standard was XML. XML is a structured, tag-based markup language similar to HTML. The tags are specified by the API provider and ideally describe the object being serialized in an organized, human-readable way.
+
+An example of serializing a post into XML might be:
+```erb
+<post>
+  <id>1</id>
+  <title>This is a blog post</title>
+  <description> Lorem ipsum sit amet dolor...</description>
+  <author>
+    <authorId>2</authorId>
+    <name>Stephen King</name>
+  </author>
+</post>
+```
+
+If we look at that, it's pretty easy to figure out what's going on, right? When the web was first becoming more dynamic, and web services/APIs were in their nascent stages, XML was the lingua franca of inter-system communication. That's where **AJAX** came from: *Asynchronous JavaScript and XML*.
+
+So **this is a `Post` instance serialized to XML**. The XML describes the state of the object, and we can find where to pull out individual bits of data, or even reconstruct the object in memory on a new system. In this way, XML was a great tool.
+
+But XML had its problems as well. Just as browsers have a hard time agreeing on how to parse tag-based HTML, parsing XML is a chore. An XML parser has to essentially *read* through a document, finding the start and end tags of nodes and deciding what to do with the data. Searching XML documents with [XPATH](https://en.wikipedia.org/wiki/XPath) is cumbersome, and constructing an XML document can be a tedious exercise in string building and tag matching.
+
+In addition, XML has the potential to inflate the size of the result exponentially. Look at the `<authorId>` tag in the example above. There's 20 bytes of metadata per one byte of data. Even in a system with hundreds of authors, that's an inefficient way of representing things. As the Internet grew and the demands on API speed and efficiency, especially as smartphones came into play over cellular networks, the size of the data being passed from API to consumer became *important*.
+
+### JSON
+**JSON stands for "JavaScript Object Notation", and was created as a way to use JavaScript to not only consume data from an API, but also serialize that data for consumption**. Since so much data was being used in AJAX calls by the mid 2000s, it only made sense to start offering that data in the native language of the calling code.
+
+Beyond that, there's significant advantages to JSON. If we serialize
+that same `Post` to JSON, it looks like this:
+```javascript
+{
+  "id": 1,
+  "title": "This is a blog post",
+  "description": "Lorem ipsum sit amet dolor...",
+  "author": {
+    "id":2,
+    "name": "Stephen King",
+  }
+}
+```
+
+This is still very readable, and it's easy to see what represents what, but just in this one example we've shaved almost 50 bytes from the string. That might not seem like much, but it's an almost 25% improvement in size, which, when stacked up against your mobile data plan, means 25% more times you get to obsessively check your Facebook likes.
+
+The other great benefit of JSON is the structure. It's just a dictionary. A set of key-value pairs. And accessing the values of a dictionary is *super easy* compared to transversing the nodes of a tag-based document. We do it all the time with Ruby hashes. Not only is it more efficient, but it's also a function that's native to the language, rather than needing to build or use a library for parsing XML.
+
+### Our Own JSON Serializer
+So it makes sense to provide JSON to our API consumer, but we're running a Rails app, so we need to find a way to serialize our Ruby objects to JSON.
+
+We need to return JSON from our controller, but it's not the controller's *responsibility* to serialize objects, so we'll start fresh with a new class.
+
+Create a `app/serializers` directory, and add a `post_serializer.rb` file to it.
+
+**Advanced:** Rails will automatically load any code found in any folders under `app/`, so you're encouraged to create new folders for new types of files that aren't `models`, `views`, or `controllers`. In a big Rails application you might find folders like `app/services`, `app/serializers`, `app/decorators`, and others. This is just one of many ways to keep your project organized.
+
+Inside, we need to *serialize* a `Post` object. Again, **serialization is just turning the object into a string, in this case a JSON string**. We know how to build strings, so let's get to it.
+
+```ruby
+# serializers/post_serializer.rb
+class PostSerializer
+  def self.serialize(post)
+
+    # start with the open brace to create a valid JSON object
+    serialized_post = '{'
+
+    serialized_post += '"id": ' + post.id.to_s + ', '
+    serialized_post += '"title": "' + post.title + '", '
+    serialized_post += '"description": "' + post.description + '", '
+
+    # the author association can also be represented in JSON
+    serialized_post += '"author": {'
+    serialized_post += '"name": "' + post.author.name + '"}'
+
+    # and end with the close brace
+    serialized_post += '}'
+  end
+end
+```
+
+**Top-tip:** Take care with your quotations. We need to single-quote our strings because JSON requires double-quoted keys and string values.
+
+Now that we have our serializer, let's update our `body` action to use it:
+
+```ruby
+# posts_controller.rb
+# ...
+  def body
+    post = Post.find(params[:id])
+    render json: PostSerializer.serialize(post)
+  end
+```
+
+Note that we changed to `render json:` - we're still just rendering a string, but we need to tell the requestor that it's a properly formatted JSON string, so that we can operate on it with JavaScript. However, it's still a plain-text string.
+
+Now if we browse to `/posts/:id/body` (pick an `id` from the `/posts` page), we will see our JSON!
+
+**Top-tip:** If you haven't installed [JSONView](https://chrome.google.com/webstore/detail/jsonview/chklaanhfefbnpoihckbnefhakgolnmc?hl=en) in Chrome, now would be a great time. It helps immensely with reading your JSON and even validates it and gives you errors if there's a problem!
+
+Now, `body` isn't really accurate anymore, since we're now returning a serialized `Post`, so let's change the route and action to `post_data`:
+
+```ruby
+# routes.rb
+# ...
+  get 'posts/:id/post_data', to: 'posts#post_data'
+```
+
+```ruby
+# posts_controller.rb
+# ...
+  def post_data
+    post = Post.find(params[:id])
+    render plain: PostSerializer.serialize(post)
+```
+
+### Consuming JSON From The API
+Now what happens if we reload our `/posts` page and try our `More`
+button?
+
+Nothing! Or, more specifically, if we look in the Chrome JavaScript console, we'll see a `404` error because we changed the route to the resource. So let's fix that first.
+
+```erb
+# posts/index.html.erb
+# ...
+<script type="text/javascript" charset="utf-8">
+$(function () {
+  $(".js-more").on('click', function() {
+    var id = $(this).data("id");
+    // change the URL to the new route
+    $.get("/posts/" + id + "/post_data", function(data) {
+      // Replace text of body-id div
+      $("#body-" + id).text(data);
+    });
+  });
+});
+</script>
+```
+
+Okay, now if we reload and try again, we can see that our button now replaces the truncated body with the JSON. This makes sense. Before we were just returning a single value, but now we have a whole object. So we'll need to alter the code to just pull the `description` from the response JSON.
+
+```erb
+# posts/index.html.erb
+# ...
+<script type="text/javascript" charset="utf-8">
+$(function () {
+  $(".js-more").on('click', function() {
+    var id = $(this).data("id");
+    $.get("/posts/" + id + "/post_data", function(data) {
+      // Replace text of body-id div
+      $("#body-" + id).html(data["description"]);
+    });
+  });
+});
+</script>
+```
+
+As you can see, we can access the JSON just like any other dictionary, and get the value for the `"description"` key.
+
+### Using JSON To Build The Show Page
+
+Now we want to set up our blog so that we can click a link to see the next entry when we're reading the current one, but we don't want to have to refresh the page.
+
+We can reuse our `post_data` API, since that's exactly what a `Post` show page should have on it!
+
+We need to update the HTML part of our template with some metadata we can use to identify the different elements, and add our `Next` link.
+
+```erb
+# posts/show.html.erb
+<div class="authorName"><%= @post.author.name %></div>
+<a href="#" class="js-next" data-id="<%=@post.id%>">Next...</a>
+<h1 class="postTitle"><%= @post.title %></h1>
+<p class="postBody"><%= @post.description %></p>
+```
+
+Note that we are using `data-id` on the `<a>`. We'll need to keep that updated so that we know what post to request next.
+
+Okay, now let's add the JavaScript to handle this.
+
+```erb
+# posts/show.html.erb
+# ...
+<script type="text/javascript" charset="utf-8">
+$(function () {
+  $(".js-next").on("click", function() {
+    var nextId = parseInt($(".js-next").attr("data-id")) + 1;
+    $.get("/posts/" + nextId + "/post_data", function(data) {
+      $(".authorName").text(data["author"]["name"]);
+      $(".postTitle").text(data["title"]);
+      $(".postBody").text(data["description"]);
+      // re-set the id to current on the link
+      $(".js-next").attr("data-id", data["id"]);
+    });
+  });
+});
+</script>
+```
+
+Here we grab the `data-id` attribute value, use `parseInt()` so we can cast it and add one to it so we can request the *next* post.
+
+After that, it's just a matter of using `$.get()` to hit our `post_data` endpoint, and replace the `text` of each part of our show page.
+
+If we reload and go to our first post, then click `Next`, we get that smooth AJAX data refresh we've been looking for.
+
+At least until we get to the last post.
+
+
+
+
+
+
+
 
