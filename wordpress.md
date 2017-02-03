@@ -348,6 +348,354 @@ Inside of wp-config.php find the line `define( 'WP_DEBUG', false);` and change i
 The theme-check plugin is also very handy for revealing errors and pieces of advice.
 
 
+# Customizing the Admin
+## Colors
+Using plugins
+- admin color schemes
+- admin color schemer
+
+We can of course do it with code. We need a style.css and a function.php
+In the wp-admin we can find the colors of the admin.
+
+Let's namespace a function to add our color scheme to the admin dashboard using `wp_admin_css_color()`.
+```php
+<?php
+    function bb_admin_color_scheme() {
+        $theme_dir = get_stylesheeet_directory_uri();
+        
+        wp_admin_css_color(
+            'treehouse', __( 'My Custom Scheme' ),
+            $theme_dir . '/admin-colors/treehouse/colors.min.css',
+            array( '#fff', '#fff', '#fff', '#fff' )
+        );
+    }
+    
+    add_action('admin_init', 'bb_admin_color_scheme');
+?>
+```
+Then we command find replace using the code from an existing scheme.
+
+## Login Page
+The [login page customization](https://codex.wordpress.org/Customizing_the_Login_Form) works thanks to hooks, so everything happens in the `functions.php`.
+
+It is also possible to do this using a wordpress plugin:
+- custom login
+
+## Admin menu
+The owner doesn't need to access everything. User roles are important here.
+- [removing menus](http://codex.wordpress.org/Function_Reference/remove_menu_page)
+- [adding menus](http://codex.wordpress.org/Function_Reference/add_menu_page)
+
+We can use code:
+```php
+<?php 
+function custom_menu_page_removing() {
+  remove_menu_page( 'index.php' );                  //Dashboard
+  remove_menu_page( 'jetpack' );                    //Jetpack* 
+  remove_menu_page( 'edit.php' );                   //Posts
+  remove_menu_page( 'upload.php' );                 //Media
+  remove_menu_page( 'edit.php?post_type=page' );    //Pages
+  remove_menu_page( 'edit-comments.php' );          //Comments
+  remove_menu_page( 'themes.php' );                 //Appearance
+  remove_menu_page( 'plugins.php' );                //Plugins
+  remove_menu_page( 'users.php' );                  //Users
+  remove_menu_page( 'tools.php' );                  //Tools
+  remove_menu_page( 'options-general.php' );        //Settings
+}
+add_action( 'admin_menu', 'custom_menu_page_removing' );
+?>
+```
+Or use the plugin admin menu editor.
+
+## Custom dashboard
+Global option plugins to change the dashboard for allusers.
+
+The is a [Dashboard widget API](https://codex.wordpress.org/Dashboard_Widgets_API), everything will happen again in our functions.php file thanks to `wp_add_dashboard_widget()`.
+```php
+function bb_add_dashboard_widgets() {
+	wp_add_dashboard_widget(
+                 'bb_welcome_dashboard_widget',         // Widget slug.
+                 'Welcome to your site',                // Title.
+                 'bb_dashboard_widget_function'         // Display function.
+        );	
+}
+add_action( 'wp_dashboard_setup', 'example_add_dashboard_widgets' );
+
+function bb_dashboard_widget_function() {
+	echo "Hello World, I'm a great Dashboard Widget";
+}
+```
+
+*Custom dahboard help widget* can be used to do this with a plugin`..
+
+## Custom admin footer
+We can use the *custom admin footer text plugin*
+We can also to it with code in *functions.php*:
+```php
+<?php
+    add_action('admin_footer', 'my_admin_footer_function');
+    function my_admin_footer_function() {
+	    echo '<p>This will be inserted at the bottom of admin page</p>';
+    }
+
+//or 
+
+    add_filter('admin_footer_text', 'my_remove_footer_admin');
+    function my_remove_footer_admin (){
+        echo 'Custom HTML text';
+    }
+?>
+```
+
+# Wordpress Hooks
+Hook - A generic term in WordPress that refers to **places where you can add your own code or change what WordPress is doing or outputting by default**. Two types of hooks exist in WordPress, actions and filters.
+- [Action](http://codex.wordpress.org/Plugin_API/Action_Reference) - In WordPress is a hook that is triggered at specific time when WordPress is running and let’s you take an action. This can include things like creating a widget when WordPress is initializing or sending a Tweet when someone publishes a post.
+- [Filter](http://codex.wordpress.org/Plugin_API/Filter_Reference) - In WordPress allows you get and modify WordPress data before it is sent from/to the database or the browser. Some examples of filters would include customizing how excerpts are displayed or adding some custom code to the end of a blog post.
+
+- Query Monitor: this plugin will display all hooks and the actions that happen.
+
+Don't hesitate to do a global doc search for `add_action( 'init` or `add_filter( 'wp_title` and see what code gets called for a few actions you're working with or debugging.
+
+In the wp-settings of the core code we can see a lot of `do_action( 'init` or `apply_filters( 'wp_title` ... that's when the actions and filter get called.
+
+It is a **best practice** to put your files in a modular way in folders, and then require them from your functions.php file with `require_once()`.
+```php
+<?php
+    require_once('lib/custom_menu.php');
+?>
+```
+
+> Making your code more modular by using actions and filter hooks is what your should aim for.
+
+It can be interesting to `require_once( 'lib/export_wp_filter.php' );` and in this file have a `var_export()` function on the `$wp_filter` array:
+```php
+<pre>
+    <?php var_export( $wp_filter ); ?>
+</pre>
+```
+To make the array look a bit better, we can use [this code](http://www.rarst.net/wordpress/debug-wordpress-hooks/) it gives us a `list_hooks()` function. let's not forget to `include_once()` this file once downloaded. This is a good alternative to the [Query Monitor plugin](https://srd.wordpress.org/plugins/query-monitor/).
+
+## filters
+We can add something to filter hook
+```php
+function bb_excerpt_length( $length ) {
+    return 16;
+}
+
+add_filter( 'excerpt_length', 'bb_excerpt_length', 999 );
+```
+
+We can remove something from a filter hook
+```php
+if ( has_filter( 'the_content', 'custom_plugin_function' ) ) {
+    remove_filter( 'the_content', 'do_shortcode', 11 );
+    add_filter( 'the_content', 'my_do_shortcode', 11 );
+}
+```
+
+### Examples of filters
+We can change the colmuns in the admin rea when listing posts
+```php
+<?php 
+function manage_posts_columns_example( $columns ) {
+	//if( $columns['title'] ) unset( $columns['title'] );
+	unset( $columns['author'] );    
+    unset( $columns['categories'] );
+    unset( $columns['tags'] );
+    unset( $columns['comments'] );
+    return $columns;
+}
+
+add_filter( 'manage_posts_columns', 'manage_posts_columns_example' );
+?>
+```
+
+We can add a custom class to the body depending on which page we are
+```php
+<?php
+function custom_body_classes( $classes ) {
+	if ( 'post' == get_post_type() ) {
+		$classes[] = "custom-class";
+	}	
+    return $classes;
+}
+
+add_filter( 'body_class', 'custom_body_classes' );
+?>
+```
+
+We can make a custom title for our pages
+```php
+<?php 
+function custom_wp_title( $title, $sep ) {
+	global $page;
+	$title .= get_bloginfo( 'name' );
+	$site_description = get_bloginfo( 'description', 'display' );
+	
+	if ( $site_description && ( is_home() || is_front_page() ) ) {
+		$title = "$title $sep $site_description";
+	} 
+	return $title;
+} 
+add_filter( 'wp_title', 'custom_wp_title', 20, 2 );
+?>
+```
+
+## Actions
+### Adding an action to a hook
+`<?php add_action( $hook, $function_to_add, $priority, $accepted_args ); ?>`
+Let's add a script by hooking into the `wp_enqueue_scripts` action
+```php
+<?php 
+function add_google_font() {
+	wp_enqueue_style( 'google_font', 'http://fonts.googleapis.com/css?family=Pacifico' );
+}
+add_action( 'wp_enqueue_scripts', 'add_google_font' );
+?>
+```
+Note that for a `add_filter` we had to return a value, here we're not, we just run code.
+
+### Removing an action from a hook
+`<?php remove_action( $tag, $function_to_remove, $priority ); ?>`
+Let's now remove this action. This can be applied to any function that gets called on any hook, that we want to override.
+```php
+<?php 
+    remove_action( 'wp_enqueue_scripts', 'add_google_font' );
+?>
+```
+
+### The `do_action`
+We can [define](http://wpengineer.com/1302/define-your-own-wordpress-hooks/) our own wordpress hooks!
+```php
+<?php
+    function custom_footer() {
+        do_action('my_footer');
+    }
+
+    function custom_footer_text() {
+        echo "Custom footer text";
+    }
+    add_action( 'my_footer', 'custom_footer_text' );
+?>
+``` 
+
+The in our index.php file for instance we can call the <?php custom_footer(); ?>. We just created a hook. The difference with `apply_filer()` is that here we don't need a default value (filter need to have values passed into them that they can output). There is no default action for a `do_action`.
+
+We can check to see if a hook exist.
+```php
+<?php
+    if ( has_action( 'init', 'custom_plugin_code' ) ) {
+        remove_action( 'init', 'custom_plugin_code' );
+        add_action( 'init', 'my_content_code' );
+    }
+?>
+```
+
+### Examples
+Let's add our js and css files
+```php
+<?php 
+    function theme_styles() {
+    	wp_enqueue_style( 'bootstrap_css', get_template_directory_uri() . '/css/bootstrap.min.css' );
+    	wp_enqueue_style( 'main_css', get_template_directory_uri() . '/style.css' );
+    }
+    add_action( 'wp_enqueue_scripts', 'theme_styles' );
+
+    function theme_js() {
+    	wp_enqueue_script( 'bootstrap_js', get_template_directory_uri() . '/js/bootstrap.min.js', array('jquery'), '', true );
+    	wp_enqueue_script( 'theme_js', get_template_directory_uri() . '/js/theme.js', array('jquery', 'bootstrap_js'), '', true );
+    }
+    add_action( 'wp_enqueue_scripts', 'theme_js' );
+?>
+```
+
+Let's register widgets
+```php
+<?php 
+    function create_my_widget() {
+        register_sidebar(array(
+            'name' => __( 'My Sidebar', 'mytheme' ),    
+            'id' => 'my_sidebar',
+            'description' => __( 'The one and only', 'mytheme' ),
+        ));
+    }
+    add_action( 'widgets_init', 'create_my_widget' ); 
+?>
+```
+
+We can register a new menu
+```php
+<?php 
+    function register_my_menus() {
+      register_nav_menus(
+        array(
+          'footer_menu' => __( 'Footer Menu', 'mytheme' )      
+        )
+      );
+    }
+    add_action( 'init', 'register_my_menus' );
+?>
+```
+
+We can remove menus from the admin area
+```php
+<?php 
+    function wpt_remove_menus(){
+      remove_menu_page( 'index.php' );                  //Dashboard
+      //remove_menu_page( 'edit.php' );                   //Posts
+      remove_menu_page( 'upload.php' );                 //Media
+      //remove_menu_page( 'edit.php?post_type=page' );    //Pages
+      remove_menu_page( 'edit-comments.php' );          //Comments
+      
+      //remove_menu_page( 'themes.php' );                 //Appearance
+      //remove_menu_page( 'plugins.php' );                //Plugins
+      //remove_menu_page( 'users.php' );                  //Users
+      //remove_menu_page( 'tools.php' );                  //Tools
+      //remove_menu_page( 'options-general.php' );        //Settings
+    }
+    add_action( 'admin_menu', 'wpt_remove_menus' );
+?>
+```
+
+## Hooking to plugins
+Plugins need to have hooks, and they need to be documented.
+
+Let's change the class and submit button text of a gravity form (their hooks are well documented)
+```php
+add_filter( 'gform_submit_button', 'form_submit_button', 10, 2 );
+function form_submit_button( $button, $form ) {
+    return "<button class='button' id='gform_submit_button_{$form['id']}'><span>Submit</span></button>";
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
