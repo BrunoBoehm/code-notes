@@ -668,29 +668,397 @@ function form_submit_button( $button, $form ) {
 }
 ```
 
+# Workflow
+## Local Env
+Recommended dev tools
+- Mamp / Desktop Server (best)
+- VVV, DesktopServer: 
+- Text Editor: Sublime text / Atom
+- or IDE: PHPstorm / NetBeans
+- Version Control : Git, Bitbucket / SourceTree / Github
+- Codekit: 
+- CSS preprocessor / Sass tools: CodeKit, Scout, Koala
+- Task runners: grunt, gulp
+- WP-CLI: push local to staging
+- Wordmove
+- FTP/SFTP: transmit, filezilla
+
+## Staging Env
+Same env as the production.
+
+Server Pilot
+Install PHP5-cli
+WP-CLI
 
 
+# GENESIS
+A few third party design shops:
+- Themedy
+- websavvy
+- pretty darni cute
+- restored 315 designs
+- Zigzagpress
 
+## Understanding genesis actions
+`add_action` and `remove_action` will act on the action hooks defined in the [genesis code](http://my.studiopress.com/documentation/customization/guides-and-references/hook-reference/) (core genesis files and lib/structure) and [core wordpress code](https://codex.wordpress.org/Plugin_API/Action_Reference) through `do_action`.
+```php
+add_action();
+remove_action();
 
+//* Generic action
+add_action( 'hook', 'callback_function', 10, 1 );
+// 1 is the number of arguments
+// 2 last arguments are optional
 
+//* Generic callback function
+function callback_function( $arg1 ) {
 
+   // Let's do some stuff!
 
+}
 
+//* Generic actions with different priorities
+add_action( 'hook', 'function_a', 10, 1 ); //executed 2nd
+add_action( 'hook', 'function_b',  5, 1 ); //executed 1st
+add_action( 'hook', 'function_c', 15, 1 ); //executed 3rd
 
+//* Generic actions with same priorities
+add_action( 'hook', 'function_a', 10, 1 ); //executed 1st
+add_action( 'hook', 'function_b', 10, 1 ); //executed 2nd
+add_action( 'hook', 'function_c', 10, 1 ); //executed 3rd
+```
+10 is the default priority. The remove action needs to match the add action in terms of priority otherwise you might ask to remove something that isn't there yet.
 
+Modifying an action means writing one's own function instead of using existing.
 
+## Understanding genesis filters
+Filters replace specific pieces of data.
+```php
+add_filter();
+remove_filter();
 
+//* Generic add filter
+add_filter( 'hook_name', 'function_to_filter', 10, 1 );
 
+//* Generic remove filter
+remove_filter( 'hook_name', 'function_to_filter', 10, 1 );
 
+//* Filter the comments
+add_filter( 'genesis_title_comments', 'my_title_comments' );
 
+//* Function to filter the comments
+function my_title_comments() {
 
+	$title = "<h3>These are the comments!</h3>";
+	return $title;
 
+}
+```
+The equivalnet for setting the hook instead of `do_action()` is `echo apply_filters();` 
 
+## Get started on a child theme
+In function.php:
+```php
+<?php
+//* Start the engine
+include_once( get_template_directory() . '/lib/init.php' );
 
+//* Child theme (do not remove)
+define( 'CHILD_THEME_NAME', 'Treehouse Hueman Genesis' );
+define( 'CHILD_THEME_URL', 'http://www.teamtreehouse.com' );
+define( 'CHILD_THEME_VERSION', '1.0.0' );
 
+//* Add HTML5 markup structure
+add_theme_support( 'html5', array( 'search-form', 'comment-form', 'comment-list' ) );
 
+//* Add viewport meta tag for mobile browsers
+add_theme_support( 'genesis-responsive-viewport' );
 
+//* Add support for 3-column footer widgets
+add_theme_support( 'genesis-footer-widgets', 3 );
+```
 
+and in the css we need the bare minimum
+```css
+/*
+Theme Name: Treehouse Hueman for Genesis
+Theme URI: http://www.teamtreehouse.com
+Version: 1.0.0
+Description: Treehouse Hueman for Genesis is a responsive theme for blogs and magazines converted to use with the <a href="http://bit.ly/the-genesis-framework">Genesis Framework</a>. Inspired by Hueman, it brings the layout and basic features to the Genesis Framework.
+Author: Jesse Petersen
+Author URI: http://www.petersenmediagroup.com
+
+Template: genesis
+Template Version: 2.1.2
+Tags: responsive-layout, custom-menu, full-width-template
+
+  Current Copyright: (c) 2015 Treehouse, LLC
+  License: GNU General Public License v3.0
+  License URI: http://www.gnu.org/licenses/gpl-3.0.html
+
+ 	Source Author: Alexander Agnarson
+	Source Author URI: http://alxmedia.se
+ 	Source Copyright: (c) 2013 Alexander "Alx" Agnarson
+*/
+/* # Table of Contents
+- HTML5 Reset
+- Defaults
+- Structure and Layout
+- Common Classes
+- Widgets
+- Plugins
+- Site Header
+- Site Navigation
+- Content Area
+- Sidebars
+- Footer Widgets
+- Site Footer
+- Media Queries
+*/
+```
+
+We can sassify the css
+- create a sass folder
+- put a style file.scss that imports partials
+- create a folder called sass/partials that contains all the needed partials
+
+A good structure can be
+```css
+@import "partials/_variables.scss";
+@import "partials/_colors.scss";
+@import "partials/_mixins.scss";
+
+@import "partials/_reset.scss";
+@import "partials/_defaults.scss";
+
+@import "partials/_structure-layout.scss";
+@import "partials/_common-classes.scss";
+@import "partials/_widgets.scss";
+@import "partials/_plugins.scss";
+@import "partials/_site-header.scss";
+@import "partials/_site-navigation.scss";
+@import "partials/_content-area.scss";
+@import "partials/_sidebars.scss";
+@import "partials/_footer-widgets.scss";
+@import "partials/_site-footer.scss";
+@import "partials/_media-queries.scss";
+```
+
+Sass beautify addon converts css to css, or online css2scss.herokuapp.com
+
+we need a few folders
+- images
+- js
+- lib
+- sass
+- fonts
+
+Let's create a few files
+- front-page.php
+- home.php (blog index)
+- landing.php
+
+## Working on the front-page.php
+Let's create a new branch 'front-page-edits'
+The php file will call function that act as a page builder. If there is nothing in the widgets then it will use home.php or index.php
+
+In our front-page.php we test add an action to hook on `genesis_meta` to see if there are widgets and display our widgets.
+```php
+add_action( 'genesis_meta', 'hueman_home_genesis_meta' );
+/**
+ * Add widget support for homepage. If no widgets active, display the default loop.
+ *
+ */
+function hueman_home_genesis_meta() {
+
+	if ( is_active_sidebar( 'home-top' ) || is_active_sidebar( 'home-bottom' )) {
+
+		//* Force sidebar-content-sidebar layout setting
+		add_filter( 'genesis_site_layout', '__genesis_return_sidebar_content_sidebar' );
+
+		//* Add hueman-pro-home body class
+		add_filter( 'body_class', 'hueman_body_class' );
+
+		//* Remove breadcrumbs
+		remove_action( 'genesis_before_loop', 'genesis_do_breadcrumbs' );
+
+		//* Remove the default Genesis loop
+		//remove_action( 'genesis_loop', 'genesis_do_loop' );
+
+		//* Add home widgets
+		add_action( 'genesis_loop', 'hueman_home_widgets' );
+
+	}
+}
+
+function hueman_home_widgets() {
+
+	echo '<div id="home-widgets" class="home-widgets">';
+
+	genesis_widget_area( 'home-top', array(
+		'before' => '<div class="home-top widget-area">',
+		'after'  => '</div>',
+	) );
+
+	genesis_widget_area( 'home-bottom', array(
+		'before' => '<div class="home-bottom widget-area">',
+		'after'  => '</div>',
+	) );
+
+	echo '</div>';
+
+}
+
+genesis();
+```
+
+### Adding widget areas
+The common location for adding widgets is in the functions.php
+```php
+//* Register widget areas
+genesis_register_sidebar( array(
+	'id'          => 'home-top',
+	'name'        => __( 'Home Top', 'treehouse-hueman-genesis' ),
+	'description' => __( 'Widgets in this section will display in the top widget area on the homepage.', 'treehouse-hueman-genesis' ),
+) );
+genesis_register_sidebar( array(
+	'id'          => 'home-bottom',
+	'name'        => __( 'Home Bottom', 'treehouse-hueman-genesis' ),
+	'description' => __( 'Widgets in this section will display in the bottom widget area on the homepage.', 'treehouse-hueman-genesis' ),
+) );
+```
+
+### Enqueing scripts, setting image sizes..
+Back in our functions.php let's configure a bit more using `wp_enqueue_style`, `add_theme_support` and `add_image_size`
+```php
+//* Enqueue scripts and styles
+add_action( 'wp_enqueue_scripts', 'hueman_scripts_styles' );
+function hueman_scripts_styles() {
+	wp_enqueue_style( 'font-awesome', '//maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css', array(), 'treehouse-hueman-genesis' );
+}
+
+//* Add support for structural wraps
+add_theme_support( 'genesis-structural-wraps', array(
+	'header', 'nav', 'subnav', 'main', 'footer-widgets', 'footer',
+) );
+
+//* Rename menus
+add_theme_support( 'genesis-menus', array(
+	'primary' => __( 'Header Top Navigation Menu', 'treehouse-hueman-genesis' ),
+	'secondary' => __( 'Header Bottom Navigation Menu', 'treehouse-hueman-genesis' )
+) );
+
+//* Add new image sizes
+add_image_size( 'home-top', 780, 354, TRUE );
+add_image_size( 'home-middle', 375, 175, TRUE );
+```
+
+We can relocate the menus as we want
+```php
+//* Relocate Primary (top) Navigation
+remove_action( 'genesis_after_header', 'genesis_do_nav' );
+add_action( 'genesis_before', 'genesis_do_nav', 4 );
+
+//* Relocate Header outside Site Container
+remove_action( 'genesis_header', 'genesis_header_markup_open', 5 );
+remove_action( 'genesis_header', 'genesis_do_header' );
+remove_action( 'genesis_header', 'genesis_header_markup_close', 15 );
+add_action( 'genesis_before', 'genesis_header_markup_open', 5 );
+add_action( 'genesis_before', 'genesis_do_header' );
+add_action( 'genesis_before', 'genesis_header_markup_close', 15 );
+
+//* Relocate Secondary (bottom) Navigation
+remove_action( 'genesis_after_header', 'genesis_do_subnav' );
+add_action( 'genesis_before', 'genesis_do_subnav', 14 );
+```
+
+### Working in the css
+It's important to use a [normalize.css](http://www.cssreset.com/what-is-a-css-reset/) library to reset everything
+http://necolas.github.io/normalize.css/
+
+Mobile first is starting for small screens, and then add-up for bigger sizes. 
+
+Variables like `$site-max-width: 1200px;` can be used to simplify the code. We have a `_variable.scss` partial.
+Mixins are groups of things combined together in a css function that we can call with for instance
+`@include transition(all, 0.2s, ease-in-out);`
+```scss
+// Transition
+// Usage: @include transition(all, 0.2s, ease-in-out);
+@mixin transition($transition-property, $transition-time, $method) {
+	-webkit-transition: $transition-property $transition-time $method;
+	-moz-transition: $transition-property $transition-time $method;
+	-ms-transition: $transition-property $transition-time $method;
+	-o-transition: $transition-property $transition-time $method;
+	transition: $transition-property $transition-time $method;
+}
+```
+
+### The lib folder
+From functions.php, we can call a template from the lib folder by 
+`get_template_part( 'lib/page-title' );`
+
+And in our lib folder we can put big fat code chunks
+```cs
+//* Add Page Title area above Content
+add_action( 'genesis_before_loop', 'hueman_page_title' );
+
+function hueman_page_title() {
+	echo "<div class='page-title pad group'>";
+	if ( is_front_page() ) {
+		echo "<h2>" . get_bloginfo( 'name' ) . "</h2>";
+	}
+	if ( is_single() ) { ?>
+		<ul class='meta-single'>
+			<li class='category'><?php the_category(' <span>/</span> '); ?></li>
+			<?php	if ( comments_open() ) { ?>
+				<li class='comments'><a href='<?php comments_link() ; ?>'><i class='fa fa-comments-o'></i><?php comments_number( '0', '1', '%' ) ; ?></a></li>
+			<?php	} ?>
+		</ul> <?php
+	}
+	if ( is_page() ) {
+		echo "<h2>" . genesis_do_post_title() . "</h2>";
+	}
+	if ( is_search() ) {
+		echo "<span>";
+		if ( have_posts() ) {
+			echo "<i class='fa fa-search'></i>";
+		}
+		if ( ! have_posts() ) {
+			echo "<i class='fa fa-exclamation-circle'></i>";
+		}
+		$search_results = $wp_query->found_posts;
+		if ( $search_results == 1 ) {
+			echo $search_results . ' ' . __( 'Search result', 'treehouse-hueman-genesis' );
+		} else {
+			echo $search_results . ' ' . __( 'Search results', 'treehouse-hueman-genesis' );
+		}
+		echo "</span>";
+	}
+	if ( is_404() ) {
+		echo "<span class='page-title-name'><i class='fa fa-exclamation-circle'></i>" . __('Error 404.  ','treehouse-hueman-genesis') . "<span>" . _e('Page not found!','treehouse-hueman-genesis') . "</span></span>";
+	}
+	if ( is_author() ) {
+		$author = get_userdata( get_query_var('author') );
+		echo "<span class='page-title-name'>" . __('Author:  ','treehouse-hueman-genesis') . "<i class='fa fa-user'></i><span>" . $author->display_name . "</span></span>";
+	}
+	if ( is_category() ) {
+		echo "<span class='page-title-name'>" . __( 'Category:  ', 'treehouse-hueman-genesis' ) . "<i class='fa fa-folder-open'></i><span>" . single_cat_title( '', false ) . "</span></span>";
+	}
+	if ( is_tag() ) {
+		echo "<span class='page-title-name'>" . __('Tagged:  ','treehouse-hueman-genesis') . "<i class='fa fa-tags'></i><span>" . single_tag_title('', false) ."</span></span>";
+	}
+	if ( is_day() ) {
+		echo "<span class='page-title-name'>" . __('Daily Archive:  ','treehouse-hueman-genesis') . "<i class='fa fa-calendar'></i><span>" . get_the_time('F j, Y') . "</span></span>";
+	}
+	if ( is_month() ) {
+		echo "<span class='page-title-name'>" . __('Monthly Archive:  ','treehouse-hueman-genesis') . "<i class='fa fa-calendar'></i><span>" . get_the_time('F Y') . "</span></span>";
+	}
+	if ( is_year() ) {
+		echo "<span class='page-title-name'>" . __('Yearly Archive:  ','treehouse-hueman-genesis') . "<i class='fa fa-calendar'></i><span>" . get_the_time('Y') . "</span></span>";
+	}
+	echo "</div><!--/.page-title-->";
+}
+```
 
 
 
