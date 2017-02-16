@@ -337,7 +337,7 @@ We can do this via the `ng-app` HTML attribute Angular makes available for us. A
 ## Resources
 - [Todd Motto's guide for Angular Modules, Setters & Getters](https://toddmotto.com/angular-modules-setters-getters/)
 - [Angular Documentation for Modules](https://docs.angularjs.org/guide/module)
-<p data-visibility='hidden'>View <a href='https://learn.co/lessons/angular-modules-readme' title='angular-modules-readme'>angular-modules-readme</a> on Learn.co and start learning to code for free.</p>
+
 
 # Very small [hello world](https://github.com/BrunoBoehm/angular-modules-lab-v-000/blob/cf12223f82ea2fc1143e50f58fe9f53cdf71cc86/index.html) app
 Let's create the html
@@ -388,5 +388,450 @@ angular
 	.module('app')
 	.controller('MainController', MainController);
 ```
+
+## $scope
+
+You might've noticed the magic of `$scope` in the last lesson - an object that we can assign values to and they appear in our view. `$scope` is named by Angular - we can't change the name of it, so make sure you refer to it as `$scope`! 
+
+Angular introduces scopes into our application. Whenever we have a new instance of a controller, that controller has a `$scope`. Everything inside our controller can access this scope, however anything outside cannot. `$scope`s can access their parent scope.
+
+## Using $scope in our views
+
+We can access every property of `$scope` that we set in the controller inside our views. This is done using the `{{ }}` syntax that we used in our first lab. All we need to do is put the property key inside of the double curlys - such as for `$scope.name`, we use `{{ name }}`. We can also use `.` to access properties inside properties (for example, an object).
+
+For example:
+
+```js
+function MainController($scope) {
+  $scope.contact = {
+    name: 'Bill Gates',
+    phone: '01234567890'
+  };
+  
+  $scope.year = '2016';
+}
+```
+
+```html
+<div ng-controller="MainController">
+
+  <h2>{{ contact.name }}</h2>
+  <h4>{{ contact.phone }}</h4>
+
+  <div>
+    Copyright {{ year }}.
+  </div>
+</div>
+```
+
+This would render out:
+
+```html
+<div ng-controller="MainController">
+
+  <h2>Bill Gates</h2>
+  <h4>01234567890</h4>
+
+  <div>
+    Copyright 2016.
+  </div>
+</div>
+```
+
+Neat, huh? 
+
+However, if we tried to access items outside of our controller, such as:
+
+```html
+<div ng-controller="MainController">
+
+  <h2>{{ contact.name }}</h2>
+  <h4>{{ contact.phone }}</h4>
+
+  <div>
+    Copyright {{ year }}.
+  </div>
+</div>
+
+{{ year }} {{ name }}
+```
+
+All we'd get rendered is:
+ 
+ 
+```html
+<div ng-controller="MainController">
+
+  <h2>Bill Gates</h2>
+  <h4>01234567890</h4>
+
+  <div>
+    Copyright 2016.
+  </div>
+</div>
+
+{{ year }} {{ name }}
+```
+
+![Angular Scopes](https://docs.angularjs.org/img/guide/concepts-scope.png)
+
+Look at the example above - each red rectangle is a scope. If we look at the first rectangle for the HTML element with `ng-controller` - this is currently what we have in our application. From this `$scope`, we'd be able to access the parent `$scope` (the big rectangle around the whole image), but not the `$scope` of the second HTML element with `ng-controller`.
+
+### $rootScope
+
+We also have the `$rootScope` - this is the first scope in our application. All of our `$scope`'s will end up linking to this scope eventually. Not to worry about this yet, you'll come to see it a lot more later on.
+
+# Data-binding
+We've talked about data-binding before, but if it's not on the top of your memory you don't need to worry. Data-binding is the term for keeping our model values in sync with our view. Whenever the model changes, our view needs to change too to reflect the change. Whenever our view changes (such as a user typing into an input), we need to update our model with the latest value. This is done via data-binding.
+
+### One-way
+
+The curly braces syntax (`{{ }}`) binds our model value into our view in the form of text. This is one-way bound - the model can update the view, but our view cannot update the model (you can't type into text - only an input!).
+
+We can also bind text into the DOM using a `ng-bind` attribute on the HTML element instead. If we use `ng-bind`, the whole text content of the element is replaced with the value, whereas with the curly braces only the curly braces is replaced. Either can be used, but curly braces are simpler. 
+
+```js
+{{ name }}
+<span ng-bind="name"></span>
+```
+
+These will both display the same thing!
+
+### Two-way
+
+We can two-way bind our data into certain HTML elements - ones that accept input. For example, you guessed it - an `<input />`. This is done with the `ng-model` attribute (more on `ng-model` and `ng-bind` later on).
+
+```js
+<input type="text" ng-model="name" />
+```
+
+Whenever we type in our `<input />`, our `$scope.name` gets updated, they will both reflect the changes to the value. 
+
+## Watching for updates
+
+We can also watch for updates - how neat! The `$scope` object exposes a few APIs, one of them is `$watch`. `$watch` allows us to pass one of our `$scope` object's keys through, and fires off a callback whenever it updates.
+
+For example:
+
+```js
+$scope.$watch('name', function (newValue, oldValue) {
+  console.log('name changed from %s to %s', newValue, oldValue);
+});
+```
+
+We could use this with the two-way data-binding example above. This would fire a `console.log` statement every time the user types in the input!
+
+When would we actually need to use this? For example, in a game we could watch for changes to our name value and broadcast it to everyone else - 
+
+```js
+$scope.$watch('name', function (newValue, oldValue) {
+  socket.emit('Player ' + oldValue + ' has changed their name to ' + newValue);
+});
+```
+
+## Overview
+
+We've learned already what `$scope` is and the magic it provides with our view. However, before we start going `$scope` mad, it's important we learn about the best practices when it comes to controllers and our views.
+
+## What is controllerAs?
+
+As you've learned, controllers revolve around the mysterious `$scope` object. However, there is a much cleaner approach to writing our controllers.
+
+Instead of injecting `$scope` into every controller, we can simply just use the `this` keyword and assign items to that instead.
+ 
+There's a slight change in our `ng-controller` syntax too:
+
+```html
+<div ng-controller="MainController as main">
+</div>
+```
+
+Here we tell Angular we'd like to use our controller *as* a variable named `main`. This then creates a new instance of our controller (with all of our values bound to the controller's instance, rather than `$scope`) and assigns the instance to a variable named `main`. This then allows us to access our properties with `{{ main.propertyName }}`.
+
+## Oh no, nested scopes
+
+This helps us when we have nested scopes. If we had a controller inside a controller, and both added the variable `name` to `$scope` - which one would we see?
+
+```html
+<div ng-controller="MainController">
+  {{ name }} <!-- This is from MainController -->
+  <div ng-controller="AnotherController">
+    {{ name }} <!-- Where's this from? -->
+  </div>
+</div>
+```
+
+We wouldn't be sure where `name` was coming from in this example. What if we wanted to use `name` from `MainController` instead of `AnotherController` both times? We wouldn't be able to!
+
+That's where controllerAs saves the day - we can assign each controller to different variables and we'd know where `name` is from.
+
+We'd take this:
+
+```js
+function MainController($scope) {
+  $scope.name = 'Bill Gates';
+}
+```
+
+And convert it into:
+
+```js
+function MainController() {
+  this.name = 'Bill Gates';
+}
+```
+
+Done! That's all it takes. The HTML markup would then look like:
+ 
+```html
+<div ng-controller="MainController as main">
+  {{ main.name }}
+  <div ng-controller="AnotherController as another">
+    {{ another.name }} and {{ main.name }}
+  </div>
+</div>
+```
+
+This would render out to be:
+
+```html
+<div ng-controller="MainController as main">
+  Bill Gates
+  <div ng-controller="AnotherController as another">
+    Steve Jobs and Bill Gates
+  </div>
+</div>
+```
+
+No more issues with nested scopes!
+
+## What about the rest of $scope
+
+So does this mean we can use `this.$watch` instead of `$scope.$watch`? Unfortunately not - the API for watching value changes still sits with `$scope`, so we still have to use that.
+
+Think of it this way - when we use controllerAs, we're allowing our controllers to assign anything they want our view to access to the `this` keyword. Everything else is as it was before!
+
+# Testing Controllers with Test Driven Development (TDD)
+
+If you haven't done any testing before, your normal coding cycle would be churning out code like there's no tomorrow. However, with Test Driven Development (TDD), you've guessed it - every part of the development we do is driven by tests.
+
+Instead of writing code, fixing bugs, writing more code, blah blah, we start off by writing a unit test. This test will initially fail, as we haven't written any code.
+
+Let's create a function that adds two values together. Instead of going straight into the deep end and writing the function, we write the test first:
+
+```js
+describe('Basic Functionality', function () {
+  it('should add two numbers', function () {
+    expect(addNumbers(1, 3)).toBe(4);
+  });
+});
+```
+
+What's this crazy syntax? When we run our tests, we use syntax that is provided to us by a framework called Jasmine. Jasmine gives us a set of predefined functions (such as `it`, `expect`, etc) that allow us to describe, quite simply, what we want the test to achieve.
+
+Above, we're telling our test runner that in our `Basic Functionality` block, we have a test that expects our number adding function to output `4` when we add `1` and `3` together.
+
+The test will then run, notice we haven't *actually* defined our number adding function, and fail. Right. Let's create the number adding function then!
+
+```js
+function addNumbers(numberOne, numberTwo) {
+}
+```
+
+Great - now we're getting started. Let's run our test again - doh! Failed. We haven't actually done any logic, so the function still won't output `4`, which is what our test is looking for.
+
+Simple - let's just return `4`! Then it passes all of our tests!
+
+```js
+function addNumbers(numberOne, numberTwo) {
+  return 4;
+}
+```
+
+Perfect, our tests now pass. Wait! Hold on a minute - when we try and use that function with any other numbers, we're going to always get `4` back! 
+
+How can we test for this? Test it again! Realistically, our tests should always test our functions with many different parameters, expecting correct answers from our functions. That way, if we have a test adding `1` and `3` (to equal `4`), and also adding `50` and `24329` (to equal `24379`), we can, with some confidence, know that our number adding function actually works as we expect.
+
+Let's modify our first test:
+
+```js
+describe('Basic Functionality', function () {
+  it('should add two numbers', function () {
+    expect(addNumbers(1, 3)).toBe(4);
+    expect(addNumbers(343, 9283)).toBe(9626);
+    expect(addNumbers(1223, 21)).toBe(1244);
+    expect(addNumbers(10, 653)).toBe(663);
+  });
+});
+```
+
+Okay, now we've got multiple test cases, let's run our tests again. As expected, our first one passed (as our number adding function is only returning `4`), but the others have failed. Now we need to head back to our number adder and actually implement it correctly.
+
+```js
+function addNumbers(numberOne, numberTwo) {
+  return numberOne + numberTwo;
+}
+```
+
+We run our tests again and they all pass - happy days! The code goes into production, but two days later we receive a bug report saying that when people are adding `2` and `2` together, they get `22` instead of `4`. Oh no, what could've gone wrong?
+
+Our function doesn't support strings! In JavaScript, if we were to do `"2" + 2`, we'd get `22` as the result because the `+` operator adds two strings together, as well as actually doing addition between two numbers.
+
+Let's head back to our tests, and add some use-cases for when the function gets called with parameters that don't match what it expects.
+
+```js
+describe('Basic Functionality', function () {
+  it('should add two numbers', function () {
+    expect(addNumbers(1, 3)).toBe(4);
+    expect(addNumbers(343, 9283)).toBe(9626);
+    expect(addNumbers(1223, 21)).toBe(1244);
+    expect(addNumbers(10, 653)).toBe(663);
+    expect(addNumbers('99', 1)).toBe(100);
+    expect(addNumbers('23', '59')).toBe(82);
+  });
+});
+```
+
+If we run our tests again, they will fail (as we expect). Now, we can head back to our code and make amendments to handle these use cases.
+ 
+```js
+function addNumbers(numberOne, numberTwo) {
+  return parseFloat(numberOne, 10) + parseFloat(numberTwo, 10);
+}
+```
+
+Brilliant. Our tests run and pass and we have a well coded, tested piece of code. We can then make changes to this code further, running our tests against it along the way, ensuring no previous expected functionality has been broken.
+
+## Jasmine and Karma
+
+To do TDD, we need to install Jasmine and Karma. Clone this repo completely.
+
+Open your terminal, and run
+
+```bash
+sudo npm install -g karma-cli
+```
+
+This will install the Karma command line interface tool, so we can run tests using `karma`.
+
+We also need a copy of Karma for our project, as well as Jasmine too.
+
+Karma command line interface starts up the karma server for us, and the local copy for our project allows us to access the API's that karma offers.
+
+```bash
+npm install karma --save-dev
+npm install jasmine-core --save-dev
+npm install karma-spec-reporter --save-dev
+npm install karma-jasmine --save-dev
+npm install karma-chrome-launcher --save-dev
+```
+
+Sorted! Run `karma start` on your command line to see it run (and pass!) our basic test (expecting `'foo'` to equal `'foo'`).
+
+## ngMock - ngWhat?
+
+When we test our code, we need to be able to get deep inside it and see what everything is doing. However, in normal day-to-day coding, we cannot do that - that's where ngMock saves the day.
+
+ngMock is a module that Angular provides us to embed into our tests in order to inject and mock our controllers, directives etc into our tests. ngMock also extends some core services that Angular provides, in order for us to inspect them and control them differently to how they would run in the browser.
+
+To embed this into our tests, all we need to do is tell karma to include it when we specify what files we'd like to test. Take a look at `karma.conf.js` inside this repo - we've done that for you.
+
+## Writing our own unit test
+
+This is where all of the above come in. In this repo (that you should've already cloned!), we've got an example controller called `MainController` inside `js/app/controllers`. We've also got an example test at `tests/MainController.spec.js`. Let's modify this test to inject our example controller.
+
+Let's change the `describe` block to match our controller's name. This way, when we look at the results in the console, we can tell what is actually being tested. (Change "example test" to MainController).
+
+Now, we need to know what app we're using before each test, much like us using `ng-app` in our HTML. To do this, we use `ngMock`'s `module` function.
+
+We can do this like so:
+
+```js
+describe('MainController', function() {
+  beforeEach(module('app'));
+});
+```
+
+This tells Jasmine to use the `app` module for every test for our `MainController`.
+
+Now, we need to inject the controller service given to us by `ngMock`. This allows us to call a function with the name of the controller we'd like, as well as specify a custom `$scope` object for the controller to play with.
+
+```js
+describe('MainController', function() {
+  beforeEach(module('app'));
+
+  var $controller;
+
+  beforeEach(inject(function(_$controller_){
+    $controller = _$controller_;
+  }));
+});
+```
+
+Now, inside each of our tests (the `it` should blocks), we can call the `$controller` function, asking for it to return `MainController`.
+
+Let's create a test to check if the name is set correctly inside the controller.
+
+```js
+describe('MainController', function() {
+  beforeEach(module('app'));
+
+  var $controller;
+
+  beforeEach(inject(function(_$controller_){
+    $controller = _$controller_;
+  }));
+
+  it('should have Steve Jobs name', function() {
+    var $scope = {};
+
+    var controller = $controller('MainController', { $scope: $scope });
+    expect(controller.name).toEqual('Steve Jobs');
+  });
+});
+```
+
+If we run `karma start` now, you'll notice our test fails. Go into the `MainController.js` file inside `js/app/controllers` and see if you can figure out why, and see if you can get our unit test to pass (Steve Jobs)!
+
+
+# What is a Service? Our little helpers
+
+Services are helpers. They're JavaScript functions and are responsible for doing specific tasks only. For example, we might have a `UserService` that communicates with our API for everything user based. Or a `NotificationService` to deal with showing notifications to the user.
+
+Services can be used anywhere and everywhere. It's what makes Angular so useful - we can reuse our code over and over so we don't have to repeat ourselves.
+
+## Where do they come from?
+
+It's all great being able to create services, but how do we get them when we need them? Introducing another piece of Angular magic - Dependency Injection.
+
+Dependency Injection is something you never knew you wanted until it's been given to you - now you won't be able to live without it. Dependency Injection allows us to define *what* we want our controllers to have access to and Angular gives them it!
+
+For instance, we could have 123 different services in our Angular application, but our controller only wants to use three of them. It's important to only include the services we need to use otherwise we may have a massive impact on performance. To do this, all we need to do is specify the three services names as parameters for our controller:
+
+```js
+function ContactController(NotificationService, UserService, AuthService) {
+  NotificationService.notify('Hello!');
+}
+```
+
+Angular then, before initiating our controller, looks at what parameters we require and takes a note of them. They are all identified using their names. Then when we initiate our controller, Angular knows exactly what services we need to be "injected".
+
+You'll notice that we've actually done something like this already with `$scope`. We don't have to use `$scope`, but as we specify it as a parameter to our controller, Angular injects it for us. We could have put `$scope` as the second or fifth parameter - it wouldn't matter. 
+
+Our `NotificationService` could look like this: 
+
+```js
+function NotificationService() {
+  this.notify = function (message) {
+    alert(message);
+  };
+}
+
+angular
+  .module('app')
+  .service('NotificationService', NotificationService);
+```
+
+Notice how we tell Angular about our service in a similar way that we notify it about our controllers - we use `.service` on our modules. We attach all our methods to the `this` keyword as they're properties. Then, we can access all created properties in our controllers. What is important here is the first parameter - this is the name of our service and will be used when we need to inject it elsewhere. The function doesn't need to have the same name, but for debugging purposes, we keep it the same (as it'll be printed in the console if we ever get errors.)
 
 
