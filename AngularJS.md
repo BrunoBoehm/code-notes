@@ -835,3 +835,124 @@ angular
 Notice how we tell Angular about our service in a similar way that we notify it about our controllers - we use `.service` on our modules. We attach all our methods to the `this` keyword as they're properties. Then, we can access all created properties in our controllers. What is important here is the first parameter - this is the name of our service and will be used when we need to inject it elsewhere. The function doesn't need to have the same name, but for debugging purposes, we keep it the same (as it'll be printed in the console if we ever get errors.)
 
 
+# Injecting a Service
+
+Let's inject one of Angular's built in services into our controller.
+
+For this lab, we're going to make use of `$timeout`. `$timeout` allows us to create timeouts (similar to `setTimeout`) in our applications whilst ensuring that any changes to our model done inside a timeout gets reflected in the view.
+
+`$timeout` accepts the same parameters as `setTimeout` - a function and an integer for how many milliseconds delay.
+
+```js
+$timeout(function () {
+	// this would be fired after 2 seconds!
+}, 2000);
+```
+
+Fork and clone this repository to get started. 
+
+Let's create our controller inside `ContactController.js`, this should have two parameters - `$scope` and `$timeout` (it doesn't matter what order you put them in, if you don't believe me - try it!).
+
+Attach the controller to our `app` module.
+
+Now, inside our controller, set `$scope.name` to your name. We previously touched on using controllerAs, but as we need to use two simple services for this lab, we will be using `$scope`.
+
+Below that, set a $timeout for 5 seconds. Inside the function, set `$scope.name` to something else.
+
+Open up `index.html` and wait 5 seconds - you'll see the view get updated with our new name!
+
+# Minification safe Dependency Injection
+
+Minification is great - it reduces our code's file size and allows us to code wonderful things without impacting load times. It strips out all unneeded whitespace and punctuation in order to make our files as small as they can possibly be.
+
+For instance, a minifier might take this:
+
+```js
+function add(numberOne, numberTwo) {
+	return numberOne + numberTwo;
+}
+```
+
+And change it into:
+
+```js
+function add(a,b){return a+b;}
+```
+
+Much smaller! However, it can cause a bit of an issue when mixed with dependency injection.
+
+Most minify-ers change our variable names to single letters - it isn't important what our variables are called, only that they all still refer to the same object/method/function/etc. For example:
+
+```js
+function ContactController($scope, $timeout) {
+}
+
+angular
+  .module('app')
+  .controller('ContactController', ContactController);
+```
+
+Would become:
+
+```js
+function a(b, c) {
+}
+
+angular
+  .module('app')
+  .controller('ContactController', a);
+```
+
+Oh no - we don't have services named `b` and `c`. Therefore, when Angular looks at our controller and notices that we require `b` and `c`, it'll throw an error as they don't exist.
+
+How do we overcome this? Well, it's important to know how dependency injection works under the hood first.
+
+## Under the hood
+
+When Angular looks at our function, it takes our parameters and creates an array of what we require. For instance, our controller above would generate the array `['$scope', '$timeout']`. Angular then attaches this array onto a property named `$inject` on our function.
+ 
+```js
+function ContactController($scope, $timeout) {
+}
+
+angular
+  .module('app')
+  .controller('ContactController', ContactController);
+  
+// ContactController.$inject = ['$scope', '$timeout'];
+```
+
+Can you see how we can resolve the issues when it comes to minification? We can take over from Angular and specify this `$inject` property ourselves. When the `$inject` property exists, Angular trusts us to know what we want and doesn't look at the controller's parameters - meaning we can name our parameters whatever we want.
+ 
+```js
+function ContactController(whatever, weWant) {
+  // whatever === $scope
+  // weWant === $timeout
+}
+
+ContactController.$inject = ['$scope', '$timeout'];
+
+angular
+  .module('app')
+  .controller('ContactController', ContactController);
+``` 
+
+In our example above, the variable `whatever` is still equal to the value of `$scope` - just named differently! The same applies to the variable `weWant`. This means that our minification process will have no side effects to our code.
+
+Another example
+```js
+function ContactController(a, b) {
+	a.name = 'Bill Gates';
+
+	b(function () {
+		a.name = 'Steve Jobs';
+	}, 5000);
+}
+
+ContactController.$inject = ['$scope', '$timeout'];
+
+angular
+	.module('app')
+	.controller('ContactController', ContactController);
+```
+
