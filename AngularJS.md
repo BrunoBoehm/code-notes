@@ -956,3 +956,232 @@ angular
 	.controller('ContactController', ContactController);
 ```
 
+# What is a Directive?
+
+Directives are essentially "markers" on a HTML element that tell Angular to attach a specific behavior to the HTML element - either something small like a click event, or actually completely transforming the DOM node to display a list of data.
+
+Directives can be either an actual HTML element or an attribute on a HTML element.
+
+```html
+<my-directive></my-directive>
+
+<!-- these are the same -->
+
+<div my-directive></div>
+```
+
+However, not all directives can be used in both ways - some are restricted to being just an attribute or just an element. All of the built-in directives from Angular are restricted to being used as attributes. For any other ones (such as custom directives you download online) you will have to check the documentation on how to use it.
+
+## Types of directives
+
+There are two types of directives - event and behavioral. Event directives handle all of the events on a HTML element we might need - for example, `click`, `mouseover`, `keydown`, etc. These are the same as normal JavaScript events that we would add event listeners for.
+
+Behavioral directives are directives that manipulate the DOM. For example, we might have a list that repeats our DOM node for every item in a list. We could even have a directive for hiding and showing content depending on one of our variables' value.
+
+We'll have more on these in the next couple of lessons.
+
+## Built-in directives
+
+Luckily for us, Angular comes with a ton of built-in directives that do what we mentioned above and more. We'll be looking into the built-in ones in the other sections of this unit. Angular's built-in directives are prefixed with `ng-` (you might have noticed we're already using `ng-app` and `ng-controller` - these are just directives!) `ng-app` tells Angular what DOM node to put our application inside of. `ng-controller` tells Angular to attach our controller to that DOM node so we can access the controller inside of the element. In case you hadn't guessed, the `ng-` stands for Angular and it's best practice NOT to use this prefix on our own directives. 
+
+# Event based directives
+
+If you've ever done a lot of JavaScript before, you would have come into contact with event listeners. These are functions that get called whenever a specific behaviour happens that we are looking out for. Either of the following might be familiar to you:
+
+```js
+input.addEventListener('click', function (e) {
+});
+
+// or
+
+input.onclick = function (e) {
+};
+```
+```html
+<!-- or this -->
+
+<input onclick="myFunction()" />
+```
+
+These would all fire off of a function when a key was pressed inside of our input.
+
+## Angular's equivalent
+
+Instead, in Angular, we use the built-in `ng-click` directive, and pass in the function we want to be called.
+
+```html
+<input ng-click="vm.myFunction()" />
+```
+
+## Why do we do this?
+
+We already have a way to do events in JavaScript without any plugins. Why do we have to do things differently inside Angular?
+
+Angular allows us to pass all the event handling over to them. We don't have to worry about browser compatibility or even unbinding our events at the sacrifice of using the built-in directives for event handling instead. A small price to pay for consistent event handling in all browsers. 
+
+Angular also has the concept of a "digest cycle". This, at a high level, is a function that keeps all of our view and model in sync with each other (we will be going into this in a lot more detail later on). The built-in directives ensure that the digest cycle is ran, keeping our view and model synchronized if we were to update our model in response to an event.
+
+## Calling our own functions
+
+As you can see in our example above, we are calling `vm.myFunction()`. An example setup of the controller might look like this:
+
+```js
+function ExampleController() {
+  this.myFunction = function () {
+    console.log('Hey!');
+  };
+}
+```
+
+Which would result in `Hey!` being printed to the console whenever the user types in the input.
+
+As the function is defined in the controller, we also have complete access to all services/model items, allowing us to manipulate them. For example, we might want a button that increments a counter every time it's clicked.
+
+First of all, we'd use the `ng-click` directive provided to us by Angular.
+
+Our HTML would look like this:
+
+```html
+<button ng-click="vm.incrementCounter()">Increment the counter!</button>
+
+{{ vm.counter }}
+```
+
+And our controller would look like this:
+
+```js
+function CounterController() {
+  this.counter = 0;
+  
+  this.incrementCounter = function () {
+    this.counter++;
+  };
+}
+```
+
+What's happening here? Well, whenever the user clicks on our button, our `incrementCounter` function gets called. We can then access our model value (`this.counter`) inside that function, and update it itself plus one. Angular then notices that the model has changed, and will update our view to reflect this.
+
+# Behavioral Directives
+
+Behavioral directives are directives that allow us to manipulate the DOM. For example, we could have a repeating list of items or we could hide/show a DOM node depending on a variables value.
+
+Behavioral directives are commonly just used as attributes, and quite a lot are provided by Angular itself.
+
+Imagine we're not using Angular. If we wanted to loop through an array of objects and display them, we'd have to do something like this:
+
+
+```js
+var todos = [{
+  title: 'Learn Angular',
+  complete: false,
+},{
+  title: 'Create GitHub profile',
+  complete: false
+},{
+  title: 'Brush teeth',
+  complete: true
+}];
+
+var list = document.querySelector('ul.todos');
+
+todos.forEach(function (todo) {
+  var item = document.createElement('li');
+  
+  var wording = todo.complete ? 'Completed!' : 'Not completed :(';
+  
+  item.innerHTML = '<h4>' + todo.title + '</h4> ' + wording;
+  
+  list.appendChild(item);
+});
+```
+
+This worked fine but what if our `todos` array was to get updated? We'd have to make sure to only insert the new items into our list, and only remove the correct elements when an item was removed from our array. This could get extremely messy and out of sync with our data if we were not really careful.
+
+## Angular saves the day!
+
+Try and contain your excitement when you see how this is done in Angular.
+
+The HTML:
+
+```html
+<ul>
+  <li ng-repeat="todo in vm.todos">
+    <h4>{{ todo.title }}</h4>
+    
+    {{ todo.complete && 'Completed!' || 'Not completed :(' }}
+  </li>
+</ul>
+```
+
+Our controller: 
+
+```js
+function TodosController() {
+  this.todos = [{
+     title: 'Learn Angular',
+     complete: false,
+   },{
+     title: 'Create GitHub profile',
+     complete: false
+   },{
+     title: 'Brush teeth',
+     complete: true
+   }];
+}
+```
+
+That's everything that we need. Not even joking.
+
+This handles everything - whenever our `todos` array is updated, Angular will update our view to match, removing and adding only the relevant nodes.
+
+## ng-model
+
+Along with `ng-repeat`, `ng-model` is one of the most commonly used directives provided by Angular. `ng-model` works its magic by setting an input's value to a variable set in the controller, as well as updating said variable whenever the user updates the `<input />`'s value.
+
+```html
+<input ng-model="vm.username" />
+```
+
+This will populate our `<input />` with the value of `vm.username` (which could be empty), and then when the user types in the input, updates `vm.username` to match.
+
+[Check out this JSFiddle](https://jsfiddle.net/pjrfbkku/) showing the power of `ng-model`.
+
+## ng-class
+
+Another task that's quite common in modern applications is dynamically adding and removing classes depending on different variables. For example, we might want to add a complete class on our example above if the todo is complete.
+
+We can do this using the power of `ng-class`. `ng-class` takes an object, with the keys being the class you want to dynamically add, and the value being an expression - when the expression evaluates to `true`, the class is added. When it's `false`, the class will be removed.
+
+For example:
+
+```html
+<div ng-class="{'classNameHere': true, 'otherClassName': false}">
+</div>
+```
+
+In the example above, `classNameHere` would be added to our `<div />` (as the object's value is equal to true), whereas `otherClassName` wouldn't be added as the value is equal to false.
+
+We can swap out `true` and `false` for different values, such as a variable's value. Let' do this for the todo items above.
+
+```html
+<ul>
+  <li ng-repeat="todo in vm.todos" ng-class="{'complete': todo.complete}">
+    <h4>{{ todo.title }}</h4>
+    
+    {{ todo.complete && 'Completed!' || 'Not completed :(' }}
+  </li>
+</ul>
+```
+
+What is `ng-repeat="todo in vm.todos"` doing for us? We tell Angular what we want to loop over (`vm.todos`) and what variable to put each items properties in (`todo`). We could do `ng-repeat="item in vm.todos"` for example.
+
+`{{ todo.complete && 'Completed!' || 'Not completed :(' }}` looks a bit complicated too, but this is just similar to an expression that we would do in regular JavaScript. This checks the truthy value of `todo.complete`, and if `true` it will display "Completed!". If it's false, it will show "Not completed :(".
+
+Notice that all we have added there is `ng-class="{'complete': todo.complete}"` - this checks our todo item and adds the `complete` class if `todo.complete` is equal to true. It is really that simple!
+
+## Angular Controller and ng Directives Video 
+
+In this video we are going to build a simple CRUD app using controller and built-in `ng` directives.
+
+<iframe width="100%" height="720" src="https://www.youtube.com/embed/2YtGsacxiXE" frameborder="0" allowfullscreen></iframe>
+
