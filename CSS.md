@@ -477,3 +477,122 @@ We can add a media query to make sure the menu will transform to a hamburger but
   }
 }
 ```
+
+# Flex
+
+
+
+# Animations
+
+## Slide-in effect for menus
+```scss
+$small: only screen and (min-width: 600px;);
+
+.nav {
+    margin-top: 1.75rem;
+    
+    .nav-elements {
+        @media $small { 
+            display: flex;
+        }
+        
+        .branding {
+            max-width: 180px;
+            margin: 0 auto;
+            
+            @media $small {
+                width: 30%;
+                margin: 0;
+            }
+        }  /*.branding*/
+        
+        .navbar {
+            margin: 0;
+            padding: 0;
+            margin-top: 2rem;
+            line-height: 150%;
+            list-style-type: none;
+            width: 100%;
+            
+            @media $small {
+                display: flex;
+                justify-content: flex-end;
+                align-content: flex-start;
+                flex-wrap: wrap;
+            }
+        
+            a {
+                font-weight: $font-weight-bold;
+                color: $color-background;
+                text-decoration: none;
+                padding: 0 1rem;
+                
+                &:hover, 
+                &:focus {
+                    color: $yellow;
+                    transition: 1s ease-out;
+                }
+                
+                &:after {
+                    content: ' ';
+                    display: block;
+                    height: 5px;
+                    width: 0;
+                    margin 0 .5rem;
+                    transition: width .3s ease-out, background-color .3s ease-out;
+                    /*will be preprocessed by autoprefixer*/
+                }
+                
+                &:hover:after {
+                    width: 100%;
+                    background: $yellow;
+                }
+            } /*a*/
+        } /*.navbar*/
+    } /*.nav-elements*/
+} /*.nav*/
+```
+
+## Backimage mixin
+This image would take the whole viewport height, with a nice gradient.
+```scss
+@define-mixin backImage
+    $image,
+    $height: 100vh,
+    $grstart: rgba(0,0,0,.2),
+    $grend: rgba(0,0,0,.5),
+    $bgPos: center center {
+        background: linear-gradient( to bottom, $grstart, $grend), url($image);
+        background-repeat: no-repeat;
+        background-position: $bgPos;
+        background-size: cover;
+        height: 100vh;
+        max-height: $height;
+    }
+```
+
+## Working with rems
+Let's put the default text size to 10px using the 62.5% rule. The [rem](https://snook.ca/archives/html_and_css/font-size-with-rem) unit is relative to the root—or the html—element. That means that we can define a single font size on the html element and define all rem units to be a percentage of that. It is a better approach than using *em* because it is relative to the font-size of the immediate parent, which causes the compounding issue (a list within a list isn't 14px, it's 20px. Go another level deeper and it's 27px).
+```css
+html { font-size: 62.5%; } 
+body { font-size: 14px; font-size: 1.4rem; } /* =14px */
+h1   { font-size: 24px; font-size: 2.4rem; } /* =24px */
+```
+And voila, we now have consistent and predictable sizing in all browsers, and resizable text in the current versions of all major browsers.
+
+We also set [border-box](https://developer.mozilla.org/en-US/docs/Web/CSS/box-sizing) for the whole document (to calculate the dimensions of an element to include padding and border, but not margin - instead of only content)
+```scss
+html {
+    font-size: 62.5%;
+    box-sizing: border-box;
+}
+
+*, *:before, *:after {
+    box-sizing: inherit;
+}
+```
+
+
+
+
+
