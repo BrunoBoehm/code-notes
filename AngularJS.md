@@ -2586,3 +2586,653 @@ describe('UserService', function () {
 ```
 
 # Custom Directives
+
+Nowadays, most frontend applications are made up of small, reusable components. If we imagine a car, it would be made up with components such as wheels, windows, engine, etc. In our case, the components that make up our website would be a header, footer, dropdown menu, toggles, etc.
+
+We can create these components using directives. We've already used directives that Angular gives us, but we can also make our own.
+
+Directives can both be HTML attributes and HTML elements. Most of our directives will be HTML elements, as they will have their own template inside of themselves instead of modifying the behaviour of existing elements.
+
+We might create a custom directive called "dropdown". This dropdown directive will have it's own template that will get put into the DOM, so we create it as a HTML element instead.
+
+In plain JavaScript, our dropdown might look [something like this](https://jsfiddle.net/ogyzmx7r). There's a lot of code here that will be common to other elements, such as selecting and replacing elements from the page. Now let's check out [what it is like in Angular](https://jsfiddle.net/ogyzmx7r/1/). You'll notice how we use a custom HTML element (`<dropdown>`) and the code we need is a lot simpler and easier to read! Let's learn all about them.
+
+## Creating a custom directive
+
+Much like services and controllers, we can use the `.directive` function to create our directives.
+
+Our directive names are what we then use to reference them in the DOM. However, as the DOM is case-insensitive, we change the capital letters in our name to hypens. For instance, the directive name `myDirective` becomes `<my-directive></my-directive>`. `userDropdownList` will become `<user-dropdown-list></user-dropdown-list>`.
+
+Let's look at a custom directive:
+
+```js
+function MyDirective() {
+	return {
+		template: '<div>Hello world!</div>'
+	};
+}
+
+angular
+	.module('app')
+	.directive('myDirective', MyDirective);
+```
+
+You'll notice that in our directive function we return an object - this describes all the functionality and configuration of our directive. The function name is a capital letter but the directive name is always camel case - this is to keep function names consistent when compared to our custom services, filters, etc.
+
+We can then use `myDirective` in the DOM, and it will be replaced by the template you see above.
+
+```
+<my-directive></my-directive>
+```
+
+Would then be transformed into
+
+```
+<my-directive>
+	<div>
+		Hello world!
+	</div>
+</my-directive>
+```
+
+When rendered by Angular! This is an extremely basic directive, we're going to look into making them much more advanced in the next few readmes!
+
+# Restricting Directive usage
+
+Angular allows us to set a property named `restrict` on the object we return on our directive definition. We can pass through a string with certain letters letting Angular know how our directive can be used.
+
+```js
+function MyDirective() {
+	return {
+		restrict: 'E',
+		template: '<div>Hello world!</div>'
+	};
+}
+
+angular
+	.module('app')
+	.directive('myDirective', MyDirective);
+```
+
+Above, we've got `restrict` set to `E`. This stands for element, meaning our directive can only be used as an element.
+
+The letters available are:
+
+`A` - used as an attribute
+`E` - used as an element
+`C` - used as a class name
+`M` - used as a comment
+
+They would be used as the following:
+
+```html
+Attribute - <div my-directive></div>
+Element - <my-directive></my-directive>
+Class: <div class="my-directive"></div>
+Comment - <!-- directive: my-directive -->
+```
+
+You might've noticed that we can use directives in class names and comments too. This isn't recommended however, as it is unclear if we're just doing a normal HTML comment or invoking a directive. It also isn't clear if we're adding a class to an element or invoking a directive too.
+
+You can use the individual letters or put them together - `'EA'` will allow the directive to be used as an element and an attribute.
+
+By default, restrict is set to 'EA'.
+
+# Template and templateUrl
+
+## Overview
+
+We've created a directive with a template - let's take a deeper look into that. You might've noticed that we've created a template item in our directive's object. This will be put into the DOM where the directive is invoked. Templates can only contain one root element! If we use more, Angular will error because it can't keep track of the elements properly.
+
+This is okay:
+```html
+<div>
+	Woo our directive goes here!
+</div>
+```
+
+This will not work:
+
+```html
+<div>
+	Woo our directive goes here!
+</div>
+<span>What about here - oh no!</span>
+```
+## templateUrl
+
+As our templates get more complex, they can become difficult to read inside of our controller function. In the example below, we're saving each line of our template as a seperate element in an array, then joining the elements together. 
+
+```js
+function MyDirective() {
+	return {
+		template: [
+        '<div class="dropdown">',
+			'<button class="dropdown__title">',
+				'Options',
+			'</button>',
+			'<ul class="dropdown__list">',
+				'<li class="dropdown__item">',
+					'<a class="dropdown__link" href="#">',
+						'Edit',
+					'</a>',
+				'</li>',
+				'<li class="dropdown__item">',
+					'<a class="dropdown__link" href="#">',
+						'Transfer',
+					'</a>',
+				'</li>',
+				'<li class="dropdown__item">',
+					'<a class="dropdown__link dropdown__link--delete" href="#">',
+						'Delete',
+					'</a>',
+				'</li>',
+			'</ul>',
+        '</div>'
+      ].join('')
+	};
+}
+
+angular
+	.module('app')
+	.directive('myDirective', MyDirective);
+```
+
+To avoid our directives getting too big like above, we can also use `templateUrl` instead, pointing to a HTML file instead. This can be incredibly useful for any large directives.
+
+```js
+function MyDirective() {
+	return {
+		templateUrl: 'directive.html'
+	};
+}
+
+angular
+	.module('app')
+	.directive('myDirective', MyDirective);
+```
+
+directive.html:
+
+```html
+<div>
+	Wow, our directive in another file!
+</div>
+```
+
+This would work the same as if we had it as a string in our directive - neat! 
+
+Normally we'd store our views in a folder inside our module folder `js/moduleName` inside a folder named `views`. This keeps everything all together!
+
+# Replacing base markup
+
+When we put our directive into the DOM, you'll notice that what will happen is this:
+
+```html
+<our-directive>
+	<div>
+		Directive contents here!
+	</div>
+</our-directive>
+```
+
+However, you may not want the `our-directive` HTML element to be there - you might prefer only semantic, proper DOM nodes to be in the DOM. It's completely your choice - there's no benefit to either way.
+
+To get rid of this, we can set the replace property on our object to `true`.
+
+```js
+function OurDirective() {
+	return {
+		replace: true,
+		template: '<div>Hello world!</div>'
+	};
+}
+
+angular
+	.module('app')
+	.directive('ourDirective', OurDirective);
+```
+
+When this is rendered, we won't see `our-directive` in the HTML!
+
+
+# Inheriting or isolating scope
+Now, one cool thing about our directives is that they can display dynamic data. For instance, we might want to have a Twitter card to display a users Twitter handle, along with a link to follow said user.
+
+We can do this exactly like we've done in our views so far - using `{{}}`.
+
+Note: now that we've started using more HTML in our directives, instead of just passing a string, we pass in a multi-line array, joined by an empty string. This means we can have a multi-lined template without having to worry about string concatenation. This is great for small templates, but as our templates get larger we should move out into a separate file.
+
+Lets create the Twitter card.
+
+```js
+function TwitterCard() {
+	return {
+		template: [
+			'<div class="twitter">',
+				'<a href="https://twitter.com/">Follow @username on twitter!</a>',
+			'</div>'
+		].join(''),
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+Now that's cool, but how do we *actually* get our data? Well, we can actually inherit it from the scope above.
+
+Let's assume we've got a controller, that has a property on it's scope named `twitter`. We would display this in our view as follows:
+
+```html
+<div ng-controller="SomeController">
+	{{ twitter }}
+</div>
+```
+
+If we were to use our Twitter card directive instead of displaying `{{ twitter }}`, we could actually use `{{ twitter }}` in our directives template.
+
+```html
+<div ng-controller="SomeController">
+	<twitter-card></twitter-card>
+</div>
+```
+
+```js
+function TwitterCard() {
+	return {
+		template: [
+			'<div class="twitter">',
+				'<a href="https://twitter.com/{{ twitter }}">Follow @{{ twitter }} on Twitter!</a>',
+			'</div>'
+		].join(''),
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+This will result in this HTML being put into the DOM (we're assuming `$scope.twitter` equals `billgates`.)
+
+```html
+<div ng-controller="SomeController">
+	<twitter-card>
+		<div class="twitter">
+			<a href="https://twitter.com/billgates">Follow @billgates on Twitter!</a>
+		</div>
+	</twitter-card>
+</div>
+```
+
+This is awesome, but what if we want to use our Twitter card twice? Isn't that the point of directives, the ability to reuse them again and again?
+
+One ridiculous way of doing this is to create a new controller for every Twitter card we want to show, assigning all of the different usernames we want to display to their own controller - surely there must be a better way?
+
+## Isolate Scope
+
+Aha! There is! It's called isolate scope. What this does is creates a new scope for our directive - it can either be a completely brand new one or copied from our parent.
+
+In our directive's object, we can attach a property named `scope` to it. This can have a few different values:
+
+### scope: false
+
+If `scope` is equal to `false`, then no new scope is created. This is the same as not having `scope` set (like in our examples above).
+
+### scope: true
+
+If `scope` is equal to `true`, we create a new scope for our directive. This is copied over from the parent scope. If we put `scope` as `true` in our examples above, nothing would change *visually*. However, if we changed the twitter handle, it would update in the controller's scope, but not the directive's.
+
+If we imagine this:
+
+```html
+<div ng-controller="SomeController">
+	{{ twitter }}
+	<twitter-card></twitter-card>
+</div>
+```
+
+We'd end up with this being rendered:
+
+```html
+<div ng-controller="SomeController">
+	billgates
+	<twitter-card>
+		<div class="twitter">
+			<a href="https://twitter.com/billgates">Follow @billgates on Twitter!</a>
+		</div>
+	</twitter-card>
+</div>
+```
+
+If we were to then update `$scope.twitter` in `SomeController`, we'd end up with:
+
+```html
+<div ng-controller="SomeController">
+	new value!
+	<twitter-card>
+		<div class="twitter">
+			<a href="https://twitter.com/billgates">Follow @billgates on Twitter!</a>
+		</div>
+	</twitter-card>
+</div>
+```
+
+The Twitter handle inside `<twitter-card>` hasn't changed. This is because we've created a new scope (initially based off of the parent scope) - they are no longer linked!
+
+### scope: {}
+
+Now, this is where things get funky. We can pass through an object to our scope object - but why?
+
+When we use normal HTML elements, such as `<input />`, we configure it via attributes. For instance, we might give it a name - we'd do this like such:
+
+```html
+<input name="ourInputName" />
+```
+
+Hold on a minute.. Can we configure our directives by passing through attributes?
+
+Yes we can!
+
+To do this, we need to specify *what* attributes we want to be configured by. Using our Twitter card above, the only thing we need to configure it is the Twitter handle.
+
+To grab this value out of the attributes, we can specify the attribute name in the object. For instance, if we wanted to utilise the Twitter card as such:
+
+```html
+<twitter-card handle="billgates"></twitter-card>
+<twitter-card handle="bob"></twitter-card>
+```
+
+We'd put the property `handle` into our scope object.
+
+Now, what do we put as the value? There are two that we can use:
+
+#### @ (at)
+
+If we pass through `@` as the value, as so:
+
+```js
+function TwitterCard() {
+	return {
+		template: [
+			'<div class="twitter">',
+				'<a href="https://twitter.com/{{ handle }}">Follow @{{ handle }} on Twitter!</a>',
+			'</div>'
+		].join(''),
+		scope: {
+			handle: '@'
+		},
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+What `@` tells Angular is to just copy the value as it is. This will literally copy whatever we put in the `handle` attribute and put it into our scope.
+
+#### = (equals)
+
+However, if we want to be able to receive variables through, we can use `=`.
+
+```js
+function TwitterCard() {
+	return {
+		template: [
+			'<div class="twitter">',
+				'<a href="https://twitter.com/{{ handle }}">Follow @{{ handle }} on Twitter!</a>',
+			'</div>'
+		].join(''),
+		scope: {
+			handle: '='
+		},
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+What this means is that if we have a controller with two properties on it, such as `twitterHandle1` and `twitterHandle2`, we can do this:
+
+```html
+<twitter-card handle="twitterHandle1"></twitter-card>
+<twitter-card handle="twitterHandle2"></twitter-card>
+```
+
+Angular will then change the values over to their actual scope values before passing the value through to our directive. This also means that if we were to update either of them, Angular will automatically update our directive to match it too. Awesome! There's not really any reason why you wouldn't want the directive to update with the latest values, but if you ever do, the option is baked in.
+
+#### Changing attribute names
+
+Notice how we've updated our template to use `{{ handle }}`? This is because our `$scope` has the property `handle` on it now, because of the object.
+
+However, you might not like this - you might have wanted to stick with `{{ twitter }}` but *also* have it configured by using the attribute `handle`. To do this, we can change the object property to `twitter` and we put `handle` after the `@` or `=`, like follows:
+
+```js
+function TwitterCard() {
+	return {
+		template: [
+			'<div class="twitter">',
+				'<a href="https://twitter.com/{{ twitter }}">Follow @{{ twitter }} on Twitter!</a>',
+			'</div>'
+		].join(''),
+		scope: {
+            twitter: '@handle'
+        },
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+This means we can do this still:
+
+```html
+<twitter-card handle="billgates"></twitter-card>
+```
+
+Whilst populating `$scope.twitter` with the value. There's no advantage to this or real reason as to why you'd need to use it, but the flexibility is there if you need it.
+
+Another exxample
+```js
+function ContactCard(){
+	return {
+		scope: {
+			name: '=',
+			email: '=',
+			phone: '='
+		},		
+		template: [
+			'<div>',
+			    '<h4>Contact Card</h4>',
+			    '<label>Name:</label> {{ name }}',
+			    '<label>Email:</label> {{ email }}',
+			    '<label>Phone:</label> {{ phone }}',
+			'</div>'
+		].join(''),
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('contactCard', ContactCard);
+```
+
+And in the view
+```html
+<div ng-app="app" class="app">
+    <div ng-controller="ContactController as ctrl">
+        <ul>
+            <li ng-repeat="contact in ctrl.contacts">
+                <contact-card name="contact.name" email="contact.email" phone="contact.phone"></contact-card>
+            </li>
+        </ul>
+    </div>
+</div>
+```
+
+## Directive Controllers
+
+We can create controllers for our directives - awesome! We'd generally use these for functions to change data or retrieve data from a service (we might have a list of contacts), or manipulate the data given us (we might want to verify an email address or phone number for a contact).
+
+Our controllers, much like the controllers we've created before, allow us to directly access `$scope` (the values passed through to us from attributes), as well as all the services that we have created, as well as built-in ones too, such as `$timeout`.
+
+## But, how?
+
+You've probably guessed how we can do this in your head. We attach a property named `controller` to our directives object!
+
+This, for now, will take a function that will become our directive's controller:
+
+```html
+<twitter-card handle="billgates"></twitter-card>
+```
+
+This will be the code to initiate all of our examples. Below, we'll define our controller function and inject `$scope`. Our `$scope` will have a property called `handle` that will be set to `"billgates"`!
+
+```js
+function TwitterCard() {
+	return {
+		template: [
+			'<div class="twitter">',
+				'<a href="https://twitter.com/{{ handle }}">Follow @{{ handle }} on Twitter!</a>',
+			'</div>'
+		].join(''),
+		scope: {
+            handle: '@'
+        },
+        controller: function ($scope) {
+            // $scope.handle returns 'billgates' 
+        },
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+Now we can use our controller exactly like what we've done before. We can manipulate data, or call a `$timeout`. For example, we could do this:
+
+```js
+function TwitterCard() {
+	return {
+		template: [
+			'<div class="twitter">',
+				'<a href="https://twitter.com/{{ twitter }}">Follow @{{ twitter }} on Twitter!</a>',
+			'</div>'
+		].join(''),
+		scope: {
+            handle: '@'
+        },
+        controller: function ($scope, $timeout) {
+            $timeout(function () {
+                $scope.handle = 'angularjs'
+            }, 5000);
+        },
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+This will set our Twitter handle to "angularjs" after 5 seconds.
+
+## controllerAs
+
+As you've learned already, the best practice is in fact to use the `controllerAs` syntax. But we're passing a function through as our controller, so how are we going to tell Angular that we want to use `controllerAs`? You guessed it - the `controllerAs` property.
+
+Much like our `ng-controller`, where we use `SomeController as some`, we use `controllerAs` and put it's value as `some` (or whatever you want to call it).
+
+```js
+function TwitterCard() {
+	return {
+		template: [
+			'<div class="twitter">',
+				'<a href="https://twitter.com/{{ handle }}">Follow @{{ handle }} on Twitter!</a>',
+				'<button ng-click="ctrl.changeHandle()">Change Handle</button>',
+			'</div>'
+		].join(''),
+		scope: {
+            handle: '@'
+        },
+        controller: function ($scope) {
+            // $scope.handle === 'billgates'
+
+            this.changeHandle = function () {
+                $scope.handle = 'angularjs';
+            };
+        },
+        controllerAs: 'ctrl',
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+As you can see here, we're setting our controller as `ctrl`. This means that anything we attach to `this` in the controller will be accessible via the `ctrl` object in our template - exactly like our controllers before!
+
+You might have noticed how `handle` is still on our `$scope` object - this is because it's passed through as a scope property. We'll cover how to get that into `this` soon.
+
+We've got a function to change our Twitter handle. This updates `$scope` - where our data is stored. As we trigger this event using `ng-click`, any changes that we do to `$scope` inside the function is automatically reflected in the view.
+
+## Existing Controllers
+
+Instead of a function, we can pass through a string to the `controller` property as well - much like what we do with `ng-controller`. This means we can use an existing controller as our directive's controller. It also means that we can remove the `controllerAs` property if we're using a string, as we can do `'SomeController as some'`.
+
+```html
+<twitter-card handle="billgates"></twitter-card>
+```
+
+```js
+function TwitterController($scope) {
+	// $scope.handle === 'billgates';
+}
+
+angular
+	.module('app')
+	.controller('TwitterController', TwitterController);
+
+function TwitterCard() {
+	return {
+		template: [
+			'<div class="twitter">',
+				'<a href="https://twitter.com/{{ handle }}">Follow @{{ handle }} on Twitter!</a>',
+				'<button ng-click="ctrl.changeHandle()">Change Handle</button>',
+			'</div>'
+		].join(''),
+		scope: {
+            handle: '@'
+        },
+        controller: 'TwitterController as ctrl',
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+Here we've got our controller initiated with our scope data, ready for us to manipulate it.
+
+Now we can manipulate our data to our hearts content. Our controllers can also have our services (such as `$timeout` or a custom service) injected so we can utilise the power of them in our directives too!
+
