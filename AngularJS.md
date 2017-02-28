@@ -1185,3 +1185,1348 @@ In this video we are going to build a simple CRUD app using controller and built
 
 <iframe width="100%" height="720" src="https://www.youtube.com/embed/2YtGsacxiXE" frameborder="0" allowfullscreen></iframe>
 
+Setting up a dev environment with a live server we're now able to launch the server by `npm run live`.
+```
+{
+  "name": "todo-list-angular",
+  "version": "1.0.0",
+  "description": "simple todo list with angular",
+  "scripts": {
+    "live": "live-server",
+    "start": "npm run live"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+  	"angular": "^1.5.8"
+  },
+  "devDependencies": {
+  	"live-server": "^0.9.2"
+  }
+}
+```
+
+Our main html file looks like
+```html
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>ToDO App</title>
+</head>
+
+<body ng-app="todoApp">
+	<h1>Welcome</h1>
+	<div ng-controller="ListController as vm">
+		<h2>{{ vm.list.name }}</h2>
+
+		<!-- add a task -->
+
+		<button ng-click="vm.startAdd()"
+			ng-show="!vm.isInAddMode()">
+			Add a Task
+		</button>
+
+		<div ng-show="vm.isInAddMode()">
+			
+			<input placeholder="Task Name"
+				ng-model="vm.currentTask.name">
+			<button ng-click="vm.add()">Add</button>
+			<button ng-click="vm.cancel()">Cancel</button>	
+
+		</div>
+
+		<!-- list of tasks -->
+
+		<div ng-repeat="task in vm.list.tasks | orderBy: '$index' ">
+
+			<!-- normal -read mode version of the task -->
+
+			<div ng-show="vm.isInReadMode(task.id)">
+				<p>
+					{{ $index +1 }}: {{ task.name }} - completed: {{ task.complete }}
+				</p>
+				<!-- task options -->
+				<button ng-click="vm.startEdit(task.id)">Edit</button>
+				<button ng-click="vm.startRemove(task.id)">Delete</button>				
+			</div>
+
+			<!-- edit view of the task -->
+			
+			<div ng-show="vm.isInEditMode(task.id)">
+				<input placeholder="task name"
+					ng-model="vm.currentTask.name">
+				<input type="checkbox" 
+					ng-true-value="true"
+					ng-false-value="false"
+					ng-model="vm.currentTask.complete">
+				<button ng-click="vm.save()">Save</button>
+				<button ng-click="vm.cancel()">Cancel</button>	
+			</div>
+
+			<!-- delete task -->
+
+			<div ng-show="vm.isInRemoveMode(task.id)">
+				<p>
+					{{ task.name }} - completed: {{ task.complete }}
+				</p>
+				<button ng-click="vm.remove(task.id)">Remove</button>
+				<button ng-click="vm.cancel()">Cancel</button>
+			</div>
+
+		</div>
+
+	</div>
+
+	<script src="./js/angular/angular.js"></script>
+	<script src="./js/app/app.js"></script>
+	<script src="./js/app/list/list_controller.js"></script>
+</body>
+
+</html>
+```
+
+And our **js/app/app.js**
+```js
+angular
+	.module('todoApp', [])
+```
+
+And our controller **js/app/list/list_controller.js**
+```js
+angular
+	.module('todoApp')
+	.controller('ListController', ListController);
+	// setter, getter
+
+// constructor function
+function ListController() {
+
+	// controllerAs syntax
+	var vm = this;
+	var selectedId = -1; // none of the list tasks
+	var addFlag = false;
+	var editFlag = false;
+	var removeFlag = false;
+
+	vm.currentTask = {};
+	vm.startAdd = startAdd;
+	vm.startEdit = startEdit;
+	vm.isInReadMode = isInReadMode;
+	vm.isInEditMode = isInEditMode;
+	vm.isInRemoveMode = isInRemoveMode;
+	vm.save = save;
+	vm.isInAddMode = isInAddMode;
+	vm.add = add;
+	vm.startRemove = startRemove;
+	vm.cancel = cancel;
+	vm.remove = remove;
+	// we call our protected function
+
+	// kindda like a ruby class method
+	vm.list = {
+		name: "Main Todo List",
+		tasks: [
+
+			{
+				id: 1,
+				name: "Finish flatiron school",
+				complete: false
+			},
+			{
+				id: 2,
+				name: "Watch JS tuts",
+				complete: false
+			},
+			{
+				id: 3,
+				name: "Take some holidays",
+				complete: false
+			}	
+
+		]		
+	};
+
+	// make sure no one is selected and we're in default state
+	function reset() {
+		selectedId = -1;
+		addFlag = false;
+		editFlag = false;
+		removeFlag = false;		
+	}
+
+	function startAdd() {
+		reset();
+		addFlag = true; // switched on 'isInAddMode' and the div appears
+		vm.currentTask = {}; // instantiates a new object
+	}
+
+	// shows the form, hides the button
+	function isInAddMode() {
+		return addFlag;
+	}
+
+
+	// function gets called when 'create task button' is clicked
+	// creates the task with the name and complete as false
+	function add() {
+		// vm.currentTask.name = ... thanks to ng-model
+		vm.currentTask.complete = false;
+		vm.list.tasks.push(vm.currentTask);
+		reset(); // makes the add form disappear
+	}
+
+	// tells each task if it is in read (or then in edit mode)
+	function isInReadMode(id) {
+		return selectedId < 0 || selectedId != id;
+	}
+
+	// not in read mode anymore: editmode!
+	function isInEditMode(id) {
+		return selectedId == id && editFlag
+	}	
+
+	function startEdit(id) {
+		reset();
+		selectedId = id;
+		editFlag = true;
+
+		// we search for the current task to populate name and complete
+		// like find(id) in ruby
+		for ( var i = 0; i < vm.list.tasks.length; i++) {
+			var task = vm.list.tasks[i];
+			if (task.id == id) {
+				vm.currentTask.name = task.name
+				vm.currentTask.complete = task.complete
+			}
+		}
+	}
+
+	// will show the delete view template
+	function startRemove(id) {
+		reset();
+		selectedId = id;
+		removeFlag = true;
+	}
+
+	function save() {
+		for (var i = 0; i < vm.list.tasks.length; i++) {
+			if (vm.list.tasks[i].id == selectedId) {
+				vm.list.tasks[i].name = vm.currentTask.name;
+				vm.list.tasks[i].complete = vm.currentTask.complete;
+				reset();
+			};
+		}
+	}
+
+	function isInRemoveMode(id) {
+		return selectedId == id && removeFlag
+	}
+
+	function cancel() {
+		reset()
+	}
+
+	function remove(id) {
+		for (var i = 0; i < vm.list.tasks.length; i++) {
+			if (vm.list.tasks[i].id == id) {
+				vm.list.tasks.splice(i, 1);
+				reset();
+			};
+		};
+	}
+
+}	
+```
+
+## Building a simple add button
+HTML like
+```html
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Angular Application</title>
+</head>
+<body>
+
+    <h1>Welcome</h1>
+    <div ng-app="app">
+        <div ng-controller="ContactController as vm">
+            <div>
+                <input ng-model="vm.currentTask.name" placeholder="Name">
+                <input ng-model="vm.currentTask.phone" placeholder="Phone">
+                <button ng-click="vm.addContact()">Add</button>
+            </div>            
+            <ul>
+                <li>
+                    <h4>{{ vm.currentTask.name }}</h4>
+                    <h6>{{ vm.currentTask.phone }}</h6>
+                </li>
+                <li ng-repeat="contact in vm.contacts">
+                    <h4>{{ contact.name }}</h4>
+                    <h6>{{ contact.phone }}</h6>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="js/angular.js"></script>
+    <script src="js/app/app.js"></script>
+    <script src="js/app/controllers/ContactController.js"></script>
+
+</body>
+</html>
+
+```
+
+And controller
+```js
+function ContactController() {
+    var vm = this;
+
+    vm.currentTask = {};
+
+    vm.contacts = [
+        {
+            name: 'Bob',
+            phone: '0123458690'
+        },{
+            name: 'Tim',
+            phone: '3934203242'
+        },{
+            name: 'Ross',
+            phone: '0684059433'
+        }
+    ];
+
+    vm.addContact = function () {
+        vm.contacts.push(vm.currentTask);
+        vm.currentTask = {}; // reinit the currentTask    
+    }
+}
+
+angular
+    .module('app')
+    .controller('ContactController', ContactController);
+```
+
+# Testing with Protractor
+
+First, let's install Protractor, a library for end-to-end feature testing in Angular. As opposed to Karma and Jasmine, we use Protractor to actually test the HTML side of things. Jasmine only let's us test what's happening programatically. With Protractor, we can click on buttons and enter text into inputs, etc. This way, we're interacting with our site the same way our users will and testing the results that they'll get back.
+
+ To install Protractor, go into your command line and enter:
+
+```bash
+npm install -g protractor
+```
+
+Make sure this is working by entering:
+
+```bash
+protractor --version
+```
+
+We then need to update `webdriver`, which is provided to us when we install protractor.
+
+```bash
+webdriver-manager update
+```
+
+Now, we need to start the Selenium Server. This is a webserver that protractor will communicate with to run our tests.
+
+```bash
+webdriver-manager start
+```
+
+### Writing a test
+
+Let's write a protractor test.
+
+Protractor lets us grab web pages and interact with elements on the page.
+
+To start, we need to load a page to interact with. For this example, we're going to grab Angular's website. To do this, we'll call the `get` method on our `browser` object and pass in a URL. 
+
+```js
+describe('Angular Website', function() {
+	it('should add a todo', function() {
+		browser.get('https://angularjs.org');
+	});
+});
+```
+
+Now, we can select an element on the page using the `element` function. We can select it via multiple different ways. One way to grab an element is using the `ng-model` selector.
+
+Now, the Angular website features a todo example. The `ng-model` value for the input to add a new todo is `todoList.todoText`. Let's grab the element.
+
+```js
+describe('angularjs homepage todo list', function() {
+	it('should add a todo', function() {
+		browser.get('https://angularjs.org');
+
+		element(by.model('todoList.todoText'))
+	});
+});
+```
+
+Now that we've got the element we can actually write inside it, using `.sendKeys`.
+
+```js
+describe('angularjs homepage todo list', function() {
+	it('should add a todo', function() {
+		browser.get('https://angularjs.org');
+
+		element(by.model('todoList.todoText')).sendKeys('Writing tests!!');
+	});
+});
+```
+
+This will type in the element just as if a user was typing!
+
+Now, we need to actually press the `add` button.
+
+```js
+describe('angularjs homepage todo list', function() {
+	it('should add a todo', function() {
+		browser.get('https://angularjs.org');
+
+		element(by.model('todoList.todoText')).sendKeys('Writing tests!!');
+		element(by.css('[value="add"]')).click();
+	});
+});
+```
+
+Here, we're grabbing the add button by its CSS selector and then clicking it - so simple!
+
+Now, that was completely useless unless we can check that the todo actually gets added.
+
+Much like the model selector we used above, we can select elements by their `ng-repeat` value.
+
+```js
+describe('angularjs homepage todo list', function() {
+	it('should add a todo', function() {
+		browser.get('https://angularjs.org');
+
+		element(by.model('todoList.todoText')).sendKeys('Writing tests!!');
+		element(by.css('[value="add"]')).click();
+
+		var todoList = element.all(by.repeater('todo in todoList.todos'));
+	});
+});
+```
+
+Simple! As multiple items have the `ng-repeat` on them, we need to use `element.all()` instead of `element()` so we get an array of all of the elements.
+
+If you take a look at the todo list, we originally had two todos and now we should have three. We can test the count of items much like our previous tests, by using `expect`.
+
+```js
+describe('angularjs homepage todo list', function() {
+	it('should add a todo', function() {
+		browser.get('https://angularjs.org');
+
+		element(by.model('todoList.todoText')).sendKeys('Writing tests!!');
+		element(by.css('[value="add"]')).click();
+
+		var todoList = element.all(by.repeater('todo in todoList.todos'));
+		expect(todoList.count()).toEqual(3);
+	});
+});
+```
+
+Sorted! We are now checking that there are three elements. Let's make sure that the new todo matches the text we put into the input.
+
+```js
+describe('angularjs homepage todo list', function() {
+	it('should add a todo', function() {
+		browser.get('https://angularjs.org');
+
+		element(by.model('todoList.todoText')).sendKeys('Writing tests!!');
+		element(by.css('[value="add"]')).click();
+
+		var todoList = element.all(by.repeater('todo in todoList.todos'));
+		expect(todoList.count()).toEqual(3);
+		expect(todoList.get(2).getText()).toEqual('Writing tests!!');
+	});
+});
+```
+
+We can run this test by running `protractor conf.js`. It will then launch a Chrome instance, go to the Angular website and run our tests.
+
+This simplistic API allows us to click and interact with a lot of different items on our pages, so we can test all of our directives functionality.
+
+Another example
+```js
+describe('angularjs homepage todo list', function() {
+	it('should add a new contact', function() {
+		browser.get('http://localhost:8080');
+
+		element(by.model('contact.name')).sendKeys('Tim');
+		element(by.model('contact.phone')).sendKeys('3934203242');
+
+		element(by.css('[class="button"]')).click();
+
+		var contacts = element.all(by.repeater('contact in vm.contacts'));
+		
+		expect(contacts.count()).toEqual(4);
+		expect(contacts.get(1).element(by.model('contact.name')).getAttribute('value')).toEqual('Tim');
+		expect(contacts.get(1).element(by.model('contact.phone')).getAttribute('value')).toEqual('3934203242');
+
+	});
+});
+```
+
+# Filtering our datasets
+
+Filters are simple functions that we can use to manipulate (or filter) data in Angular.
+
+We've touched on the `ng-repeat` directive for repeating a list of data - wouldn't it be neat if we could filter on that data too? This comes in handy when we have a large dataset and would like to quickly search through it to find the relevant data.
+
+We can do this using the pipe operator (`|`) after the ng-repeat. The syntax for this is `| filterName: value`. We can use different filters (by changing the `filterName` part) and change what the filter criteria is by changing the `value` part.
+
+The filter that we'd use to filter an ng-repeat by a value is simply named `filter`! We can pass a variable to this filter and it will search the whole dataset for us.
+
+```html
+<input ng-model="ctrl.search" />
+
+<ul>
+	<li ng-repeat="data in ctrl.data | filter: ctrl.search">
+	</li>
+</ul>
+```
+
+This will filter our dataset by the value of the input data - providing us with a really simple yet powerful search filter! As we type in the input, `ctrl.search` gets updated. Angular notices that we're using `ctrl.search` as a filter and filters the repeat by the value. This means that if we type in "bob", only results containing "bob" will be displayed!
+
+## Display values
+
+There are a few other filters that Angular provides us with, that we don't necessarily use for `ng-repeat`s.
+
+Another powerful filter is `date`. This can take a unix timestamp and returns it nicely formatted for us. We use this with the same syntax as above, passing through a string as the value. The string will change how the date is displayed. Check out the docs to see all the ways we can display a date - there's loads!
+
+```html
+<abbr>
+	{{ ctrl.date | date:'medium' }} <!-- Dec 25, 2016 2:23:56 PM -->
+</abbr>
+```
+
+## Filtering in Controllers
+
+We can also filter in our controllers, using the `$filter` service. This is the preferred method for filtering on big sets of data as it helps increase performance.
+
+The syntax to use `$filter` is close to what we used above:
+
+```js
+$filter('filterName')(data, 'value');
+```
+
+This will then return the filtered data.
+
+If we were to use this instead of the filter in an `ng-repeat`, it would look like the following:
+
+```js
+function SomeController($filter) {
+	this.list = [{
+		name: 'Bob'
+	}, {
+		name: 'Tom'
+	}];
+
+	this.search = 'B';
+
+	this.filteredList = $filter('filter')(this.list, this.search);
+}
+```
+
+We would then use `filteredList` like normal in our `ng-repeat`:
+
+```html
+<ul>
+	<li ng-repeat="item in ctrl.filteredList">
+		{{ item.name }}
+	</li>
+</ul>
+```
+
+# Testing filters
+
+As we learned earlier, we can use either filters in the DOM or in our controllers.
+
+We're going to be writing our filter's tests using Karma and Jasmine - this means we will have to be using the filters in our controllers as we cannot test our DOM. We do this because our filters directly manipulate data, and that's all we need to test. If they manipulated the DOM, we'd test the DOM.
+
+The tests we are about to write are quite similar to tests we've done before. We will be using a controller that filters a list, and we'll be ensuring that filtered list is correct.
+
+Let's take our basic controller. We've got a list of people, a search term and our filtered list. We've got a function to call to re-filter our list when the search term changes (this could be called when a user presses search or by using `ng-change` on the input to fire it whenever the input changes).
+
+```js
+function ContactController($filter) {
+    this.list = [{
+        name: 'Bob'
+    }, {
+        name: 'Tom'
+    }];
+
+    this.search = 'B';
+
+    this.filteredList = $filter('filter')(this.list, this.search);
+
+    this.changeFilter = function () {
+        this.filteredList = $filter('filter')(this.list, this.search);
+    };
+}
+
+angular
+    .module('app')
+    .controller('ContactController', ContactController);
+```
+
+We can now inject this into our tests and checkout the result of `this.filteredList`.
+
+```js
+describe('ContactController', function () {
+    var $controller;
+
+    beforeEach(module('app'));
+
+    beforeEach(inject(function (_$controller_) {
+        $controller = _$controller_;
+    }));
+
+
+    it('should filter the results correctly', function () {
+        var $scope = {};
+        $controller('ContactController as vm', {$scope: $scope});
+
+        // $scope.vm holds all of our values
+    });
+});
+```
+
+We can access the filtered list via `$scope.vm.filteredList`. Now, our search term is simply `"B"` - meaning we should only receive an array with Bob in it back from the filter. Let's test this out:
+
+```js
+describe('ContactController', function () {
+    var $controller;
+
+    beforeEach(module('app'));
+
+    beforeEach(inject(function (_$controller_) {
+        $controller = _$controller_;
+    }));
+
+
+    it('should filter the results correctly', function () {
+        var $scope = {};
+        $controller('ContactController as vm', {$scope: $scope});
+
+        expect($scope.vm.filteredList[0]).toEqual({name: 'Bob'});
+    });
+});
+```
+
+If you run the tests now, they will pass!
+
+Now, we need to test that we can change our filter too. To do this, we're going to change `$scope.vm.search` (our search critera) to `"T"`. We can then call our function to re-filter our list, and check the first result again.
+
+```js
+it('should re-filter the results correctly when changing search term', function () {
+    var $scope = {};
+    $controller('ContactController as vm', {$scope: $scope});
+
+    $scope.vm.search = 'T';
+
+    $scope.vm.changeFilter();
+
+    expect($scope.vm.filteredList[0]).toEqual({name: 'Tom'});
+});
+```
+
+Another example 
+```js
+describe('ContactController', function () {
+    var $controller;
+
+    beforeEach(module('app'));
+
+    beforeEach(inject(function (_$controller_) {
+        $controller = _$controller_;
+    }));
+
+
+    it('should filter by gender', function () {
+        var $scope = {};
+        $controller('ContactController as vm', {$scope: $scope});
+
+        $scope.vm.search = 'female';
+        $scope.vm.changeFilter();
+
+        expect($scope.vm.filteredList.length).toBe(71);
+    });
+
+    it('should filter by geography', function() {
+    	var $scope = {};
+    	$controller('ContactController as vm', {$scope: $scope});
+
+    	$scope.vm.search = 'Manchester';
+    	$scope.vm.changeFilter();
+
+    	expect($scope.vm.filteredList.length).toEqual(8);
+    });
+
+});
+```
+
+# Expressions
+
+Anything in between the `{{}}` braces we've been using in our templates is an "expression". We've only been doing *simple* expressions up to this point, just referencing a variable.
+
+However, expressions can be a lot more powerful. We can add, look up indexes/properties in arrays/objects or even use ternary operators (or do most of what we can do in JavaScript, such as `{{ 1 + 1 }}` outputting 2).
+
+### How long?
+
+One common expression that we may use on a day-to-day basis is the length of an array. For instance, we might want to display how many notifications a user has or how many emails they've got. We can do this purely with the `.length` property - much like how we do it in JavaScript!
+
+```html
+{{ someArray.length }}
+```
+
+It's as simple as that!
+
+### If this.. or that
+
+We can also use a ternary expression. This takes a boolean value and switches what it displays depending if the boolean is true or false.
+
+```html
+{{ someArray.length === 0 && 'No emails!' || 'Lots of emails' }}
+
+<h6>You have {{ ctrl.emails.length == 0 && 'no' || ctrl.emails.length }} emails</h6>
+```
+
+`No emails!` will be displayed if `someArray.length === 0`. If it isn't equal to zero, `Lots of emails` will be displayed
+
+# Custom Services
+
+Angular allows us, much like controllers, to create custom services. These are very powerful and can do a lot for us, such as communicating with APIs or manipulating data. We can inject these into any controller we'd like to, meaning we won't be repeating ourselves.
+
+This fits perfectly into our "MVVM" pattern. We can create services (our helpers) to do all the "dirty" work for us (communicate with APIs, etc), and we can then utilise them in our controllers. This keeps our controllers thin and all the business logic inside our services.
+
+## .service()
+
+Our services follow the same setup as our custom controllers. We use `.service` to create them! This is the basic setup of a service:
+
+```js
+function SomeService() {
+	this.someFunction = function () {
+
+	};
+}
+
+angular
+	.module('app')
+	.service('SomeService', SomeService);
+```
+
+Very easy! With services, much like our controllers (when using controllerAs), we attach all of our functions to `this`. These will be publicly accessible by anyone who injects the service. We can also create private functions by using normal functions, as such:
+
+```js
+function SomeService() {
+	function privateMethod() {
+
+	}
+
+	this.publicMethod = function () {
+		privateMethod();
+	};
+}
+
+angular
+	.module('app')
+	.service('SomeService', SomeService);
+```
+
+## Injecting our services
+
+Much like when we used `$timeout`, we can inject our custom services into our controllers by using their name. To inject our `SomeService` above, we just add `SomeService` as an argument to our controller:
+
+```js
+function SomeController(SomeService) {
+	SomeService.publicMethod();
+}
+
+angular
+	.module('app')
+	.controller('SomeController', SomeController);
+```
+
+# Making HTTP requests
+
+In JavaScript, if we need to make HTTP requests, we'd use `XMLHTTPRequest`. This is quite an outdated aspect of JavaScript, and it didn't provide the most simplistic API:
+
+```js
+var request = new XMLHttpRequest();
+
+request.onreadystatechange = function() {
+	if (request.readyState === 4 && request.status === 200) {
+	  console.log('data loaded!');
+	}
+};
+
+request.open('GET', 'http://api.com/api/method', true);
+request.send();
+```
+That's a lot of work just to make one HTTP request. Luckily, Angular gives us a better way - enter `$http`.  
+
+## What is $http?
+
+$http is a core Angular service that provides a simplistic API to allow us to communicate with HTTP endpoints with ease. It is a wrapper for `XMLHTTPRequest` to allow us to use a simplistic, easy API.
+
+There are a few ways to do requests - let's take a look at them
+
+### $http()
+
+We can use `$http` as a function, passing through a configuration object with it, as such:
+
+```js
+$http({
+	method: 'GET',
+	url: '/someURL'
+});
+
+$http({
+	method: 'POST',
+	data: {
+		username: 'Bill'
+	},
+	url: '/someOtherURL'
+});
+```
+
+This will return a promise with the data - we call the `.then` function that the function call returns - passing through a callback function that will get called when the request has finished.
+
+A "promise" is just a specification on implementing certain methods. The $http function returns an object of methods, one of them being `then`. We use `then` to execute a callback whenever the "promise" is resolved (the request has finished loading).
+
+```js
+$http({
+	method: 'GET',
+	url: '/someURL'
+})
+	.then(function (data) {
+		console.log(data);
+	});
+```
+
+This will load the response from our URL, and allow us to consume the data somewhere after it's returned the response.
+
+### $http.get() and $http.post();
+
+$http also gives us helper functions instead of calling it as a function itself.
+
+They act similar to the example above, but as we already have the method in the name we can just pass through the URL we would like as a string.
+
+```js
+$http.get('/someURL');
+
+$http.post('/someOtherURL', { username: 'Bill' });
+```
+
+### Using these in our services
+
+Now, any usage of `$http` should be done in a custom service that we create. This makes our controllers nice a thin, and allows us to call our API from anywhere in the application. If we didn't abstract our API calls out into a service, we might end up having two calls to the same endpoint somewhere in our application. If that endpoint then changed, we'd have to look around the application for any usage of the endpoint, instead of just changing it once in one file.
+
+This fits into our `MVVM` architecture - thin controllers and all the logic being done by helpers. It means we have code that can be shared between the whole application.
+
+Let's have a look at how we'd put our `$http` usage into our services.
+
+```js
+function UserService($http) {
+	this.getLoggedInUser = function () {
+		return $http.get('/rest/user');
+	}
+}
+
+angular
+	.module('app')
+	.service('UserService', UserService);
+```
+
+Here we have a function that we can call in our controllers to get information on the currently logged in user. We're returning the `$http` call so we can then use the `.then` method in our controllers to then update our data. You'd consume this data in a controller as follows:
+
+```js
+function HeaderController(UserService) {
+	var ctrl = this;
+
+	ctrl.user = '';
+
+	UserService
+		.getLoggedInUser()
+		.then(function (res) {
+			ctrl.user = res.data.username;
+		});
+}
+
+angular
+	.module('app')
+	.controller('HeaderController', HeaderController);
+```
+
+We call our `UserService.getLoggedInUser()` function and then update our controller's values with the response that's returned. Awesome!
+
+Now, we might have a form to update the user's email address. We'd then use `$http.post()` in our service:
+
+```js
+function UserService($http) {
+	this.getLoggedInUser = function () {
+		return $http.get('/rest/user');
+	};
+
+	this.updateEmail = function (emailAddress) {
+		return $http.post('/rest/user/email', {email: emailAddress});
+	};
+}
+
+angular
+	.module('app')
+	.service('UserService', UserService);
+```
+
+We could then call this in our controller, after a button is clicked for example:
+
+```js
+function SettingsController(UserService) {
+
+	this.emailAddress = ''; // this is bound to an input via `ng-model`
+
+	this.submitForm = function () {
+		UserService
+	        .updateEmail(this.emailAddress)
+	        .then(function () {
+	            alert('Email updated!');
+	        });
+	};
+}
+
+angular
+	.module('app')
+	.controller('SettingsController', SettingsController);
+```
+
+# What is $resource?
+
+$resource is a service that creates a resource object for us to communicate with APIs. We pass through a URL and it gives us an object back that looks like this:
+
+```js
+var User = $resource('/user/:userId');
+
+/**
+ * User = { get: function (),
+ *          save: function (),
+ *          remove: function ()
+ *        }
+ */
+```
+
+Here, we've defined our URL. Let's break that down:
+
+`/user/:userId`
+
+We're defining our URL as `/user/:userId` - but hold on, we can't have colons in our URLs!?
+
+Well, with $resource, using a colon in a URL means that section is *actually* a variable. `:userId` means that we aren't actually going to put `:userId` into our URL, rather that we will be replacing `:userId` with an actual user ID. This allows us to put our data into our URL - for instance, we would end up querying `/user/1` or `/user/1231938`. All requests will go to the same URL, unless we don't specify a userId. If we don't specify a userId, it will just go to `/rest/user`.
+
+Now, our `User` variable is equal to an object containing multiple functions. We can call these to make the appropriate requests.
+
+### Usage in a service
+
+To use this in our service, we'd define our `$resource` at the top, and then different methods will use that resource.
+
+```js
+function UserService($resource) {
+	var User = $resource('/user/:userId');
+
+	this.getUser = function (userId, callback) {
+		User.get({userId: userId}, callback);
+	};
+}
+```
+
+And then we can use that as follows in our controllers:
+
+```js
+function MyController(UserService) {
+	UserService.getUser(3, function (user) {
+		console.log(user);
+	});
+}
+```
+
+### Reading
+
+When we call `.get()`, you've guessed it - it makes a GET request for us. As the first argument, we pass in an object with the data we need for request. In the case of our endpoint above, we need to pass in an object with a `userId` property, in order for Angular to replace `:userId` with the actual user's ID.
+
+```js
+User.get({userId: 3}, function (user) {
+	console.log(user);
+});
+```
+
+Our second argument is a callback that gets fired when the request completes. This will make a GET request to `/user/3` (as we've passed in 3 as the `userId`).
+
+If we were to still be using `$http`, it would look like this:
+
+```js
+$http
+	.get('/rest/user/3')
+	.then(function (user) {
+		console.log(user)
+	});
+```
+
+### Updating and Creating
+
+Now, we can create new users and also update previous users using the `.$save()` function. This will issue a POST request to the same URL as above.
+
+#### Updating
+For existing users, we'd do any modifications inside the `.get` callback, as we already have received the user. Note: we use `$save()` inside the `.get` callback as we may have a property named `save` on the user.
+
+```js
+User.get({userId: 3}, function (user) {
+	console.log(user);
+
+	user.email = newEmailAddress;
+
+	user.$save();
+});
+```
+
+#### Creating
+When we want to create a new user, we just simply create a new instance of `User`, and then call `.$save()` again.
+
+```js
+var user = new User();
+
+user.name = 'Bill Gates';
+user.email = 'bill@microsoft.com';
+
+user.$save();
+```
+
+This will issue a POST request again, with details about our new user.
+
+The `$http` equivalent is:
+
+```js
+$http
+	.post('/rest/user', {name: 'Bill Gates', email: 'bill@microsoft.com'})
+	.then(function (user) {
+		console.log(user)
+	});
+```
+
+### Removing
+
+We can also delete users, using `.$delete()`.
+
+```js
+User.get({userId: 3}, function (user) {
+	console.log(user);
+
+	user.email = newEmailAddress;
+
+	user.$delete();
+});
+```
+
+```js
+$http
+	.delete('/rest/user/3')
+	.then(function (user) {
+		console.log(user)
+	});
+```
+
+# What is a HTTP interceptor?
+
+Now, using `$http` or `$resource` means we're going to end up doing a lot of HTTP requests in our applications.
+
+Eventually, we may need to manipulate all of the requests, or even take a wide-look at all the responses and handle any errors globally instead of on an individual case - we can do this with HTTP interceptors.
+
+We might also want to retry requests if they fail. We can do this with HTTP interceptors!
+
+HTTP interceptors allow us to define functionality that will happen before every request is made, or just after every request has come back from the server. This means we can append things to every request we make, or handle errors that may arise from the backend (it's better to do this in an interceptor and have application-wide error handling, rather than doing it for every possible request we make).
+
+HTTP interceptors are just simple services that we then push into an interceptors array in the `$httpProvider` service.
+
+First, let's look at how we'd make the service:
+
+```
+function MyInterceptor() {
+
+}
+
+angular
+	.module('app')
+	.service('MyInterceptor', MyInterceptor)
+	.config(function ($httpProvider) {
+		$httpProvider.interceptors.push('MyInterceptor');
+	});
+	// This last call pushes our new interceptor into the $httpProvider interceptor array
+```
+
+If this looks familiar - it is! Now you might be wondering how we actually intercept things.
+
+There are certain functions we can attach to our interceptor service - Angular will look if they exist, and then run them if they do.
+
+### Before a request
+
+Now, to intercept the request before it is actually made, we need to define the function `request` on `this`.
+
+```
+function MyInterceptor() {
+	this.request = function (config) {
+		// this will be fired before each request!
+	};
+}
+
+angular
+	.module('app')
+	.service('MyInterceptor', MyInterceptor)
+	.config(function ($httpProvider) {
+		$httpProvider.interceptors.push('MyInterceptor');
+	});
+```
+
+We can now manipulate our request by editing the `config` variable passed through. For instance, if we want to add another header to our request, we just modify `config.headers`.
+
+```
+function MyInterceptor() {
+	this.request = function (config) {
+		config.headers['X-Requested-From'] = 'Angular';
+		return config;
+	};
+}
+
+angular
+	.module('app')
+	.service('MyInterceptor', MyInterceptor)
+	.config(function ($httpProvider) {
+		$httpProvider.interceptors.push('MyInterceptor');
+	});
+```
+
+This will append the `X-Requested-From` header to every single request going through `$http`!
+
+### After a request
+
+We can also intercept after a request has been completed (but before we return the results to our controllers/services) by attaching the function `response`.
+
+We might want to log what time the request came back:
+
+```
+function MyInterceptor() {
+	this.response = function (config) {
+		config.config.responseTime = Date.now();
+		return config;
+	};
+}
+
+angular
+	.module('app')
+	.service('MyInterceptor', MyInterceptor)
+	.config(function ($httpProvider) {
+		$httpProvider.interceptors.push('MyInterceptor');
+	});
+```
+
+We can then check when the request was completed in our services!
+
+### After an error
+
+We can just purely kick in our interceptor after an error too. We could have some service to display notifications to the user, and we can invoke this service in our interceptor if there was an error. We can do this by the `responseError` function.
+
+```
+function MyInterceptor(NotificationService) {
+	this.responseError = function (config) {
+		NotificationService
+			.showError(config);
+	};
+}
+
+angular
+	.module('app')
+	.service('MyInterceptor', MyInterceptor)
+	.config(function ($httpProvider) {
+		$httpProvider.interceptors.push('MyInterceptor');
+	});
+```
+
+(NotificationService will be a custom service that we have made, alerting the user when we call `.showError`)
+
+# Testing Services
+
+Our services are grabbing and manipulating data all over the place, and as we may be using them all over our application, it is important that we test our services to ensure that when we change them, we don't break our application.
+
+## Grabbing our services
+
+Previously, we've been using `$controller` to get our controllers, so logically we should be using `$service` to grab our services. Unfortunately, it's not that simple. We use `$controller` to both grab and instantiate our controllers. We don't need to instantiate our services, so we use a nice service named `$injector`!
+
+Let's take a look at how we'd grab our service:
+
+```js
+describe('OurService', function () {
+    beforeEach(module('app'));
+
+    var OurService;
+
+    beforeEach(inject(function ($injector) {
+        OurService = $injector.get('OurService');
+    }));
+
+
+    it('should test our service', function () {
+        // We can use OurService here
+    });
+
+});
+```
+
+It's a little bit different from before, but not an issue! Still really simple.
+
+We can now access all of our public methods our service gives us, and then test the results.
+
+For instance, for our `MathService` that we used earlier on in the series, we can test it as follows -
+
+```js
+describe('MathService', function () {
+    beforeEach(module('app'));
+
+    var MathService;
+
+    beforeEach(inject(function ($injector) {
+        MathService = $injector.get('MathService');
+    }));
+
+
+    it('should add up correctly', function () {
+        expect(MathService.sum([1,23]).toEqual(24);
+    });
+});
+```
+
+Yes, it's that simple!
+
+## Testing $http calls
+
+Now, our services are also going to be calling `$http` a lot, and it would be a lot of effort to mock an entire backend. Luckily, ngMocks provides us with a nice little tool called `$httpBackend`. This allows us to mock our API calls.
+
+There are three parts to `$httpBackend`:
+
+### $httpBackend.when
+
+We use `$httpBackend` to setup the responses to our HTTP calls. It accepts a method and a URL, and allows us to define the response that we'd get back.
+
+If we have a backend endpoint at `/rest/user` that responds with the current user's information, we can mock it as follows:
+
+```js
+describe('UserService', function () {
+    beforeEach(module('app'));
+
+    var UserService, $httpBackend;
+
+    beforeEach(inject(function ($injector) {
+        UserService = $injector.get('UserService');
+        $httpBackend = $injector.get('$httpBackend');
+
+        $httpBackend.when('GET', '/rest/user').respond({user: 'Bill Gates', email: 'bill@microsoft.com'});
+    }));
+});
+```
+
+### $httpBackend.expectGET
+
+Now, when we actually test the service's function that calls that endpoint, we need to tell ngMocks that we're expecting the request to occur. We do this by calling `$httpBackend.expectGET` with the endpoint we're expecting to have a request to.
+
+```js
+describe('UserService', function () {
+    beforeEach(module('app'));
+
+    var UserService, $httpBackend;
+
+    beforeEach(inject(function ($injector) {
+        UserService = $injector.get('UserService');
+        $httpBackend = $injector.get('$httpBackend');
+
+        $httpBackend.when('GET', '/rest/user').respond({user: 'Bill Gates', email: 'bill@microsoft.com'});
+    }));
+
+    it('should get the current users information', function (done) {
+        $httpBackend.expectGET('/rest/user');
+    });
+});
+```
+
+We're now setup to receive the mocked backend response. Our response will have several properties, with the `data` property referring to the body of our response. In this case, It'll be an object with `name` equal to `Bill Gates` and his email too.
+
+```js
+describe('UserService', function () {
+    beforeEach(module('app'));
+
+    var UserService, $httpBackend;
+
+    beforeEach(inject(function ($injector) {
+        UserService = $injector.get('UserService');
+        $httpBackend = $injector.get('$httpBackend');
+
+        $httpBackend.when('GET', '/rest/user').respond({user: 'Bill Gates', email: 'bill@microsoft.com'});
+    }));
+
+    it('should get the current users information', function (done) {
+        $httpBackend.expectGET('/rest/user');
+
+        UserService
+          .getUserInfo()
+          .then(function (res) {
+            var data = res.data;
+            if (data.email === 'bill@microsoft.com' && data.user === 'Bill Gates') {
+              done();
+            }
+          });
+	});
+});
+```
+
+Here, instead of using `expect().toBe()`, we call a function named `done()` if our response is correct. This means that we can do asynchronous tests in Jasmine. An important item to note here is that we must pass the `done` function in as a argument to this test for this feature to work. 
+
+### $httpBackend.flush()
+
+We then need to call `$httpBackend.flush()` to immediately execute all pending requests (which then fires off our request, calling our callback with the returned data and runs the test).
+
+```js
+describe('UserService', function () {
+    beforeEach(module('app'));
+
+    var UserService, $httpBackend;
+
+    beforeEach(inject(function ($injector) {
+        UserService = $injector.get('UserService');
+        $httpBackend = $injector.get('$httpBackend');
+
+        $httpBackend.when('GET', '/rest/user').respond({user: 'Bill Gates', email: 'bill@microsoft.com'});
+    }));
+
+    it('should get the current users information', function (done) {
+        $httpBackend.expectGET('/rest/user');
+
+        UserService
+          .getUserInfo()
+          .then(function (res) {
+            if (res.email === 'bill@microsoft.com' && res.user === 'Bill Gates') {
+              done();
+            }
+          });
+
+        $httpBackend.flush();
+	});
+});
+```
+
+All done! We've now got a fully tested `UserService`, including mocked HTTP requests.
