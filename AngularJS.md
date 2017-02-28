@@ -3669,3 +3669,355 @@ In the view
 </div>
 ```
 
+# Using the compile/link functions
+
+Each directive has a lifecycle. Up until now we've only been using one part of the lifecycle - the controller. The controller is initiated and ran just before the directive is about to be mounted into the DOM. This is so we can manipulate any values that we need in time for the rendering.
+
+However, it might come to the point where we need to actually do raw DOM manipulation on the directive itself. For instance, we might have a jQuery plugin that straps into a DOM element - we'd need the actual DOM element in order to initiate it. One problem - the controller is initiated *before* the directive is in the DOM. What do we do?
+
+
+### `link`
+
+This is where the `link` function comes in. If we specify this, **we get a function executed *after* the directive has been mounted in the DOM**. We also then get the DOM element passed through to us as the second parameter.
+
+```js
+function someDirective() {
+  return {
+    template: [
+	  '<div>',
+	    'Hello!',
+	  '</div>'
+	].join(''),
+    link: function ($scope, $element, $attrs) {
+
+    }
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('someDirective', someDirective);
+```
+
+You can see above that we get three parameters (they must be in that order!). `$scope` - much like what we can inject into our controllers. `$element`, our DOM mounted element, and `$attrs`, an object of all the attributes used when the directive is initiated.
+
+### `compile`
+
+Compile allows us to manipulate the element before it is inserted into the DOM. This runs in between the `controller` and the `link` function. This gives us access to the unmounted DOM node, and the attributes.
+
+```js
+function someDirective() {
+  return {
+    template: [
+      '<div>',
+        'Hello!',
+      '</div>'
+    ].join(''),
+    compile: function ($element, $attrs) {
+
+    }
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('someDirective', someDirective);
+```
+
+In our compile function, we'd then return an object with `pre` and `post` values. Both of these are functions.
+
+These are `pre-link` and `post-link` functions, giving us access to every single point in the directive lifecycle.
+
+Take a look at this diagram of the lifecycle:
+
+![Image](https://camo.githubusercontent.com/fe421dba43140e49c1f36b6bb247322f64928918/687474703a2f2f692e737461636b2e696d6775722e636f6d2f58524473362e706e67)
+
+This means that if we put some `console.log` calls in our compile function, as so:
+
+```js
+function someDirective() {
+  return {
+    template: [
+      '<div>',
+        'Hello!',
+      '</div>'
+    ].join(''),
+    controller: function () {
+        console.log('controller');
+    },
+    compile: function ($element, $attrs) {
+        console.log('compile');
+
+        return {
+            pre: function (scope, element, attrs) {
+                console.log('pre-link');
+            },
+            post: function (scope, element, attrs) {
+                console.log('post-link');
+            }
+        }
+    }
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('someDirective', someDirective);
+```
+
+We would get this printed out in the console:
+
+```js
+compile
+controller
+pre-link
+post-link
+```
+
+What are all of these stages?
+
+- `compile` - ready to compile the directive
+- `controller` - manipulate all data **before** the directive is actually compiled
+- `pre-link` - the directive is **compiled** to DOM nodes, but isn't inserted into the DOM
+- `post-link` - the directive has been **inserted into the DOM** (**same as the link function**)
+
+Generally, we should be using the pre-link (compile) function to do any DOM manipulation - moving nodes, changing HTML/styles etc.
+
+We'd want to use the post-link (link) function to add event listeners.
+
+This gives us full control over what we want to do with our directives.
+
+Example:
+```js
+function SomeDirective() {
+	return {
+		template: [
+			'<div>',
+				'Replace this text!',
+			'</div>'
+		].join(''),
+		compile: function (elem, attrs) {
+			return {
+				pre: function (scope, element, attrs) {
+					console.log(element);
+					element[0].innerText = "My Text";
+				},
+				post: function (scope, element, attrs) {
+					console.log(element);
+					element[0].addEventListener('click', function(){
+						alert('Yo');
+					});
+				}
+			}
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('someDirective', SomeDirective);
+```
+
+# Using the link function for DOM manipulation
+## Native Events
+
+Now that we've got access to the actual DOM nodes, we can do our own, manual DOM events on the elements. Whilst generally we'd use `ng-click` and let Angular do the dirty work for us, we can do it ourselves manually if we are using 3rd-party plugins that aren't compatible with Angular.
+
+Let's take a simple directive:
+
+```js
+function SomeDirective() {
+	return {
+		template: [
+			'<div>',
+				'<span>Click on me!</span>',
+			'</div>'
+		].join(''),
+		link: function (scope, elem, attrs) {
+
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('someDirective', SomeDirective);
+```
+
+Now it's important to note that `elem` isn't *actually* the raw DOM node. It is a jqLite (a light version of jQuery) (or jQuery if you have loaded jQuery before Angular) element. However, we can access the raw DOM node via `elem[0]`.
+
+Let's add a click event to our `<span />`.
+
+```js
+function SomeDirective() {
+	return {
+		template: [
+			'<div>',
+				'<span>Click on me!</span>',
+			'</div>'
+		].join(''),
+		link: function (scope, elem, attrs) {
+			var actualElement = elem[0];
+
+			var spanElement = actualElement.querySelector('span');
+
+			spanElement.addEventListener('click', function () {
+				alert('You clicked me!');
+			});
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('someDirective', SomeDirective);
+```
+
+We're adding a DOM event to the actual DOM element rather than using jQuery/jqLite. This is because the API for them slightly differ, and as we can't guarantee what would be loaded on the page, we'll use native JavaScript events instead.
+
+Here, we will get an alert showing when the user clicks on the span. Awesome! Now, say that we want to actually update the `scope` values when the user clicks on the span - how do we do this? First of all, let's put a scope value in our view and controller:
+
+```js
+function SomeDirective() {
+	return {
+		template: [
+			'<div>',
+				'<span>Click on me!</span>',
+				'{{ status }}',
+			'</div>'
+		].join(''),
+		controller: function ($scope) {
+			$scope.status = 'Not clicked!';
+		},
+		link: function (scope, elem, attrs) {
+			var actualElement = elem[0];
+
+			var spanElement = actualElement.querySelector('span');
+
+			spanElement.addEventListener('click', function () {
+				scope.status = 'Clicked!';
+			});
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('someDirective', SomeDirective);
+```
+
+Now you can see that we're updating `scope` in our link function. However, this won't actually work. We're outside the scope of Angular here, so Angular isn't able to tell that we've updated our scope.
+
+However, we can manually push Angular to update, by using `scope.$apply()`. Don't worry about this magic, we'll go into detail with this soon.
+
+```js
+function SomeDirective() {
+	return {
+		template: [
+			'<div>',
+				'<span>Click on me!</span>',
+				'{{ status }}',
+			'</div>'
+		].join(''),
+		controller: function ($scope) {
+			$scope.status = 'Not clicked!';
+		},
+		link: function (scope, elem, attrs) {
+			var actualElement = elem[0];
+
+			var spanElement = actualElement.querySelector('span');
+
+			spanElement.addEventListener('click', function () {
+				scope.status = 'Clicked!';
+
+				scope.$apply();
+			});
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('someDirective', SomeDirective);
+```
+
+Sorted! This will update our `scope` with the new value. This is also effectively how `ng-click` works, which is why we use them instead of doing all of our DOM events in the link function!
+
+## Update the controller
+
+One problem - we don't *really* use `$scope` anymore - we use controller values. Well, much like when we required the parent controller in our previous README, we can actually request our own directives controller for use in the link function.
+
+To do this, we add `require` with the value `someDirective`. Before, we used `^nameOfDirective` to get the parent's directive. Notice how we aren't using a `^` anymore - we are no longer looking upwards to the parents for a controller - instead, we're asking for the controller of the directive (the `someDirective` part).
+
+```js
+function SomeDirective() {
+	return {
+		template: [
+			'<div>',
+				'<span>Click on me!</span>',
+				'{{ some.status }}',
+			'</div>'
+		].join(''),
+		require: 'someDirective',
+		controller: function () {
+			$scope.status = 'Not clicked!';
+		},
+		link: function (scope, elem, attrs, ctrl) {
+			var actualElement = elem[0];
+
+			var spanElement = actualElement.querySelector('span');
+
+			spanElement.addEventListener('click', function () {
+				// ctrl.status = undefined;
+				ctrl.status = 'Clicked!';
+
+				scope.$apply();
+			});
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('someDirective', SomeDirective);
+```
+
+Have a look at the minor changes we've made - we've now got that fourth argument in our link function too, and we're updating `ctrl.status` in our event.
+
+However, our status value in our controller is still on our `scope`. We need to change this over to the controller, using `controllerAs`. We can then attach the value to `this` instead of the scope.
+
+```js
+function SomeDirective() {
+	return {
+		template: [
+			'<div>',
+				'<span>Click on me!</span>',
+				'{{ some.status }}',
+			'</div>'
+		].join(''),
+		require: 'someDirective',
+		controller: function () {
+			this.status = 'Not clicked!';
+		},
+		controllerAs: 'some',
+		link: function (scope, elem, attrs, ctrl) {
+			var actualElement = elem[0];
+
+			var spanElement = actualElement.querySelector('span');
+
+			spanElement.addEventListener('click', function () {
+				ctrl.status = 'Clicked!';
+
+				scope.$apply();
+			});
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('someDirective', SomeDirective);
+```
+
+
+We're still using `scope.$apply()` though - why? We still use it because `$apply()` is a function only available on scope, and we still need to tell Angular that we've updated our view.
