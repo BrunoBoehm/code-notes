@@ -3236,3 +3236,436 @@ Here we've got our controller initiated with our scope data, ready for us to man
 
 Now we can manipulate our data to our hearts content. Our controllers can also have our services (such as `$timeout` or a custom service) injected so we can utilise the power of them in our directives too!
 
+Example: let's put the username to lowercase
+```js
+function ContactCard() {
+	return {
+		scope: {
+			name: '=',
+			email: '=',
+			phone: '=',
+			username: '='
+		},
+		template: [
+			'<div>',
+				'<h4>Contact Card</h4>',
+				'<label>Name:</label>',
+				'{{ name }}',
+				'<label>Email:</label>',
+				'{{ email }}',
+				'<label>Phone:</label>',
+				'{{ phone }}',
+				'<label>Username:</label>',
+				'<span class="username">{{ username }}</span>',
+			'</div>'
+		].join(''),
+		controller: function($scope){
+			$scope.username = $scope.username.toLowerCase();
+		},
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('contactCard', ContactCard);
+```
+
+# bindToController
+
+`bindToController` works exactly like our `scope` property, but puts the items into `this` instead of `$scope`. This is awesome - as we're going to be using `controllerAs`, we should have all of our values assigned the same variable.
+
+Let's take a look at how we'd convert our directives over to using `bindToController`:
+
+### Before
+
+```js
+function TwitterCard() {
+	return {
+    		template: [
+    			'<div class="twitter">',
+    				'<a href="{{ twitter.twitterLink }}/{{ handle }}">Follow @{{ handle }} on Twitter!</a>',
+    			'</div>'
+    		].join(''),
+    		scope: {
+    		    handle: '='
+    		},
+    		controller: function ($scope) {
+    			// $scope.handle === 'billgates'
+
+    			this.twitterLink = 'https://twitter.com';
+    		},
+    		controllerAs: 'twitter',
+    		restrict: 'E'
+    	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+You'll notice the inconsistency - we're using `{{ handle }}` as well as `{{ twitter.twitterLink }}`. This is data from our scope (passed through to the directive) as well as directive from our controller (using `this` to match best practices). Mixing the two isn't good!
+
+### After
+
+To fix this, we'll add a property called `bindToController` to our directive containing the values we want to have passed through. 
+
+```html
+<twitter-card handle="billgates"></twitter-card>
+```
+
+```js
+function TwitterCard() {
+	return {
+		template: [
+			'<div class="twitter">',
+				'<a href="{{ twitter.twitterLink }}/{{ twitter.handle }}">Follow @{{ twitter.handle }} on Twitter!</a>',
+			'</div>'
+		].join(''),
+		scope: {},
+		controller: function () {
+			// this.handle === 'billgates'
+
+			this.twitterLink = 'https://twitter.com';
+		},
+		controllerAs: 'twitter',
+        bindToController: {
+            handle: '='
+        },
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('twitterCard', TwitterCard);
+```
+
+Order is restored. We now have consistency! All of our values are now added to our controller's `this` object - meaning we're only accessing our data from our controller now!
+
+You might have noticed how we've still got our `scope` property - this is to tell Angular that we do still want a brand new scope - we're just not attaching anything to it.
+
+Another example
+```js
+function ContactCard() {
+	return {
+		scope: {},
+		template: [
+			'<div>',
+				'<h4>Contact Card</h4>',
+				'<label>Name:</label>',
+				'{{ contact.name }}',
+				'<label>Email:</label>',
+				'{{ contact.email }}',
+				'<label>Phone:</label>',
+				'{{ contact.phone }}',
+				'<label>Username:</label>',
+				'<span class="username">{{ contact.username }}</span>',
+			'</div>'
+		].join(''),
+		controller: function(){
+			
+		},
+		controllerAs: 'contact',
+		bindToController: {
+			name: '=',
+			email: '=',
+			phone: '=',
+			username: '='			
+		},
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('contactCard', ContactCard);
+```
+
+And the HTML
+```html
+<div ng-app="app" class="app">
+    <div ng-controller="ContactController as ctrl">
+        <ul>
+            <li ng-repeat="contact in ctrl.contacts">
+                <contact-card
+                        name="contact.name"
+                        email="contact.email"
+                        phone="contact.phone"
+                        username="contact.username" />
+            </li>
+        </ul>
+    </div>
+</div>
+```
+
+## Sharing directive controllers with require
+
+We can require the parent controller for a certain directive by using the `require` property in our directive. We pass in a string, with the directives name that we want.
+
+Following on from our example above, we might have the following setup:
+
+```html
+<tabs>
+  <tab label="Tab 1">
+    Tab 1 contents!
+   </tab>
+   <tab label="Tab 2">
+    Tab 2 contents!
+   </tab>
+   <tab label="Tab 3">
+    Tab 3 contents!
+   </tab>
+</tabs>
+```
+
+If we ran this now, our `tabs` component wouldn't know about the child tabs, and there is no list of tabs to choose from when we want to change what tab is active. This is where require comes in! Require allows us to notify the parent that it exists, so we can have a list of tabs at the top to change the active tab.
+
+Imagine our `tabs` directive looks like this:
+
+```js
+function tabs() {
+  return {
+    restrict: 'E',
+    scope: {},
+    transclude: true,
+    controller: function () {
+      this.tabs = [];
+    },
+    controllerAs: 'tabs',
+    template: [
+      '<div class="tabs">',
+        '<ul class="tabs__list"></ul>',
+        '<div class="tabs__content" ng-transclude></div>',
+      '</div>'
+    ].join('')
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('tabs', tabs);
+```
+
+You might notice a property we haven't mentioned before - `transclude`. Don't worry about this yet, we're going to learn this very shortly!
+
+In each tab, we've got a label for the tab. We're going to want to put this inside our `tabs__list` list. However, inside the `tabs` component we don't actually know what tabs we have inside the element.
+
+One easy way to populate this list is if each of our `tab` directives notify our `tabs` directive that they exist. In our example, we've got three `tab` elements, so each of these will notify the parent controller.
+
+Imagine our `tab` directive looked like this:
+
+```js
+function tab() {
+  return {
+    restrict: 'E',
+    scope: {
+      label: '@'
+    },
+    require: '^tabs',
+    transclude: true,
+    template: `
+      <div class="tabs__content" ng-if="tab.selected">
+        <div ng-transclude></div>
+      </div>
+    `,
+    link: function ($scope, $element, $attrs) {
+
+    }
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('tab', tab)
+  .directive('tabs', tabs);
+```
+
+You'll notice we've added `require` with the value `^tabs` - this is telling Angular to require the parent controller from our `tabs` component.
+
+Here, we have a simple sort-of "transparent" directive (our content is passed into our directive, not replaced). What this does (and again, more on the whole tranclusion concept later) is wrap our contents in a new `<div />`. For instance:
+
+```html
+<tab label="Tab 3">
+	Tab 3 contents!
+</tab>
+```
+
+Will become:
+
+```html
+<tab label="Tab 3">
+	<div class="tabs__content" ng-if="tab.selected">
+		<div ng-transclude>
+			Tab 3 contents!
+		</div>
+	</div>
+</tab>
+```
+
+You'll notice we've also got a property named `link`. We're going to learn more about this later, but for now, assume that it is magic and we're going to be using it in this example.
+
+Normally, our link function has three parameters - scope (`$scope`), element (the mounted DOM element) and attrs (the attributes passed through to the directive). However, when we use `require`, we get a fourth - ctrl. This will be equal to the parents controller, allowing us to access everything to do with it.
+
+Let's add an `addTab` method to our `tabs` directives controller. This will add a tab to the list so we can repeat and display the tabs labels at the top of the directive, so the user can click on them to change the active tab.
+
+```js
+function tabs() {
+  return {
+    restrict: 'E',
+    scope: {},
+    transclude: true,
+    controller: function () {
+      this.tabs = [];
+
+      this.addTab = function (tab) {
+        this.tabs.push(tab);
+      };
+    },
+    controllerAs: 'tabs',
+    template: [
+      '<div class="tabs">',
+        '<ul class="tabs__list"></ul>',
+        '<div class="tabs__content" ng-transclude></div>',
+      '</div>'
+    ].join('')
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('tabs', tabs);
+```
+
+Now, if we access the fourth argument in our link function inside our `tab` directive:
+
+```js
+function tab() {
+  return {
+    restrict: 'E',
+    scope: {
+      label: '@'
+    },
+    require: '^tabs',
+    transclude: true,
+		controller: function () {
+      this.tabs = [];
+
+      this.addTab = function (tab) {
+        this.tabs.push(tab);
+      };
+    },
+    controllerAs: 'tabs',
+    template: [
+      '<div class="tabs__content" ng-if="tab.selected">',
+        '<div ng-transclude></div>',
+      '</div>'
+    ].join(''),
+    link: function ($scope, $element, $attrs, $ctrl) {
+        // $ctrl = { tabs: [], addTab: func(){} }
+    }
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('tab', tab)
+  .directive('tabs', tabs);
+```
+
+You'll see that we can now access the parent's controller and methods! From here, we can add the tab information in to our parent's tab array.
+
+#### Example
+```js
+function Tab() {
+	return {
+		restrict: 'E',
+		scope: {
+			label: '@'
+			// from the view <tab label="Tab 1">
+		},
+		require: '^tabs',
+		transclude: true,
+		template: [
+    	    '<div class="tabs__content" ng-if="tab.selected">',
+      	        '<div ng-transclude></div>',
+            '</div>'
+            // will go inside of <tab label="Tab 1">
+		].join(''),
+		link: function ($scope, $element, $attrs, $ctrl) {
+			$scope.tab = {
+				label: $scope.label,
+				selected: false
+			};
+			$ctrl.addTab($scope.tab);
+			// $ctrl is the 4th argument, given because we use 'require'
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('tab', Tab);
+```
+
+and 
+```js
+function Tabs() {
+	return {
+		restrict: 'E',
+		scope: {},
+		transclude: true,
+		controller: function () {
+			this.tabs = [];
+
+			this.addTab = function addTab(tab) {
+				this.tabs.push(tab);
+			};
+			
+			this.selectTab = function selectTab(index) {
+				for (var i = 0; i < this.tabs.length; i++) {
+					this.tabs[i].selected = false;
+				}
+				this.tabs[index].selected = true;
+			};
+		},
+		controllerAs: 'tabs',
+		link: function ($scope, $element, $attrs, $ctrl) {
+			$ctrl.selectTab($attrs.active || 0);
+		},
+		template: [
+      	'<div class="tabs">',
+        	'<ul class="tabs__list">',
+          	    '<li ng-repeat="tab in tabs.tabs">',
+            	    '<a href="" ng-bind="tab.label" ng-click="tabs.selectTab($index);"></a>',
+                '</li>',
+            '</ul>',
+        	'<div class="tabs__content" ng-transclude></div>',
+        '</div>'
+		].join('')
+	};
+}
+
+angular
+	.module('app')
+	.directive('tabs', Tabs);
+```
+
+In the view
+```html
+<div ng-app="app" class="app">
+    <tabs>
+        <tab label="Tab 1">
+            Tab 1 contents!
+        </tab>
+        <tab label="Tab 2">
+            Tab 2 contents!
+        </tab>
+        <tab label="Tab 3">
+            Tab 3 contents!
+        </tab>
+    </tabs>
+</div>
+```
+
