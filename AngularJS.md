@@ -2498,7 +2498,7 @@ Here, instead of using `expect().toBe()`, we call a function named `done()` if o
 
 ### $httpBackend.flush()
 
-We then need to call `$httpBackend.flush()` to immediately execute all pending requests (which then fires off our request, calling our callback with the returned data and runs the test).
+We then need to call `$httpBackend.flush()` to immediately execute all pending requests (which then fires off our request, calling our callback with the returned data and runs the test). If we don't call `$httpBackend.flush()` we'll get a timeout on Karma's test page, the tests waiting to be launched.
 
 ```js
 describe('UserService', function () {
@@ -2530,3 +2530,59 @@ describe('UserService', function () {
 ```
 
 All done! We've now got a fully tested `UserService`, including mocked HTTP requests.
+
+Another Example with a UserService
+```js
+function UserService($http) {
+	this.getUser = function () {
+		return $http.get('/rest/user');
+	};
+
+	this.createFullName = function (user) {
+		return user.first_name + ' ' + user.last_name
+	};
+}
+
+angular
+	.module('app')
+	.service('UserService', UserService);
+```
+
+and the test
+```js
+describe('UserService', function () {
+
+	beforeEach(module('app'));
+
+	var UserService, $httpBackend;
+
+	beforeEach(inject( function($injector){
+		UserService = $injector.get('UserService');
+		$httpBackend = $injector.get('$httpBackend');
+
+		$httpBackend.when('GET', '/rest/user').respond({first_name: 'Bill', last_name: 'Gates'});
+	}));
+
+	it('Should get the user first and last names', function(done) {
+		$httpBackend.expectGET('/rest/user');
+
+		UserService
+			.getUser()
+			.then(function(res){
+				var user = res.data;
+				if (user.first_name === 'Bill' && user.last_name === 'Gates') {
+					done();
+				}
+			});
+
+		$httpBackend.flush();	
+	});
+
+	it('should add name and last name together', function(){
+		var user = {first_name: 'Bill', last_name: 'Gates'};
+		expect(UserService.createFullName(user)).toEqual('Bill Gates');
+	});
+});
+```
+
+# Custom Directives
