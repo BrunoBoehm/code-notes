@@ -4021,3 +4021,643 @@ angular
 
 
 We're still using `scope.$apply()` though - why? We still use it because `$apply()` is a function only available on scope, and we still need to tell Angular that we've updated our view.
+
+
+# $digest cycle
+
+So far, we've been updating our $scope object and our controller and the changes get reflected in the view. This is awesome, but how is it actually done?
+
+In comes the digest cycle! The digest cycle is a cycle that checks all of our values and fires callbacks if there are changes.
+
+When we put an expression in the view (such as `{{ ctrl.name }}`), Angular creates a "watcher". This watcher then goes into an array in `$scope.$$watchers`. This watcher has a function that returns the latest value of `ctrl.name`, and a callback to update the view with the latest `ctrl.name` value.
+
+When we run the digest cycle, we loop through all of our watchers and run the functions. The function runs, returns `ctrl.name` and checks it against its last known value. If the value is different, the callback fires, updating the view with the latest value of `ctrl.name`.
+
+These watchers are scoped to our `$scope` object, meaning that if we're updating values in our scope, we don't have to update **all** the scopes that exist in our Angular application. For instance, if we're just updating values inside a directive, we only need to run the digest cycle inside that directive - no need to go outside of it.
+
+There are two ways to trigger the $digest cycle - `$scope.$digest()` and `$scope.$apply()`.
+
+### $digest()
+
+`$scope.$digest()` runs the digest cycle on the given `$scope` object, and goes down all the children scopes. This is as far as the cycle goes - it doesn't go upwards, only downwards. If we went upwards, we'd go up scopes until we reached the root scope.
+
+### $apply()
+
+`$apply()` is the same as `$digest()` - except from the fact it runs `$digest` from our `$rootScope`. This means whilst `$apply()` does only go downwards, much like `$digest()`, it goes downwards from the `$rootScope`, meaning **all** of our watchers are checked and updated. This means any nested controllers will have their digest cycle ran.
+
+## Manual digest
+
+The reason why we have to call `$scope.$apply()` when we update values in our event listener is because Angular doesn't know that we've updated the scope. How does it know when we use `ng-click`, etc? Angular actually runs `$scope.$apply()` itself after the click event that `ng-click` provides us. This means that we're basically doing the same as Angular does when we run `$scope.$apply()` in our events.
+
+## Transclusion
+
+Say we want to be able to customize the content inside of our directives, like so:
+
+```html
+<our-directive>
+	Content here! We want to put custom content in our directive!
+</our-directive>
+```
+
+Up until now, any content *inside* the directive would be replaced by our template. However, we can change that and actually put the content into our template, and also control where we want to put it - awesome!
+
+To do this, we add a property named `transclude` to our directive. We will set this to `true` for now. This lets us use the `ng-transclude` directive.
+
+```js
+function ourDirective() {
+  return {
+    transclude: true,
+    template: [
+      '<div class="ourDirective">',
+        'The content of our directive is:',
+      '</div>'
+    ].join('')
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('ourDirective', ourDirective);
+```
+
+We can then use the directive `ng-transclude` to put our content wherever we want it in our template.
+
+```js
+function ourDirective() {
+  return {
+    transclude: true,
+    template: [
+      '<div class="ourDirective">',
+        'The content of our directive is: <span ng-transclude></span>',
+      '</div>'
+    ].join('')
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('ourDirective', ourDirective);
+```
+
+It's as simple as that! When Angular runs, we will end up with this rendered in the HTML:
+
+```html
+<our-directive>
+	<div class="ourDirective">
+		The content of our directive is: <span>Content here! We want to put custom content in our directive!</span>
+	</div>
+</our-directive>
+```
+
+# Manual and isolate transclusion with transclude()
+
+We can also use the fifth function provided in our `link` function - `transclude`. This function returns our transcluded content as an actual DOM element. This allows us to manually append our elements into our directives instead.
+
+We might want to use this when we want to transform the transcluded elements depending on attributes. For instance, we could remove a `<button>` if the attribute disabled is present.
+
+```js
+function ourDirective() {
+  return {
+    transclude: true,
+    template: [
+      '<div class="ourDirective">',
+        'The content of our directive is: <span></span>',
+      '</div>'
+    ].join(''),
+    link: function (scope, element, attrs, ctrl, transclude) {
+        // transclude() = DOM elements
+    }
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('ourDirective', ourDirective);
+```
+
+Now that we've got the transcluded elements as actual DOM elements and also our whole directive element (the `element` variable), we can insert our transcluded content wherever we want. If we want to put it into the span, we can do this:
+
+```js
+function ourDirective() {
+  return {
+    transclude: true,
+    template: [
+      '<div class="ourDirective">',
+        'The content of our directive is: <span></span>',
+      '</div>'
+    ].join(''),
+    link: function (scope, element, attrs, ctrl, transclude) {
+        element.find('span').after(transclude());
+    }
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('ourDirective', ourDirective);
+```
+
+Awesome! This puts our transcluded content inside the `<span />`.
+
+# Multi-slot transclusion transclude: {}
+
+Instead of a string or a boolean value, to do multi-slot transclusion, we pass through an object.
+
+We might use multi-slot transclusion when we want to move certain elements into different positions in our directives templates, instead of just putting them all in one place. We might want to wrap an image with a link or a user profile with an image.
+
+The properties on this object are what we want to name our slots. For instance, if we've got this setup for our directive:
+
+```html
+<user-profile>
+    <h4>Tim Cook</h4>
+    <h6>CEO, Apple</h6>
+</user-profile>
+```
+
+You can see here that our `<h4>` element is the name and our `<h6>` is the position. Therefore, it makes sense to name our slots `name` and `position`.
+
+We then put the values of our properties to be the element that we're targeting. We'd end up with something like this:
+
+```js
+function UserProfile() {
+  return {
+    transclude: {
+        name: 'h4',
+        position: 'h6'
+    },
+    template: [
+      '<div class="user">',
+        '<h2>User Profile</h2>',
+      '</div>'
+    ].join('')
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('userProfile', UserProfile);
+```
+
+We can now access these elements using the familiar `ng-transclude` directive. We pass in the slot name that we want as the value.
+
+```js
+function UserProfile() {
+  return {
+    transclude: {
+        name: 'h4',
+        position: 'h6'
+    },
+    template: [
+      '<div class="user">',
+        '<h2>User Profile</h2>',
+        '<div>Name: <span ng-transclude="name"></span></div>',
+        '<div>Position: <span ng-transclude="position"></span></div>',
+      '</div>'
+    ].join('')
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('userProfile', UserProfile);
+```
+
+You can see how we can put our slots anywhere we like in our directive. Also, we don't have to match the tags that we transclude - you can see that although we've picked out `<h4>` and `<h6>` we're transcluding them inside of a `<span />` element (this does put our header elements *inside* our span element, not just the text).
+
+## Optional slots
+
+Now, if you remove either the `<h4>` or `<h6>`, you will get an error as we're expecting there to be both of them.
+
+We can mark slots as optional, too. Let's make position optional, as everyone has a name but people might not have a position. To make a slot as optional, inside of our string we add a `?` before the element.
+
+```js
+function UserProfile() {
+  return {
+    transclude: {
+        name: 'h4',
+        position: '?h6'
+    },
+    template: [
+      '<div class="user">',
+        '<h2>User Profile</h2>',
+        '<div>Name: <span ng-transclude="name"></span></div>',
+        '<div>Position: <span ng-transclude="position">No position</span></div>',
+      '</div>'
+    ].join('')
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('userProfile', UserProfile);
+```
+
+Now we use our directive with and without specifying a `<h6>` element. If there isn't a `<h6>` element, the contents of our `<span ng-transclude="position">` will be displayed instead, meaning we can gracefully show different content if there is no position specified.
+
+# jqLite events
+
+jqLite allows us to use `.on` and `.off` on our `element` inside the link function. `.off()` will remove all event listeners that we've added to the element, and `.on` let's us add them for different event types, such as `click`.
+
+If we don't unbind our events, we may suffer with issues later down the line as our element will no longer exist but our event callbacks may still be fired. If we're updating our element inside of our callback, we will get errors because the element no longer exists.
+
+Let's add a click event to our element:
+
+```js
+function ourDirective() {
+  return {
+    transclude: true,
+    template: [
+      '<div>',
+        'Click on me!',
+      '</div>'
+    ].join(''),
+    link: function (scope, element) {
+        element.on('click', function () {
+            alert('You clicked me!');
+        });
+    }
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('ourDirective', ourDirective);
+```
+
+Awesome! Now we can add native DOM events to our element. Here we can also target `window`, and `document`, etc, as we might have to change our directives behaviour when the browser resizes or when the user scrolls the page. But how do we know when to unbind these events?
+
+## $destroy
+
+Luckily, we get an event fired when our directive is *about* to be unmounted from the DOM. We can subscribe to this event using `scope.$on`.
+
+```js
+function ourDirective() {
+  return {
+    transclude: true,
+    template: [
+      '<div>',
+        'Click on me!',
+      '</div>'
+    ].join(''),
+    link: function (scope, element) {
+        scope.$on('$destroy', function () {
+           alert('About to be destroyed!');
+        });
+    }
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('ourDirective', ourDirective);
+```
+
+This will alert us when our directive is about to be removed from the DOM. Now, we can unsubscribe from these events. Luckily, as explained earlier, we can use `.off()`!
+
+```js
+function ourDirective() {
+  return {
+    transclude: true,
+    template: [
+      '<div>',
+        'Click on me!',
+      '</div>'
+    ].join(''),
+    link: function (scope, element) {
+        element.on('click', function () {
+           alert('You clicked me!');
+        });
+
+        scope.$on('$destroy', function () {
+		   element.off();
+		});
+    }
+  };
+}
+
+angular
+  .module('app', [])
+  .directive('ourDirective', ourDirective);
+```
+
+Sorted! We've now created new events and removed the listeners when our directive gets destroyed.
+
+#### Another example
+```js
+function Counter() {
+	return {
+		template: [
+			'<div>',
+				'<h3>Counter</h3>',
+				'<div>Click anywhere to increment the counter!</div>',
+				'<div>Current count: {{ ctrl.count }}</div>',
+			'</div>'
+		].join(''),
+		controller: function ($scope) {
+			this.count = 0;
+		},
+		require: 'counter', // gives us ctrl in the link function
+		controllerAs: 'ctrl', // use this and ctrl.count
+		link: function(scope, element, attrs, ctrl){
+			element.on('click', function(){
+				ctrl.count++;
+				scope.$apply(); // we're outside of the controller scope, we need to remind it
+			});
+
+			scope.$on('$destroy', function(){
+				element.off();
+			});			
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('counter', Counter);
+	
+// this could also be written without controllerAs	
+	
+function Counter() {
+    return {
+        template: [
+            '<div class="counter">',
+                '<h3>Counter</h3>',
+                '<div>Click anywhere to increment the counter!</div>',
+                '<div>Current count: {{ count }}</div>',
+            '</div>'
+        ].join(''),
+        controller: function ($scope) {
+            $scope.count = 0;
+        },
+        link: function (scope, element) {
+            element.on('click', function () {
+                scope.count++;
+                scope.$apply();
+            });
+ 
+            scope.$on('$destroy', function () {
+                element.off();
+            });
+        }
+    }
+}
+ 
+angular
+    .module('app')
+    .directive('counter', Counter);	
+```
+
+# Testing custom directives
+
+We already know how to use protractor to test our HTML output, so the explanation on how to test directives is very similar.
+
+Our protractor setup currently runs a local webserver so we have a web page to test in our tests - this is the `index.html` that we've used before (you can see an example in this repo). Here we include all of our directives etc, and we use them like we would inside a normal application. This allows protractor to use the directive like a normal user would.
+
+Inside this repo, we've got a counter directive that increments when we click on the directive.
+
+```js
+function Counter() {
+	return {
+		template: [
+			'<div class="counter">',
+				'<h3>Counter</h3>',
+				'<div>Click anywhere to increment the counter!</div>',
+				'<div class="counter__count">Current count: {{ count }}</div>',
+			'</div>'
+		].join(''),
+		controller: function ($scope) {
+			$scope.count = 0;
+		},
+		link: function (scope, element) {
+			element.on('click', function () {
+				scope.count++;
+
+				scope.$apply();
+			});
+
+			scope.$on('$destroy', function () {
+				element.off();
+			});
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('counter', Counter);
+```
+
+Let's test this that our directive is functioning properly.
+
+Inside our `index.html`, we have this:
+
+```html
+<counter></counter>
+```
+
+This initializes and puts our counter directive on the page.
+
+Now, in our `Index.spec.js` file inside `spec/`, we can grab the page.
+
+```js
+describe('Directive Test', function() {
+	browser.get('http://localhost:8080');
+});
+```
+
+Now let's grab our counter directive - this has the class `counter`. Let's also grab the current count.
+
+```js
+describe('Directive Test', function() {
+	browser.get('http://localhost:8080');
+
+	var counter = element(by.css('.counter'));
+	var count = element(by.css('.counter__count'));
+});
+```
+
+Now we can test that the counter displays an initial 0 count by grabbing the innerHTML.
+
+```js
+describe('Directive Test', function() {
+	browser.get('http://localhost:8080');
+
+	var counter = element(by.css('.counter'));
+	var count = element(by.css('.counter__count'));
+
+	it('should have an initial 0 count', function () {
+		expect(count.getInnerHtml()).toEqual('Current count: 0');
+	});
+});
+```
+
+Awesome! Now, let's click on the counter and check that it increments the counter correctly.
+
+```js
+describe('Directive Test', function() {
+	browser.get('http://localhost:8080');
+
+	var counter = element(by.css('.counter'));
+	var count = element(by.css('.counter__count'));
+
+	it('should have an initial 0 count', function () {
+		expect(count.getInnerHtml()).toEqual('Current count: 0');
+	});
+
+	it('should increment when we click on it', function () {
+		counter.click();
+
+		expect(count.getInnerHtml()).toEqual('Current count: 1');
+	});
+
+});
+```
+
+Sorted - now our directive is tested, and is working perfectly!
+
+Another test example
+```js
+describe('UserProfile test', function(){
+	browser.get('http://localhost:8080');
+
+	var directive = element.all(by.css('.user')).get(0);
+
+	it('should display the right info', function(){
+		expect(directive.getText()).toContain('Name');
+		expect(directive.getText()).toContain('Position');
+		expect(directive.getText()).toContain('Description');
+		expect(directive.getText()).toContain('Bill Gates');
+	})
+})
+```
+
+# Bonus: Using the component() method
+
+
+We use components every day - be it a dropdown box, a login form or a navigation bar. Components are awesome - much like directives, they're reusable, isolated pieces of functionality that we can use again and again. Other frameworks provide similar abilities - in fact the whole of React is based off of components - nothing else!
+
+Instead of passing through a function to our `component` method (like what we do with the `directive` method), we pass through an object instead. This is really similar to the object we return in our directives.
+
+For example:
+
+```js
+function Counter() {
+	return {
+		template: [
+			'<div ng-click="counter.increment()" class="counter">',
+				'<h3>Counter</h3>',
+				'<div>Click anywhere to increment the counter!</div>',
+				'<div class="counter__count">Current count: {{ counter.count }}</div>',
+			'</div>'
+		].join(''),
+		controller: function ($scope) {
+			this.count = 0;
+
+			this.increment = function () {
+				this.count++;
+			};
+		},
+		controllerAs: 'counter'
+	}
+}
+
+angular
+	.module('app')
+	.directive('counter', Counter);
+```
+
+Would turn into this:
+
+```js
+var Counter =  {
+	template: [
+	    '<div ng-click="counter.increment()" class="counter">',
+	        '<h3>Counter</h3>',
+	        '<div>Click anywhere to increment the counter!</div>',
+	        '<div class="counter__count">Current count: {{ counter.count }}</div>',
+	    '</div>'
+	].join(''),
+	controller: function ($scope) {
+	    this.count = 0;
+
+	    this.increment = function () {
+	        this.count++;
+	    };
+	},
+	controllerAs: 'counter'
+};
+
+angular
+	.module('app')
+	.component('counter', Counter);
+```
+
+Pretty much the same thing! However, there are a few restrictions to using the `.component()` method:
+
+- Every item is an element - we can't create attributes
+- We no longer use the `scope` property. Everything is bound to the controller
+- We no longer use `bindToController` - this is simply named `bindings` instead
+- When we use `require`, we have to pass through an object instead of a string, with the property being anything that we want and the string being what we'd normally use
+    - For example, instead of `{ require: '^parentController' }`, we use `{ require: { parent: '^parentController' } }`
+- We cannot use a `link` or `compile` function
+
+Then why even use them? Well, directives are old and a bit verbose for what we may need 99% of the time. Components are a new, updated method that has matched the way the frontend has changed. Think of them as a simple way to write a directive, and if you need to go complicated, use a directive instead.
+
+#### Another example
+
+```js
+var ContactCard = {
+	bindings: {
+		name: '=',
+		email: '=',
+		phone: '='
+	},
+	template: [
+		'<div>',
+			'<h4>Contact Card</h4>',
+			'<label>Name:</label>',
+			'{{ ctrl.name }}',
+			'<label>Email:</label>',
+			'{{ ctrl.email }}',
+			'<label>Phone:</label>',
+			'{{ ctrl.phone }}',
+		'</div>'
+	].join(''),
+	controllerAs: 'ctrl',
+	restrict: 'E'
+};
+
+
+angular
+	.module('app')
+	.component('contactCard', ContactCard);
+```
+
+Instead of
+```js
+function ContactCard() {
+	return {
+		scope: {
+			name: '=',
+			email: '=',
+			phone: '='
+		},
+		template: [
+			'<div>',
+				'<h4>Contact Card</h4>',
+				'<label>Name:</label>',
+				'{{ name }}',
+				'<label>Email:</label>',
+				'{{ email }}',
+				'<label>Phone:</label>',
+				'{{ phone }}',
+			'</div>'
+		].join(''),
+		restrict: 'E'
+	};
+}
+
+angular
+	.module('app')
+	.directive('contactCard', ContactCard);
+```
