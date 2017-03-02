@@ -1,10 +1,10 @@
 
-					ng-app			ng-controller
+				ng-app		    ng-controller
 angular		=>		module		=>  controlers
 
-								=>  directives
+						=>  directives
 								
-								=>  services
+						=>  services
 
 ## Controllers
 The controller has a `$scope`.
