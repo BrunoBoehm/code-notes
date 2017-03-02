@@ -3484,7 +3484,7 @@ angular
 
 You'll notice we've added `require` with the value `^tabs` - this is telling Angular to require the parent controller from our `tabs` component.
 
-Here, we have a simple sort-of "transparent" directive (our content is passed into our directive, not replaced). What this does (and again, more on the whole tranclusion concept later) is wrap our contents in a new `<div />`. For instance:
+Here, with `transclude` we have a simple sort-of "transparent" directive (our content is passed into our directive, not replaced). What this does (and again, more on the whole tranclusion concept later) is wrap our contents in a new `<div />`. For instance:
 
 ```html
 <tab label="Tab 3">
@@ -3506,7 +3506,7 @@ Will become:
 
 You'll notice we've also got a property named `link`. We're going to learn more about this later, but for now, assume that it is magic and we're going to be using it in this example.
 
-Normally, our link function has three parameters - scope (`$scope`), element (the mounted DOM element) and attrs (the attributes passed through to the directive). However, when we use `require`, we get a fourth - ctrl. This will be equal to the parents controller, allowing us to access everything to do with it.
+Normally, our link function has three parameters - scope (`$scope`), element (the mounted DOM element) and attrs (the attributes passed through to the directive). However, when we use `require`, we get a fourth - ctrl. This will be equal to the parents (directive) controller, allowing us to access everything to do with it.
 
 Let's add an `addTab` method to our `tabs` directives controller. This will add a tab to the list so we can repeat and display the tabs labels at the top of the directive, so the user can click on them to change the active tab.
 
@@ -3549,13 +3549,6 @@ function tab() {
     },
     require: '^tabs',
     transclude: true,
-		controller: function () {
-      this.tabs = [];
-
-      this.addTab = function (tab) {
-        this.tabs.push(tab);
-      };
-    },
     controllerAs: 'tabs',
     template: [
       '<div class="tabs__content" ng-if="tab.selected">',
@@ -3574,7 +3567,7 @@ angular
   .directive('tabs', tabs);
 ```
 
-You'll see that we can now access the parent's controller and methods! From here, we can add the tab information in to our parent's tab array.
+You'll see that we can now access the parent's directive controller and methods! From here, we can add the tab information in to our parent's tab array.
 
 #### Example
 ```js
@@ -4662,20 +4655,295 @@ angular
 	.directive('contactCard', ContactCard);
 ```
 
+# Custom Filters
+
+Custom filters come in two types - single value filters and dataset filters. We can apply a custom filter to filter an array in an `ng-repeat`, or we can apply a filter to an expression to format the expression differently. Both of these are declared via the `.filter` method.
+
+```js
+function MyCustomFilter() {
+	// wooo!
+}
+
+angular
+	.module('app')
+	.filter('myCustomFilter', MyCustomFilter);
+```
+
+Looks familiar, yes?
+
+Our custom filters should return a function that will then process the data passed to it. Let's create a filter to make our expression uppercase.
+
+## Single value filters
+
+When we return a function in our filter, as such:
+
+```js
+function MyCustomFilter() {
+	return function (str) {
+
+	};
+}
+
+angular
+	.module('app')
+	.filter('myCustomFilter', MyCustomFilter);
+```
+
+We get the expression's value passed through to the function. Anything we then returned from our returned function will be put in place of the expression. We could return the string `'hello'` but that wouldn't be any use to anyone.
+
+Let's return the `str` variable, in uppercase.
+
+```js
+function makeUppercase() {
+	return function (str) {
+		return str.toUpperCase();
+	};
+}
+
+angular
+	.module('app')
+	.filter('makeUppercase', makeUppercase);
+```
+
+Awesome! We can now use this like any other filter in Angular.
+
+```html
+<div>
+	{{ 'My String' | makeUppercase }}
+
+	{{ ctrl.variable | makeUppercase }}
+</div>
+```
+
+Which will result in:
+
+```html
+<div>
+	MY STRING
+
+	OTHER STRING <!-- ctrl.variable = 'other string' -->
+</div>
+```
+
+## Arguments
+
+We can also pass arguments through to our custom filters. Much like what we've done with the `date` filter before, we can pass through as many arguments we like to the filter, and they're then the 2nd, 3rd, etc, argument passed through to our function.
+
+We can add a toggle to our `makeUppercase` filter on whether or not to *actually* make the text uppercase.
+
+```html
+<div>
+	{{ 'My String' | makeUppercase:true }}
+
+	{{ ctrl.variable | makeUppercase:false }}
+</div>
+```
+
+We can then receive this argument in our function, and not make it uppercase if it's false.
+
+```js
+function makeUppercase() {
+	return function (str, active) {
+		return active ? str.toUpperCase() : str;
+	};
+}
+
+angular
+	.module('app')
+	.filter('makeUppercase', makeUppercase);
+```
+
+As the `true` or `false` can also point to a variable's value instead (`{{ 'My String' | makeUppercase:variableName }}`), we can turn our filters on and off based on different variables. For instance, for administrators, we might want their name to be uppercase, but all other members just leave their names the same.
+
+Awesome!
+
+## Filters for datasets
+
+If we apply this filter to a data-set (for instance on an `ng-repeat`), we simply get passed the array instead of a string expression.
+
+Assume that we have this:
+
+```html
+<ul>
+	<li ng-repeat="album in ctrl.albums | startsWithLetter:'a'">
+	</li>
+</ul>
+```
+
+This is calling a custom filter named `startsWithLetter`, passing through `'a'` as an argument. We can then define our custom filter as follows:
+
+```js
+function startsWithLetter() {
+	return function (items, letter) {
+		// items = ctrl.albums (an array of albums)
+		// letter = 'a'
+	};
+}
+
+angular
+	.module('app')
+	.filter('startsWithLetter', startsWithLetter);
+```
+
+Now we can filter through the array like we would in native JavaScript:
+
+```js
+function startsWithLetter() {
+	return function (items, letter) {
+		// items = ctrl.albums (an array of albums)
+		// letter = 'a'
+
+		return items.filter(function (item) {
+			return item.name[0] === letter;
+		});
+	};
+}
+
+angular
+	.module('app')
+	.filter('startsWithLetter', startsWithLetter);
+```
+
+This will filter out our array, only returning items where the `name` property begins with the letter `a`. The array you return from this function will be all the elements that are displayed in the rendered `ng-repeat`.
 
 
+Examples
+```js
+function UpperFirstLetter() {
+	return function (str) {
+		return str[0].toUpperCase() + str.slice(1);
+	}
+}
 
+angular
+	.module('app')
+	.filter('upperFirstLetter', UpperFirstLetter);
+```
 
+and 
+```js
+function City(){
+	return function(contacts, city){
+		return contacts.filter(function(contact){
+			return contact.location.city === city;
+		});
+	};
+}
 
+angular
+	.module('app')
+	.filter('city', City);
+```
 
+and
+function removeAllVowels() {
+	return function (str) {
+		return str.replace(/[aeiou]/gi, '');
+	};
+}
 
+angular
+	.module('app')
+	.filter('removeAllVowels', removeAllVowels);
 
+## Testing filters
 
+Like our services, we can inject filters into our tests. We use the `$filter` helper.
 
+As our filters do not care explicitly what *type* of data is given to them, we don't need to load them up in Protractor and test them in the actual application. We can simply inject them into our karma tests and test the functionality out of them with any data!
 
+Let's say we've got this filter:
 
+```js
+function firstUppercase() {
+	return function (str) {
+		return str.charAt(0).toUpperCase() + str.slice(1);
+	};
+}
 
+angular
+	.module('app')
+	.filter('firstUppercase', firstUppercase);
+```
 
+We can inject this using `$filter` in our tests:
+
+```js
+describe('UserService', function () {
+	var $controller, firstUppercase;
+
+	beforeEach(module('app'));
+
+	beforeEach(inject(function ($filter) {
+		firstUppercase = $filter('firstUppercase');
+	}));
+});
+```
+
+Now, as we returned a function in our filter, we can simply call `firstUppercase` as a function and receive our manipulated value in return.
+
+```js
+describe('UserService', function () {
+	var $controller, firstUppercase;
+
+	beforeEach(module('app'));
+
+	beforeEach(inject(function ($filter) {
+		firstUppercase = $filter('firstUppercase');
+	}));
+
+	it('should capitalise the first letter', function () {
+		expect(firstUppercase('test')).toEqual('Test');
+	});
+});
+```
+
+Nice - our tests now pass! You can pass through any data you like, meaning we can also test any filters that we create on datasets.
+
+```js
+describe('removeAllVowels Filter', function () {
+	var $controller;
+
+	beforeEach(module('app'));
+
+	beforeEach(inject(function ($injector) {
+		$filter = $injector.get('$filter');
+
+		removeAllVowels = $filter('removeAllVowels');
+	}));
+
+	it('should remove all vowels', function(){
+		expect(removeAllVowels('Biscuit')).toEqual('Bsct');
+	});
+
+});
+```
+and for testing list filter
+```js
+describe('Favorite Food Filter', function () {
+	var $controller;
+
+	beforeEach(module('app'));
+
+	beforeEach(inject(function ($injector) {
+		$filter = $injector.get('$filter');
+
+	}));
+
+	it('should choose filter on favorite food correctly', function(){
+		var mockedList = [
+			{favoriteFood: 'bread'},
+			{favoriteFood: 'milk'}
+		];
+
+		var results = $filter('favoriteFood')(mockedList, 'milk')
+
+		expect(results.length).toBe(1);
+		expect(results[0].favoriteFood).toBe('milk');
+	})
+	
+});
+```
 
 
 
