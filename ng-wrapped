@@ -1,0 +1,713 @@
+
+					ng-app			ng-controller
+angular		=>		module		=>  controlers
+
+								=>  directives
+								
+								=>  services
+
+## Controllers
+The controller has a `$scope`.
+```js
+function MainController($scope) {
+  $scope.name = 'Bill Gates';
+}
+```
+This scope is accessible in the view like this
+```html
+<div ng-controller="MainController">
+	<p>{{ name }}</p>
+</div>
+```
+or using one-way data-binding
+```html
+<div ng-controller="MainController">
+	<p><span ng-bind="name"></span></p>
+</div>
+```
+
+Anything inside {{}} is an expression, we can do javascript stuff inside
+```html
+{{ someArray.length }}
+
+<h6>You have {{ ctrl.emails.length == 0 && 'no' || ctrl.emails.length }} emails</h6>
+```
+
+
+### Using ControllerAs syntax
+We tell angular we want to use our controller as a variable ('main' for instance).
+It creates a new instance of our controller (with all of our values bound to the controller's instance, rather than $scope) and assigns the instance to a variable named main.
+
+
+This enables nested scopes
+```js
+function MainController($scope) {
+  $scope.name = 'Bill Gates';
+}
+```
+
+becomes
+```js
+function MainController() {
+  this.name = 'Bill Gates';
+}
+```
+We're allowing our controllers to assign anything they want our view to access to the this keyword
+
+And we change our view
+```html
+<div ng-controller="MainController as main">
+	<p>{{ main.name }}</p>
+</div>
+```
+
+## Services
+Services are helpers. They're JavaScript functions and are responsible for doing specific tasks only.
+```js
+function NotificationService() {
+  this.notify = function (message) {
+    alert(message);
+  };
+}
+
+angular
+  .module('app')
+  .service('NotificationService', NotificationService);
+```
+While attaching the service to the module, the first parameter is the name of our service and will be used when we need to inject it elsewhere. The function doesn't need to have the same name, but for debugging purposes, we keep it the same, it will appear in the console.
+
+
+Dependency injection enables to inject a service into the controller that needs it.
+```js
+function ContactController(NotificationService, UserService, AuthService) {
+  NotificationService.notify('Hello!');
+}
+```
+
+### Built in services
+Angular has built in services like `$timeout`, or `$http`
+
+We can use $http as a function, passing through a configuration object with it, as such:
+```js
+$http({
+    method: 'GET',
+    url: '/someURL'
+});
+
+$http({
+    method: 'POST',
+    data: {
+        username: 'Bill'
+    },
+    url: '/someOtherURL'
+});
+
+$http.get('/someURL');
+
+$http.post('/someOtherURL', { username: 'Bill' });
+
+// and handle the promise data
+$http({
+    method: 'GET',
+    url: '/someURL'
+})
+    .then(function (data) {
+        console.log(data);
+    });
+```
+
+We can inject service into our controller
+```js
+// our service
+function UserService($http) {
+    this.getLoggedInUser = function () {
+        return $http.get('/rest/user');
+    }
+
+    this.updateEmail = function (emailAddress) {
+        return $http.post('/rest/user/email', {email: emailAddress});
+    };    
+}
+
+angular
+    .module('app')
+    .service('UserService', UserService);
+```
+
+And in our  header controller
+```js
+function HeaderController(UserService) {
+    var ctrl = this;
+
+    ctrl.user = '';
+
+    UserService
+        .getLoggedInUser()
+        .then(function (res) {
+            ctrl.user = res.data.username;
+        });
+}
+
+angular
+    .module('app')
+    .controller('HeaderController', HeaderController);
+```
+
+And in our settings controller
+```js
+function SettingsController(UserService) {
+
+    this.emailAddress = ''; // this is bound to an input via `ng-model`
+
+    this.submitForm = function () {
+        UserService
+            .updateEmail(this.emailAddress)
+            .then(function () {
+                alert('Email updated!');
+            });
+    };
+}
+
+angular
+    .module('app')
+    .controller('SettingsController', SettingsController);    
+```
+
+In our service, we can also use angular's `$resource` service that gives us `.get()`, `$save()` and `$delete()` functions.
+```js
+function UserService($resource) {
+    var User = $resource('/user/:userId');
+
+    this.getUser = function (userId, callback) {
+        User.get({userId: userId}, callback);
+    };
+
+	// User.get({userId: 3}, function (user) {
+	//    console.log(user);
+	// });    
+}
+```
+
+And then we can use that as follows in our controller:
+```js
+function MyController(UserService) {
+    UserService.getUser(3, function (user) {
+        console.log(user);
+    });
+}
+```
+
+
+### Minification safe Dependency Injection
+We need to specify the real names of our injected services, otherwise they'll be squished during minification.
+```js
+function ContactController(whatever, weWant) {
+  // whatever === $scope
+  // weWant === $timeout
+}
+
+ContactController.$inject = ['$scope', '$timeout'];
+
+angular
+  .module('app')
+  .controller('ContactController', ContactController);
+```
+
+### HTTP Interceptors
+Now, using $http or $resource means we're going to end up doing a lot of HTTP requests in our applications, so that we want to handle responses and errors globally. HTTP interceptors allow us to define functionality that will happen before every request is made, or just after every request has come back from the server.
+
+HTTP interceptors are just simple services that we then push into an interceptors array in the $httpProvider service.
+
+```js
+function MyInterceptor() {
+    this.request = function (config) {
+        config.headers['X-Requested-From'] = 'Angular';
+        return config;
+    };
+}
+
+angular
+    .module('app')
+    .service('MyInterceptor', MyInterceptor)
+    .config(function ($httpProvider) {
+        $httpProvider.interceptors.push('MyInterceptor');
+    });
+```
+This will append the X-Requested-From header to every single request going through $http!
+
+```js
+function MyInterceptor() {
+    this.response = function (config) {
+        config.config.responseTime = Date.now();
+        return config;
+    };
+}
+
+angular
+    .module('app')
+    .service('MyInterceptor', MyInterceptor)
+    .config(function ($httpProvider) {
+        $httpProvider.interceptors.push('MyInterceptor');
+    });
+```
+We can also intercept after a request has been completed, and log what time the request came back.
+
+```js
+function MyInterceptor(NotificationService) {
+    this.responseError = function (config) {
+        NotificationService
+            .showError(config);
+    };
+}
+
+angular
+    .module('app')
+    .service('MyInterceptor', MyInterceptor)
+    .config(function ($httpProvider) {
+        $httpProvider.interceptors.push('MyInterceptor');
+    });
+```
+We can just purely kick in our interceptor after an error too. `NotificationService` will be a custom service that we have made, alerting the user when we call `.showError` 
+
+
+### Custom Services
+With services, much like our controllers (when using controllerAs), we attach all of our functions to this. These will be publicly accessible by anyone who injects the service. We can also create private functions by using normal functions, as such:
+```js
+function SomeService() {
+    function privateMethod() {
+
+    }
+
+    this.publicMethod = function () {
+        privateMethod();
+    };
+}
+
+angular
+    .module('app')
+    .service('SomeService', SomeService);
+```
+
+To inject our SomeService above, we just add SomeService as an argument to our controller:
+```js
+function SomeController(SomeService) {
+    SomeService.publicMethod();
+}
+
+angular
+    .module('app')
+    .controller('SomeController', SomeController);
+```
+
+
+## Directives
+Directives are essentially "markers" on a HTML element that tell Angular to attach a specific behavior to the HTML element - either something small like a click event, or actually completely transforming the DOM node to display a list of data. Directives can be either an actual HTML element or an attribute on a HTML element.
+
+There are two types of directives
+
+- event: events on a HTML element we might need - for example, click, mouseover, keydown, etc
+- behavioral: a list that repeats our DOM node for every item in a list, hiding and showing content depending on one of our variables' value
+
+Angular comes with a ton of built-in directives
+
+### Event directives
+Our HTML
+```html
+<div ng-controller="CounterController as vm">
+	<button ng-click="vm.incrementCounter()">Increment the counter!</button>
+	{{ vm.counter }}
+</div>	
+```
+and controller 
+```js
+function CounterController() {
+  this.counter = 0;
+
+  this.incrementCounter = function () {
+    this.counter++;
+  };
+}
+```
+
+
+### Behavioral directives
+We can manipulate the DOM
+
+#### ng-repeat
+Our controller
+```js
+function TodosController() {
+  this.todos = [{
+     title: 'Learn Angular',
+     complete: false,
+   },{
+     title: 'Create GitHub profile',
+     complete: false
+   },{
+     title: 'Brush teeth',
+     complete: true
+   }];
+}
+```
+
+Our HTML
+```html
+<ul>
+  <li ng-repeat="todo in vm.todos">
+    <h4>{{ todo.title }}</h4>
+
+    {{ todo.complete && 'Completed!' || 'Not completed :(' }}
+  </li>
+</ul>
+```
+
+
+#### ng-model
+We can have an input connected to a display
+```html
+<input ng-model="vm.username" />
+
+{{ vm.usernname }} 
+```
+
+
+
+#### ng-class
+SHow a class depending on value
+```html
+<ul>
+  <li ng-repeat="todo in vm.todos" ng-class="{'complete': todo.complete}">
+    <h4>{{ todo.title }}</h4>
+
+    {{ todo.complete && 'Completed!' || 'Not completed :(' }}
+  </li>
+</ul>
+```
+
+#### ng-show
+depending on the value of a function, we can show or not a DOM node
+```html
+<div ng-show="vm.isInReadMode(task.id)">
+    <p>
+        {{ $index +1 }}: {{ task.name }} - completed: {{ task.complete }}
+    </p>
+    <!-- task options -->
+    <button ng-click="vm.startEdit(task.id)">Edit</button>
+    <button ng-click="vm.startRemove(task.id)">Delete</button>              
+</div>
+```
+
+
+#### Filters
+We can filter our datasets for what needs to be listed.
+```html
+<input ng-model="ctrl.search" />
+
+<ul>
+    <li ng-repeat="data in ctrl.data | filter: ctrl.search">
+    </li>
+</ul>
+```
+
+Another powerful filter is date that takes a UNIX timestamp
+```html
+<abbr>
+    {{ ctrl.date | date:'medium' }} <!-- Dec 25, 2016 2:23:56 PM -->
+</abbr>
+```
+
+We can also filter in our controllers, using the `$filter` service. This is the preferred method for filtering on big sets of data as it helps increase performance.
+```js
+function SomeController($filter) {
+    this.list = [{
+        name: 'Bob'
+    }, {
+        name: 'Tom'
+    }];
+
+    this.search = 'B';
+
+    this.filteredList = $filter('filter')(this.list, this.search);
+}
+```
+We would then use `filteredList` like normal in our ng-repeat:
+```html
+<ul>
+    <li ng-repeat="item in ctrl.filteredList">
+        {{ item.name }}
+    </li>
+</ul>
+```
+
+### Custom Directives
+Our directive names are what we then use to reference them in the DOM. However, as the DOM is case-insensitive, we change the capital letters in our name to hypens. For instance, the directive name myDirective becomes <my-directive></my-directive>.
+
+In our directive function we return an object - this describes all the functionality and configuration of our directive. 
+
+The function name is a capital letter but the directive name is always camel case - this is to keep function names consistent when compared to our custom services, filters, etc.
+
+```js
+function MyDirective() {
+    return {
+        template: '<div>Hello world!</div>'
+    };
+}
+
+angular
+    .module('app')
+    .directive('myDirective', MyDirective);
+```
+
+The object can have several parameters
+
+- restrict: 'EA' (element, attribute)
+- replace: true (to get rid of the markup our-directive in the HTML)
+- templateUrl: 'js/module/templates/views/directive.html' (to stop using join('') and externalize the view code)
+- scope
+- controller
+- controllerAs
+- bindToController
+- transclude
+- require
+
+#### Inheriting/isolating scope
+Our directives can display dynamic data, by inheriting from the scope above.
+```html
+<div ng-controller="SomeController">
+    <twitter-card></twitter-card>
+</div>
+```
+
+And the custom directive
+```js
+function TwitterCard() {
+    return {
+        template: [
+            '<div class="twitter">',
+                '<a href="https://twitter.com/{{ twitter }}">Follow @{{ twitter }} on Twitter!</a>',
+            '</div>'
+        ].join(''),
+        restrict: 'E'
+    };
+}
+
+angular
+    .module('app')
+    .directive('twitterCard', TwitterCard);
+```
+Now if our SomeController `$scope.twitter` equals BillGates it would be printed.
+
+To make the scope independent on the parent scope and being able to reuse our directive, we can **Isolate Scope**. It creates a new scope for our directive - it can either be a completely brand new one or copied from our parent.
+
+- scope: false  (doesn't set a scope)
+- scope: true   (sets a scope by copying the parent but if parent changes, the child doesn't - they are unlinked after being copied)
+- scope: {} (passing an object to our scope with '@' to copy the value as is or '=' to pass through)
+
+```html
+<twitter-card handle="billgates"></twitter-card>
+<twitter-card handle="bob"></twitter-card>
+```
+
+and our Directive
+```js
+function TwitterCard() {
+    return {
+        template: [
+            '<div class="twitter">',
+                '<a href="https://twitter.com/{{ handle }}">Follow @{{ handle }} on Twitter!</a>',
+            '</div>'
+        ].join(''),
+        scope: {
+            handle: '='
+        },
+        restrict: 'E'
+    };
+}
+
+angular
+    .module('app')
+    .directive('twitterCard', TwitterCard);
+```
+
+We can also have the alternative writing like so, to be more explicit
+```js
+function TwitterCard() {
+    return {
+        template: [
+            '<div class="twitter">',
+                '<a href="https://twitter.com/{{ twitter }}">Follow @{{ twitter }} on Twitter!</a>',
+            '</div>'
+        ].join(''),
+        scope: {
+            twitter: '=handle' // that changes
+        },
+        restrict: 'E'
+    };
+}
+
+angular
+    .module('app')
+    .directive('twitterCard', TwitterCard);
+```
+
+#### Custom directive controllers
+
+##### Creating directive controllers
+We can create controllers for our directives - awesome! We'd generally use these for functions to change data or retrieve data from a service (we might have a list of contacts), or manipulate the data given us (we might want to verify an email address or phone number for a contact).
+
+Our controllers, much like the controllers we've created before, allow us to directly access $scope (the values passed through to us from attributes), as well as all the services that we have created, as well as built-in ones too, such as $timeout.
+
+```html
+<twitter-card handle="billgates"></twitter-card>
+```
+
+And our directive
+```js
+function TwitterCard() {
+    return {
+        template: [
+            '<div class="twitter">',
+                '<a href="https://twitter.com/{{ twitter }}">Follow @{{ twitter }} on Twitter!</a>',
+            '</div>'
+        ].join(''),
+        scope: {
+            handle: '@'
+        },
+        controller: function ($scope, $timeout) {
+            $timeout(function () {
+                $scope.handle = 'angularjs'
+            }, 5000);
+        },
+        restrict: 'E'
+    };
+}
+
+angular
+    .module('app')
+    .directive('twitterCard', TwitterCard);
+```
+This will set our Twitter handle to "angularjs" after 5 seconds.
+
+
+We can also make use of controllerAs
+```js
+function TwitterCard() {
+    return {
+        template: [
+            '<div class="twitter">',
+                '<a href="https://twitter.com/{{ handle }}">Follow @{{ handle }} on Twitter!</a>',
+                '<button ng-click="ctrl.changeHandle()">Change Handle</button>',
+                				   // here we use ctrl
+            '</div>'
+        ].join(''),
+        scope: {
+            handle: '@'
+        },
+        controller: function ($scope) {
+            // $scope.handle === 'billgates'
+
+			// this !
+            this.changeHandle = function () {
+                $scope.handle = 'angularjs';
+            };
+        },
+        controllerAs: 'ctrl',
+        restrict: 'E'
+    };
+}
+
+angular
+    .module('app')
+    .directive('twitterCard', TwitterCard);
+```
+
+We can clean this using `bindToController`. It works exactly like our scope property, but puts the items into this instead of `$scope`. This is awesome - as we're going to be using `controllerAs`, we should have all of our values assigned the same variable.
+
+```js
+function TwitterCard() {
+    return {
+        template: [
+            '<div class="twitter">',
+                '<a href="https://twitter.com/{{ ctrl.handle }}">Follow @{{ ctrl.handle }} on Twitter!</a>',
+                '<button ng-click="ctrl.changeHandle()">Change Handle</button>',
+            '</div>'
+        ].join(''),
+        bindToController: {
+            handle: '@'
+        },
+        scope: {}, // we do still want a brand new scope
+        controller: function () {
+            // this.handle === 'billgates'
+
+            this.changeHandle = function () {
+                this.handle = 'angularjs';
+            };
+        },
+        controllerAs: 'ctrl',
+        restrict: 'E'
+    };
+}
+
+angular
+    .module('app')
+    .directive('twitterCard', TwitterCard);
+```
+
+
+
+
+##### Using existing controllers
+Instead of a function, we can pass through a string to the controller property as well.
+This means we can use an existing controller as our directive's controller. 
+It also means that we can remove the controllerAs property if we're using a string, as we can do 'SomeController as some'.
+
+
+Our controller
+```js
+function TwitterController($scope) {
+    // $scope.handle === 'billgates';
+
+    this.changeHandle = function () {
+        $scope.handle = 'angularjs';
+    };
+}
+```
+
+Our directive
+```js
+angular
+    .module('app')
+    .controller('TwitterController', TwitterController);
+
+function TwitterCard() {
+    return {
+        template: [
+            '<div class="twitter">',
+                '<a href="https://twitter.com/{{ handle }}">Follow @{{ handle }} on Twitter!</a>',
+                '<button ng-click="ctrl.changeHandle()">Change Handle</button>',
+            '</div>'
+        ].join(''),
+        scope: {
+            handle: '@'
+        },
+        controller: 'TwitterController as ctrl',
+        restrict: 'E'
+    };
+}
+
+angular
+    .module('app')
+    .directive('twitterCard', TwitterCard);
+```
+
+
+
+
+
+
+
+
+
+
+
+
