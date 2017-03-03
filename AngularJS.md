@@ -6393,6 +6393,183 @@ We can also pass through an object of different event types to debounce. For ins
 <input ng-model="ctrl.search" ng-model-options="{ updateOn: 'default blur', debounce: {'default': 1000, 'blur': 0} }" />
 ```
 
+# Dependency Injection
 
+Let's say we've got a controller that injects `$scope`, `$timeout` and `UserService`.
+
+```js
+function SomeController($scope, $timeout, UserService) {
+
+}
+
+angular
+	.module('app')
+	.controller('SomeController', SomeController);
+```
+
+When we plug this controller into Angular, Angular checks what dependencies it wants and creates an `$inject` array on our controller:
+
+```js
+function SomeController($scope, $timeout, UserService) {
+
+}
+
+SomeController.$inject = ['$scope', '$timeout', 'UserService'];
+
+angular
+	.module('app')
+	.controller('SomeController', SomeController);
+```
+
+This is where the overhead comes in! Angular has to parse the string version of our function, filter out all the unnecessary parts and compile an array of the needed dependencies.
+
+## strictDI
+
+strictDI means that Angular will no longer create that `$inject` property for us - we must specify it ourselves, removing any unnecessary overhead.
+
+We can turn on strictDI by putting the directive `ng-strict-di` on the same element we put `ng-app` on.
+
+```
+<div ng-app="app" ng-strict-di>
+</div>
+```
+
+Now, any custom filter/service/directive/controller/etc that does not have the `$inject` property defined will throw an error. If we've annotated all of our functions correctly (saving Angular a load of time), it'll work exactly like before - just that little bit faster!
+
+# applyAsync
+
+We can turn on $applyAsync in our modules config.
+
+```js
+angular
+	.module('app')
+	.config(function ($httpProvider) {
+        $httpProvider.useApplyAsync(true);
+	});
+```
+
+Here we're injecting `$httpProvider` (that configures everything to do with `$http`) and turning applyAsync on. But what does it actually do?
+
+applyAsync batches our `$http` calls that happen at a similar time into one digest cycle call. If we have two `$http` calls that happen at the same time, normally we'd be running two digest cycles - this isn't great for performance.
+
+Instead, applyAsync will notice that these two requests are near each other and wait for them both to complete, running one digest cycle after that. This is great! It saves a lot of processing time for one little configuration object. However, this does mean there is a slight delay between making your request and then Angular making the actual HTTP request - this is because it needs to wait to see if there are any other `$http` calls to batch into one.
+
+Improving performance is all about trade offs. As you build more Angular applications, you'll become comfortable deciding when to implement this feature.
+
+# Disabling debug info
+
+Load a previous Angular lab and look at it in developer tools. You'll see loads of weird classes. These are there to tell our testing applications what is actually going on inside Angular, so they don't need to dive into the JavaScript code to find out. `ng-binding` tells the testing program that the value is bound to a variable. `ng-scope` is where a new scope has been created. They're not necessary for Angular to function, however.
+
+Much like applyAsync, it's just a simple configuration switch to turn these off.
+
+We use `$compileProvider` and call `debugInfoEnabled` with false, turning it off.
+
+```js
+angular
+	.module('app')
+	.config(function ($compileProvider) {
+        $compileProvider.debugInfoEnabled(false);
+	});
+```
+
+Now that we've done that, you'll no longer see any classes or comments added anywhere. Awesome! A little overhead, but in the long run, makes things a lot faster.
+
+# Watching models with $scope.$watch and $scope.$watchCollection
+
+In our controllers, we can watch when values update using `$scope.$watch`. We pass through two functions to this - the first one is a function that returns the value we want to watch. The second is the function that gets called when the value is updated.
+
+```js
+function SomeController($scope) {
+	var ctrl = this;
+	ctrl.search = '';
+
+	$scope.$watch(function () {
+		return ctrl.search;
+	}, function (newValue, oldValue) {
+		console.log('value updated!');
+	});
+}
+
+angular
+	.module('app')
+	.controller('SomeController', SomeController);
+```
+```html
+<input ng-model="ctrl.search" />
+```
+
+When a user types into our input, our function will get called with its old value and its new value. For instance, if we typed the letter `r` into our input, it would get called with `oldValue` equal to `''` and `newValue` equal to `'r'`.
+
+## Watching objects/arrays
+
+We've looked at observing strings, now let's watch objects/arrays. We can do this with `$scope.$watchCollection`
+
+
+```js
+function SomeController($scope) {
+	var ctrl = this;
+	ctrl.collection = {
+		id: 5,
+		name: 'Test'
+	};
+
+	$scope.$watchCollection(function () {
+		return ctrl.collection;
+	}, function (newValue, oldValue) {
+		console.log('value updated!');
+	});
+}
+
+angular
+	.module('app')
+	.controller('SomeController', SomeController);
+```
+
+This will then fire out whenever we change any item in that object! However, this doesn't work that well when we change a value inside an object inside an object. For instance, if we have an object with the variable `user` and update the `name` property inside it from `Bob` to `Alice`, we will get notified. Same as if we removed the property, or added a new one. However, we don't get the same level of checks on deep nested objects.
+
+## Deep-watching objects/arrays
+
+We can deep watch objects/arrays by going back to `$scope.$watch`, but passing in a third parameter of `true` to tell Angular to deep watch the collection.
+
+```js
+function SomeController($scope) {
+	var ctrl = this;
+	ctrl.collection = {
+		id: 5,
+		name: 'Test',
+		country: {
+			name: 'United States'
+		}
+	};
+
+	$scope.$watch(function () {
+		return ctrl.collection;
+	}, function (newValue, oldValue) {
+		console.log('value updated!');
+	}, true);
+}
+
+angular
+	.module('app')
+	.controller('SomeController', SomeController);
+```
+
+Before, with `$scope.$watchCollection`, if we had updated the country's name, we wouldn't have got a callback fired. However, with `$scope.$watch`, we do! Just be careful - this requires more resources to check the object, so use them only when you must.
+
+Angular doesn't deep watch by default as it is more intensive and requires more computation time in order to find differences. If it did do it by default, our digest cycle will be a lot slower!
+
+Be careful using these functions - they mean that extra checks are added to the digest cycle (on top of the ones automatically created by Angular), meaning that every time it is ran, it takes even longer.
+
+# $$watchers, $digest cycle and dirty-checking
+
+Whenever we need to watch a model value (such as using `$scope.$watch` or `{{ ctrl.value }}`), Angular pushes an item into a property named `$$watchers` on our scope.
+
+What is a `$$watcher`? A watcher stores the function that we use to get the latest value of the item (remember the first function we pass through to `$scope.$watch`?), the last known value (oldValue that gets passed to our callback), our callback and also whether or not we're deep watching the collection.
+
+When we run the digest cycle, Angular loops through all of our watchers and executes the first function, that returns the latest value of the item. It then compares (or deep checks) the last value and the new value, and calls the callback when the values are different.
+
+Imagine we have an `ng-repeat` repeating a list of people, with 5 different expressions in our element, displaying name, email, phone, address and nickname. When we have 1000 people, we have 1000x5=5000 watchers added to the `$$watchers` array. These are then **all** ran when we run the digest cycle - can you see why it gets slow now?
+
+It's important that we try and minimize our `$$watchers` count - use `$scope.$watch` only when you need to, and try and avoid watching full objects, as it takes more time to compare them.
 
 
