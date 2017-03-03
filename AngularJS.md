@@ -4945,5 +4945,626 @@ describe('Favorite Food Filter', function () {
 });
 ```
 
+# The event system: Publishing events
+
+All events can be published on our `$scope` or `$rootScope` objects. Why do we use events? Well, communication between controllers in two different aspects of the application can become quite hard - how can our controllers notify each other of updates? Or imagine if we receive data in a service and that data gets updated - how can we notify the controllers that there is new data to consume. This is where events come in! 
+
+Angular offers us two ways of publishing events - either up or down. Up will go all the way from the current scope to our root scope, and down will go down from our current scope into it's children scopes, and all it's children's scopes, and so on and so forth.
+
+Child scopes are a bit tricky to understand - but don't worry, they're really simple! Let's imagine where we start our app - `ng-app`. This is our `$rootScope`. Then, we use `ng-controller` or a directive inside `ng-app`. This will create another scope, inside of our root scope. Then, if we were to use a directive inside of them, we'd get a child scope inside their scope. Whenever we use a directive (`ng-controller`, `ng-repeat`, custom directives etc) that create their own scope, they're made in their parents scopes.
+
+To publish events downwards, we use `$scope.$broadcast`. To publish event upwards, we use `$scope.$emit`.
+
+The first argument we pass through to these functions is the name of the event. This is what we would then specify when we want to listen for the event. We could have a message being sent and then received, so we'd generally namespace these into `message` and then the action - such as `message:sent` and `message:received`.
+
+The second argument we pass through is data. This can then be picked up by the subscriber. For instance, we might want to publish an event when the user sends a message - we can send the message data through with the event too, and subscribe to it in a directive that then displays the message.
+
+Examples of this are:
+
+```js
+$scope.$emit('eventName'); // passing through data is optional
+
+$scope.$emit('anotherEvent', { obj: 'hello!' });
+
+$scope.$broadcast('aDifferentEvent', 3949324); // we can pass through any data
+```
+
+## Subscribing to events
+
+We can then use a function named `$on` to subscribe to these events. We pass through a callback too, which retrieves the data (if there is any) too.
+
+We can subscribe to the events above like so:
+
+```
+$scope.$on('eventName', function () {
+	// no data passed through
+});
+
+$scope.$on('anotherEvent', function (event, data) {
+	// data = { obj: 'hello' }
+});
+
+$scope.$on('aDifferentEvent', function (event, data) {
+	// data = 3949324
+});
+```
+
+Simple!
+
+## $rootScope
+
+We can also broadcast events on the `$rootScope` - after all it is a scope! As all the children scopes are *eventual* children of the root scope, we will use `$broadcast` as this goes down the scopes.
+
+Publishing and subscribing to events on the `$rootScope` is generally preferred - most of the time there is no advantage to only publishing events upwards/downwards from the current scope so by using events on the root scope, we can guarantee everyone will receive the event we are broadcasting - every scope will get notified of the event.
+
+```js
+$rootScope.$emit('eventName');
+$rootScope.$broadcast('aDifferentEvent', 3949324);
+
+$rootScope.$on('eventName', function () {
+	// awesome!
+});
+$rootScope.$on('aDifferentEvent', function (event, data) {
+	// awesome!
+});
+```
+
+## Unsubscribing from an event
+
+One awesome thing that Angular does when we subscribe to an event is provide us a really easy way to unsubscribe from it. Angular will automatically unsubscribe all the event subscribers on our `$scope` object (that's how we can use `$scope.$on` to listen for `$destroy`), but it can't unsubscribe from our subscribers on the `$rootScope`.
+
+`$scope.$on` returns a closure function that we can actually call to unsubscribe it!
+
+```js
+var unbind = $rootScope.$on('eventName', function () {
+	// awesome!
+});
+
+// unbind === func() {}
+```
+
+We can then call `unbind()`, and this will unsubscribe the event!
+
+We could then hook this into our `$scope.$on('destroy')` function call (the one that gets emitted when our directive is about to be removed):
+
+```js
+var unbind = $rootScope.$on('eventName', function () {
+	// awesome!
+});
+
+$scope.$on('$destroy', unbind);
+```
+
+Example
+```js
+function ContactController($rootScope, $scope) {
+
+    var ctrl = this;
+
+    var removeListener = $rootScope.$on('remove', function(event, data){
+        ctrl.contacts.splice(data, 1);
+    })
+
+    $scope.$on('remove', removeListener);
+
+    ctrl.contacts = [
+    // data goes here
+    ];
+}
+
+angular
+    .module('app')
+    .controller('ContactController', ContactController);    
+```
+
+
+And in our directive
+```js
+function Contact() {
+	return {
+		restrict: 'E',
+		template: [
+			'<div class="contact">',
+				'Name: {{ ctrl.contact.name.title }} {{ ctrl.contact.name.first }} {{ ctrl.contact.name.last }} - <a href="" ng-click="ctrl.remove(ctrl.id)">Remove</a>',
+			'</div>'
+		].join(''),
+		controller: function ($rootScope) {
+			this.remove = function (id) {
+				$rootScope.$broadcast('remove', id);
+			};
+
+		},
+		controllerAs: 'ctrl',
+		bindToController: {
+			id: '=',
+			contact: '='
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('contact', Contact);
+```
+
+and HTML
+```html
+<div ng-app="app" class="app">
+    <div ng-controller="ContactController as ctrl">
+        <ul>
+            <li ng-repeat="contact in ctrl.contacts">
+                <contact id="$index" contact="contact"></contact>
+            </li>
+        </ul>
+    </div>
+</div>
+```
+Since the event is unsubscribed we can only click once.
+
+# Built-in form validation methods
+
+We're already two-way binding our input values to our controller via `ng-model`, but Angular allows us to take our form integration much, much further.
+
+When we assign a `name` to our form and input elements, Angular begins its magic and gives us access to a lot of useful tools to validate the user input. Why do we validate? So we don't get incorrect data! Whilst we would still validate the data on the server, we can save the user time (and server resources) by validating on the client first. Imagine if we could signup to Facebook with just numbers in our name - it wouldn't make any sense. Angular makes it easy for us to prevent the user from making these types of requests. 
+
+Let's take this example form:
+
+```html
+<form>
+	<input ng-model="ctrl.username" />
+	<input ng-model="ctrl.password" />
+</form>
+```
+
+And add name elements to our `<form>` and `<input />`s.
+
+```html
+<form name="form">
+	<input
+		name="username"
+		ng-model="ctrl.username" />
+	<input
+        name="password"
+        ng-model="ctrl.password" />
+</form>
+```
+
+We now get quite an awesome object added to our `$scope`:
+
+```js
+$scope.form = {
+	username: {
+		$untouched: true,
+		$touched: false,
+		$pristine: true,
+		$dirty: false,
+		$valid: true,
+		$invalid: false,
+		$error: {}
+	},
+	password: {
+        $untouched: true,
+        $touched: false,
+        $pristine: true,
+        $dirty: false,
+        $valid: true,
+        $invalid: false,
+        $error: {}
+    }
+};
+```
+
+As you can see we get quite a big, detailed object back. What do all of these mean?
+
+- `$untouched` - this is initially `true`, set to `false` when the user goes in and then out of the input
+- `$touched` - opposite of `$untouched`
+- `$pristine` - this is initially `true`, set to `false` when the user changes the input's value (the user does not have to go out of the input for this to change)
+- `$dirty` - opposite of `$pristine`
+- `$valid` - if the field's value matches all validation rules applied to it
+- `$invalid` - opposite of `$valid`
+- `$error` - an object of all errors that the input is currently failing on
+
+Whilst `$pristine` and `$touched` offer us some cool features, the core of the power is in the `$error` and `$valid` items.
+
+By default, inputs in HTML allow us to set validation rules on them - for instance, required and maxlength.
+
+Angular will check all of these, and let us know in our object whether or not the input passes these validation rules - this allows us to show messages if the user hasn't entered the correct information.
+
+If we have this form:
+
+```html
+<form name="form">
+	<input
+		name="username"
+		required="required"
+		ng-model="ctrl.username" />
+</form>
+```
+
+We will get this object:
+
+```js
+$scope.form = {
+	username: {
+		$untouched: true,
+		$touched: false,
+		$pristine: true,
+		$dirty: false,
+		$valid: false,
+		$invalid: true,
+		$error: {
+			required: true
+		}
+	}
+};
+```
+
+You can see here that we have an error in our input - it's required, and not filled in! We can see all the individual errors that the input fails on in `$error`, but also get a general value on whether or not our field is valid by looking at `$valid`.
+
+Let's display the error in the view, if the user exists our input and still leaves it blank. We can do this by combining the `$touched` and `$error.required` values.
+
+```html
+<form name="form">
+	<input
+		name="username"
+		required="required"
+		ng-model="ctrl.username" />
+
+	<div ng-if="form.username.$touched && form.username.$error.required">
+		Username is required!
+	</div>
+</form>
+```
+
+This will display our error if the user goes into our input and then leaves it blank. This is better user experience because it means the error won't immediately be shown when the user loads the page. Simple!
+
+```html
+<div ng-app="app" class="app">
+    <div ng-controller="FormController as ctrl">
+        <form name="form">
+            <!-- <pre>{{ form | json }}</pre> -->
+            <div>
+                Username: 
+                <input 
+                    type="text"
+                    name="username"
+                    minlength="3"
+                    maxlength="20"
+                    required="required"
+                    ng-model="ctrl.username"
+                />
+
+                <div ng-if="form.username.$touched">
+                    <div ng-if="form.username.$error.required">
+                        Username is required!
+                    </div>
+                    <div ng-if="form.username.$error.minlength">
+                        Username must be more than 3 characters!
+                    </div>
+                    <div ng-if="form.username.$error.maxlength">
+                        Username must be less than 20 characters!
+                    </div>                          
+                </div>                                      
+            </div>
+
+
+            <div>
+                Password:     
+                <input 
+                    type="password"
+                    name="password"
+                    minlength="8"
+                    required="required"
+                    ng-model="ctrl.password"
+                />
+
+                <div ng-if="form.password.$touched">
+                    <div ng-if="form.password.$error.minlength">
+                        Password must be more than 8 characters!
+                    </div>
+                    <div ng-if="form.password.$error.required">
+                        Password is required!
+                    </div>                        
+                </div>                    
+            </div>
+
+            <div>
+                Email:     
+                <input 
+                    name="email"
+                    type="email"
+                    required="required"
+                    ng-model="ctrl.email"
+                />
+
+                <div ng-if="form.email.$touched">
+                    <div ng-if="form.email.$error.required">
+                        Email is required
+                    </div>
+                    <div ng-if="form.email.$error.email">
+                        Email must be valid
+                    </div>                        
+                </div>                
+            </div>                                       
+        </form>
+    </div>
+</div>
+```
+
+# ngMessages
+
+`ngMessages` is a separate module for Angular. so we need to make sure we require the file and module into our main module.
+
+```js
+angular
+	.module('app', [
+		'ngMessages'
+	]);
+```
+
+And then we're ready to use it!
+
+## What does it do?
+
+`ngMessages` allows us to take an object, and display different messages depending on what properties exist on that object.
+
+This links in with our `$error` object that we had in the previous README. To refresh your memory, the `$error` object may look something like this, for a field named `username`:
+
+```js
+{
+	username: {
+		$error: {
+			required: true
+		}
+	}
+}
+```
+
+Let's pass the `$error` object into `ngMessages`. As a parent component, we use the `ng-messages` directive.
+
+```html
+<form name="form">
+	<input
+	    name="username"
+		ng-model="ctrl.username"
+		required="required" />
+
+	<div ng-messages="form.username.$error">
+	</div>
+</form>
+```
+
+Now that we've done that, we can use the directive `ng-message` for each property we want to display errors for. As we've only got the possibility of `required` appearing in our object (as that is the only validation we've defined), we'll have one element:
+
+```html
+<form name="form">
+	<input
+	    name="username"
+		ng-model="ctrl.username"
+		required="required" />
+
+	<div ng-messages="form.username.$error">
+		<div ng-message="required">Username is required!</div>
+	</div>
+</form>
+```
+
+We can use this on different inputs too. For instance, with an email, we get an `email` property too. We can also add a `minlength` validation:
+
+```html
+<form name="form">
+	<input
+	    name="email"
+	    type="email"
+		ng-model="ctrl.email"
+		minlength="2"
+		required="required" />
+
+	<div ng-messages="form.email.$error">
+	</div>
+</form>
+```
+
+We'll now have an object that looks like this:
+
+```js
+{
+	email: {
+		$error: {
+			required: true,
+			minlength: true,
+			email: true
+		}
+	}
+}
+```
+
+And now we can simply add more DOM elements for each error message:
+
+```html
+<form name="form">
+	<input
+	    name="email"
+	    type="email"
+		ng-model="ctrl.email"
+		minlength="2"
+		required="required" />
+
+	<div ng-messages="form.email.$error">
+		<div ng-message="required">Email is required!</div>
+		<div ng-message="minlength">Must be more than 2 characters!</div>
+		<div ng-message="email">Must be a valid email!</div>
+	</div>
+</form>
+```
+
+It's worth noting that only one message will be displayed at a time, in order of the DOM nodes. At first, our `required` message will show, then if we type one letter in our input, the `minlength` message will show. Then when we've typed more letters, the `email` message will appear.
+
+## Only on $touched
+
+We can also then add an `ng-if` to only show the error messages once the user has actually interacted with the input.
+
+```html
+<form name="form">
+	<input
+	    name="email"
+	    type="email"
+		ng-model="ctrl.email"
+		minlength="2"
+		required="required" />
+
+	<div ng-messages="form.email.$error" ng-if="form.email.$touched">
+		<div ng-message="required">Email is required!</div>
+		<div ng-message="minlength">Must be more than 2 characters!</div>
+		<div ng-message="email">Must be a valid email!</div>
+	</div>
+</form>
+```
+
+Awesome! Let's compare this to what our previous code would've been:
+
+```html
+<div ng-if="form.email.$touched">
+    <div ng-if="form.email.$error.required">
+        Email is required!
+    </div>
+    <div ng-if="form.email.$error.minlength">
+        Email must be more than 2 characters!
+    </div>
+    <div ng-if="form.email.$error.email">
+        Must be a valid email!
+    </div>
+</div>
+```
+
+You'll see we have cut down a lot of repeated code - also if we were to change the name of our input, we'd only have to change it once with `ngMessages` - 3 times (and maybe many more) without it.
+
+# $parsers and $formatters
+
+We can add parsers and formatters by requiring in the `ngModel` controller in our directive.
+
+This can solve some simple issues and save us processing data down the line - for instance, our model might be minutes, but we might want to display the data as hours and minutes. It saves us processing the data later on in our controllers - the data is simply formatted there and then.
+
+```js
+function changeCase() {
+	return {
+		restrict: 'A',
+		require: 'ngModel',
+		link: function (scope, element, attrs, ngModel) {
+
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('changeCase', changeCase);
+```
+
+Here we can push functions into two different arrays - `$parsers` and `$formatters`.
+
+### $parsers
+
+Parsers parse incoming data from the `ng-model` directive before saving them to the model. Let's change all values to be stored in lowercase in our model.
+
+```js
+function changeCase() {
+	return {
+		restrict: 'A',
+		require: 'ngModel',
+		link: function (scope, element, attrs, ngModel) {
+			ngModel.$parsers.push(function (str) {
+				return str.toLowerCase();
+			});
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('changeCase', changeCase);
+```
+
+Now, regardless of what case we actually type in inside our input, it'll be saved into the model in lowercase.
+
+### $formatters
+
+Formatters are the opposite of parsers - they format the data from the model into the view. Let's change all of our model values to be displayed in uppercase in our view.
+
+```js
+function changeCase() {
+	return {
+		restrict: 'A',
+		require: 'ngModel',
+		link: function (scope, element, attrs, ngModel) {
+			ngModel.$formatters.push(function (str) {
+				return str.toUpperCase();
+			});
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('changeCase', changeCase);
+```
+
+This will take our model values and display them in uppercase in our field. Combine this with our previous `$parser`, and all our of actual model values will be in lowercase, but displayed in uppercase in our view.
+
+## Using our parsers/formatters
+
+You might have noticed that our directive is restricted to being used as an attribute. This means that we can apply it to **any input that we have `ng-model` attached on** (will error out if not attached directly).
+
+```html
+<input ng-model="ctrl.username" change-case />
+```
+
+# $validators
+
+Sometimes HTML validators arent enough - for instance, we can't test if data fits to a certain format (like requiring that a string must be 2 characters, 2 numbers and then 2 characters again), or if an input is only numbers.
+
+Let's create a directive to see if our input is *only* numbers. Up until now we've only used directives as elements with templates. However, we're now creating directives as attributes (remember that we can restrict our directives to only be attributes) and not having a tempate - by applying our directive to an element, we're affecting the behaviour of that element - not the contents.
+
+Much like `$parsers` and `$formatters`, we add our custom validators into `$validators`. Here we have a function where we can test if the value is valid, returning true or false depending on their validity.
+
+```js
+function integer() {
+	return {
+		restrict: 'A',
+		require: 'ngModel',
+		link: function (scope, element, attrs, ngModel) {
+			ngModel.$validators.integer = function (value) {
+				return value.test(/^\-?\d+$/);
+			};
+		}
+	}
+}
+
+angular
+	.module('app')
+	.directive('integer', integer);
+```
+
+You might've noticed we're simply adding to the `ngModel.$validators` object instead of pushing into it. This is because we need to give our validators a simple name that will then get added to our `$errors` object if the validation returns false. We can also use these custom validators in `ngMessages`! To activate this validation on an input, we add it as an attribute like when we use `maxlength`, etc.
+
+Example usage of our new validator would look like this:
+
+```html
+<form name="form">
+	<input name="number" ng-model="ctrl.number" integer />
+
+	<div ng-messages="form.number.$errors">
+		<div ng-message="integer">Number must be an integer!</div>
+	</div>
+</form>
+```
+
+Awesome! Custom validation that slots in nicely with the built-in validation we've used previously.
+
+
+
+
+
+
 
 
