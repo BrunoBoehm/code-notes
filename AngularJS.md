@@ -6176,4 +6176,223 @@ Letting Angular know to track by the `id` property on the news articles.
 
 If we go back to when we update the data - instead of removing two DOM nodes and creating three, Angular just creates one new DOM node at the top of the list - awesome!
 
+# Filters inside/outside of controllers
+
+When we use a filter on an `ng-repeat`, such as:
+
+```html
+<input ng-model="ctrl.search" />
+<ul>
+	<li ng-repeat="contact in ctrl.contacts | filter:ctrl.search">
+		{{ contact.name }}
+	</li>
+</ul>
+```
+
+Everytime that our digest cycle is run, our filter is re-run, even if there are no changes to the `ctrl.search` value. This means there are pointless recalculations done by Angular.
+
+One way that we can stop this is by actually filtering on the `ctrl.contacts` array in our controller. We can then control *when* we filter on the list.
+
+We would take this:
+
+```js
+function ContactList() {
+	this.contacts = [{
+		name: 'Bill Gates',
+		email: 'bill@microsoft.com',
+		phone: '01234567890',
+		username: 'b1lLG4Tes'
+	},{
+		name: 'Steve Jobs',
+		email: 'steve@apple.com',
+		phone: '12345678910',
+		username: 'steveJOBS!!!!!!'
+	},{
+		name: 'Joe Bloggs',
+		email: 'joe@bloggs.com',
+		phone: '13092019340',
+		username: 'jb'
+	},{
+		name: 'President Obama',
+		email: 'president@whitehouse.com',
+		phone: '75934988239',
+		username: 'obamaY0'
+	}];
+
+	this.search = '';
+}
+```
+
+and call `$filter('filter')` on our `contacts` array:
+
+```js
+function ContactList($filter) {
+	this.contacts = [{
+		name: 'Bill Gates',
+		email: 'bill@microsoft.com',
+		phone: '01234567890',
+		username: 'b1lLG4Tes'
+	},{
+		name: 'Steve Jobs',
+		email: 'steve@apple.com',
+		phone: '12345678910',
+		username: 'steveJOBS!!!!!!'
+	},{
+		name: 'Joe Bloggs',
+		email: 'joe@bloggs.com',
+		phone: '13092019340',
+		username: 'jb'
+	},{
+		name: 'President Obama',
+		email: 'president@whitehouse.com',
+		phone: '75934988239',
+		username: 'obamaY0'
+	}];
+
+	this.search = '';
+
+	this.filteredList = $filter('filter')(this.contacts, this.search);
+}
+```
+
+Now we have a filtered list in our `filteredList`. We will then change the `ng-repeat` over to use this list instead.
+
+```html
+<input ng-model="ctrl.search" />
+<ul>
+	<li ng-repeat="contact in ctrl.filteredList">
+		{{ contact.name }}
+	</li>
+</ul>
+```
+
+Notice how we don't use a filter in our `ng-repeat` anymore, and it looks a lot neater? Having the filter in the controller allows us to know exactly what our data is going to be when we look at the controller, and it simplifies the view.
+
+Now we need to update the filter when the `ctrl.search` value changes - we can do this using `ng-change`.
+
+```html
+<input ng-model="ctrl.search" ng-change="ctrl.refilter()" />
+<ul>
+	<li ng-repeat="contact in ctrl.filteredList">
+		{{ contact.name }}
+	</li>
+</ul>
+```
+
+We're calling a `refilter` function in our controller - let's define that:
+
+```js
+function ContactList($filter) {
+	this.contacts = [{
+		name: 'Bill Gates',
+		email: 'bill@microsoft.com',
+		phone: '01234567890',
+		username: 'b1lLG4Tes'
+	},{
+		name: 'Steve Jobs',
+		email: 'steve@apple.com',
+		phone: '12345678910',
+		username: 'steveJOBS!!!!!!'
+	},{
+		name: 'Joe Bloggs',
+		email: 'joe@bloggs.com',
+		phone: '13092019340',
+		username: 'jb'
+	},{
+		name: 'President Obama',
+		email: 'president@whitehouse.com',
+		phone: '75934988239',
+		username: 'obamaY0'
+	}];
+
+	this.search = '';
+
+	this.filteredList = $filter('filter')(this.contacts, this.search);
+
+	this.refilter = function () {
+		this.filteredList = $filter('filter')(this.contacts, this.search);
+	};
+}
+```
+
+There's no need for us to explicity write the `$filter` call twice. We can just simply call the `refilter` function in the controller:
+Note **we need to inject $filter**.
+```js
+function ContactList($filter) {
+	this.contacts = [{
+		name: 'Bill Gates',
+		email: 'bill@microsoft.com',
+		phone: '01234567890',
+		username: 'b1lLG4Tes'
+	},{
+		name: 'Steve Jobs',
+		email: 'steve@apple.com',
+		phone: '12345678910',
+		username: 'steveJOBS!!!!!!'
+	},{
+		name: 'Joe Bloggs',
+		email: 'joe@bloggs.com',
+		phone: '13092019340',
+		username: 'jb'
+	},{
+		name: 'President Obama',
+		email: 'president@whitehouse.com',
+		phone: '75934988239',
+		username: 'obamaY0'
+	}];
+
+	this.search = '';
+
+	this.refilter = function () {
+		this.filteredList = $filter('filter')(this.contacts, this.search);
+	};
+
+	this.refilter();
+}
+```
+
+Awesome! Now our filter is in our controller, and is only updated when we want it to be!
+
+# ngModelOptions
+
+So far, we've been updating our model values immediately. However, in some circumstances, we might want to wait until the user has actually finished typing. You'll notice this is used quite a lot in popular applications. Facebook waits for you to have finished typing for a little bit before making a search query. This reduces server load and stops them firing off hundreds of pointless requests as the user types.
+
+We apply `ng-model-options` to our inputs, passing in a configuration option.
+
+```html
+<input ng-model="ctrl.search" ng-model-options="{}" />
+```
+
+This configuration option can take the following options:
+
+### updateOn
+
+We can choose `ng-model` to only update on a certain type of event, such as `blur`. We can also use the event `default` to allow it to update on all events. You can use as many events as you want, as long as they are separated by a space.
+
+```html
+<input ng-model="ctrl.search" ng-model-options="{updateOn: 'blur'}" />
+```
+
+This will only update `ctrl.search` when the user exits the input.
+
+### debounce
+
+We can also "debounce" updates. This means that we can set a timer for the update after the user has stopped typing.
+
+If we set it to 200ms, it will wait for no button presses on the input for 200ms before updating the value. You'll notice that Google has a similar feature - it doesn't search until you have finished typing.
+
+```html
+<input ng-model="ctrl.search" ng-model-options="{debounce: 1000}" />
+```
+
+This will only update `ctrl.search` after the user has stopped typing for a full second.
+
+We can also pass through an object of different event types to debounce. For instance, if we wanted it to update immediately after the user exits the input, but a second after the user stops typing, we'd use:
+
+```html
+<input ng-model="ctrl.search" ng-model-options="{ updateOn: 'default blur', debounce: {'default': 1000, 'blur': 0} }" />
+```
+
+
+
 
