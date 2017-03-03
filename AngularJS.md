@@ -5794,7 +5794,386 @@ And views/user.html
 </div>
 ```
 
+# uiRouter
 
+`uiRouter` is quite similar to `ngRoute`, but each "route" is known as a "state". We define states, not routes.
 
+Each state that we define is quite similar to a route in `ngRoute`, but we have to give each state a name too. This allows us to have children states inside of a state (we'll go onto nested states/views soon).
+
+This is awesome - you might've noticed how in the last lab we've got three links to `#/user/name`. Instead, with uiRouter, we can use the state names instead of URLs. This saves us time in the long run - if we have 100 different places in our app that link to the user page, imagine having to update all of them to the URL if it ever changed! However, as we've got state names, we won't have to update any of them.
+
+Let's take a look at how we'd define a route in `ngRoute`:
+
+```js
+angular
+	.module('app', ['ngRoute'])
+	.config(function ($routeProvider) {
+		$routeProvider
+			.when('/user', {
+				templateUrl: 'views/user.html',
+				controller: 'UserController'
+			});
+	});
+```
+
+And how we'd define a route in `uiRouter`:
+
+```js
+angular
+	.module('app', ['ui.router'])
+	.config(function ($stateProvider) {
+		$stateProvider
+			.state('user', {
+				url: '/user',
+				templateUrl: 'views/user.html',
+				controller: 'UserController'
+			});
+	});
+```
+
+You can see they're very similar. We've moved the URL into the configuration object, and replaced the URL with the state's name. We're also using `$stateProvider` instead of `$routeProvider`.
+
+Instead of using `ng-view`, we use `ui-view` to place the states in our HTML.
+
+We'll go into more advanced concepts with `uiRouter` soon - things such as nested views and resolving data.
+
+## uiSref
+
+`uiRouter` also provides a directive named `ui-sref` (as in, [$state.href()](http://angular-ui.github.io/ui-router/site/#/api/ui.router.state.directive:ui-sref)). We mentioned earlier about linking to states by name - this is where `uiSref` comes in. We can use this on our hyperlinks to generate links to our states. We pass in the state name as the value and `uiRouter` will replace the link with a link to our state.
+
+Say we've got a state named `docs`, that links to `/documentation/v1`:
+
+```js
+angular
+	.module('app', ['ui.router'])
+	.config(function ($stateProvider) {
+		$stateProvider
+			.state('docs', {
+				url: '/documentation/v1',
+				templateUrl: 'views/user.html',
+				controller: 'UserController'
+			});
+	});
+```
+
+We can then use `ui-sref="docs"` to link to that state.
+
+```html
+<a href="" ui-sref="docs">Go to the docs!</a>
+```
+
+This will then get automatically changed into:
+
+```html
+<a href="/documentation/v1">Go to the docs!</a>
+```
+
+This is awesome - we can change the URL on our states without changing the name and all of our links get updated to match the new URL.
+
+## uiSrefActive
+
+`uiRouter` also provides us with one more directive - `ui-sref-active`. We pass in a class name as the value, and when the given state inside our `ui-sref` is active, it will apply this class to the link.
+
+For instance, if we have this:
+
+```html
+<a href="" ui-sref="docs" ui-sref-active="active">Go to the docs!</a>
+```
+
+When we're actually on the docs page, that link will get the `active` class applied to it:
+
+```html
+<a href="" class="active" ui-sref="docs" ui-sref-active="active">Go to the docs!</a>
+```
+
+Simple!
+
+Example / only what changes from previous version using ngRoute
+```html
+<div ng-app="app" class="app">
+    <a href="" ui-sref="user({name: 'liam'})" ui-sref-active="active">Liam</a> - <a href="" ui-sref="user({name: 'jayden'})" ui-sref-active="active">Jayden</a> - <a href="" ui-sref="user({name: 'mary'})" ui-sref-active="active">Mary</a>
+
+    <div ui-view></div>
+</div>
+```
+
+and the main module
+```js
+angular
+    .module('app', ['ui.router'])
+    .config(function($stateProvider){
+    	$stateProvider
+    		.state('user', {
+    			url: '/user/:name',
+    			templateUrl: 'views/user.html',
+    			controller: 'UserController as ctrl',
+    			resolve: {
+    				user: function($http, $stateParams){
+    					console.log($stateParams);
+    					return $http.get('http://0.0.0.0:8882/rest/user/' + $stateParams.name)
+    				}
+    			}
+    		});
+    });
+```
+
+# Nested View
+
+Imagine that we have a normal setup for a web page - a header, a footer, and everything in between those change depending on what page we are on. This is great for most cases - we can swap between different pages such as home, about, contact, etc.
+
+But what if we want to have a settings page, with multiple different pages for us to look at? We might want to be able to edit profile information, but also change our notification preferences or even have a "delete your account page".
+
+We'd setup our settings route, and this would be displayed in our main section where all the routes go. What now? How do we get all these different pages rendered *inside* our settings page?
+
+We could just create a tabs component that changes what we can see depending on what tab has been clicked, but it means our URL will always stick at `/settings` rather than changing between `/settings/notifications` and `/settings/user`.
+
+This is where nested views come in. As mentioned before with states, a state can have multiple children states. These will then be rendered inside of our parent state - but we must make sure that we use the `ui-view` directive inside our parent state too.
+
+Our previous setup might've looked like this:
+
+```js
+angular
+	.module('app', ['ui.router'])
+	.config(function ($stateProvider) {
+		$stateProvider
+			.state('settings', {
+				url: '/settings',
+				templateUrl: 'views/settings.html',
+				controller: 'SettingsController'
+			})
+			.state('settingsUser', {
+                url: '/settings/user',
+                templateUrl: 'views/settings/user.html',
+                controller: 'UserSettingsController'
+            })
+            .state('settingsNotifications', {
+                url: '/settings/notifications',
+                templateUrl: 'views/settings/notifications.html',
+                controller: 'NotificationsSettingsController'
+            })
+	});
+```
+
+Let's setup our settings example in `uiRouter`.
+
+```js
+angular
+	.module('app', ['ui.router'])
+	.config(function ($stateProvider) {
+		$stateProvider
+			.state('settings', {
+				url: '/settings',
+				templateUrl: 'views/settings.html',
+				controller: 'SettingsController'
+			})
+			.state('settings.user', {
+                url: '/user',
+                templateUrl: 'views/settings/user.html',
+                controller: 'UserSettingsController'
+            })
+            .state('settings.notifications', {
+                url: '/notifications',
+                templateUrl: 'views/settings/notifications.html',
+                controller: 'NotificationsSettingsController'
+            })
+	});
+```
+
+We're not saving much code here - but by having child states it means we can render those states *inside* the parent state - the first example of code would replace the settings state with either the notifications or user settings state.
+
+You'll notice how we state the parent controller in the name of the state. We put the parent name first, then a dot, and then the actual state name. This tells `uiRouter` that `settings` is the parent state.
+
+You'll also notice on our `settings.user` and `settings.notifications` states, we haven't put the URLs as `/settings/user` and `/settings/notifications` respectively - this is because they automatically inherit the URL from their parent state. We are simply adding on `/user` and `/notifications` to `/settings`.
+
+Now, inside of our `settings.html` we need to make sure we include the `ui-view` directive. This is where the templates for our users and notifications pages will be rendered.
+
+```html
+<div class="settings">
+	<h3>Settings</h3>
+
+	<a ui-sref="settings.user">User Settings</a> - <a ui-sref="settings.notifications">Notification Settings</a>
+
+    <div ui-view></div>
+</div>
+```
+
+Now our user and notifications pages will be rendered underneath the settings navigation - neat!
+
+Also, when we go to `/settings/user`, `uiRouter` automatically detects that our parent state is `settings`, and puts this into our main applications `<div ui-view>`. It'll then sort out the children states, so it renders the page correctly.
+
+It's important to note that when we load a child state, such as `settings.user`, it'll resolve all the parent state's resolves. If we had a resolve on `settings` to fetch settings data, going to our `settings.user` state will load that resolve on the `settings` state.
+
+Example 
+```js
+angular
+    .module('app', ['ui.router'])
+    .config(function($stateProvider, $urlRouterProvider){
+    	$stateProvider
+    		.state('home', {
+    			url: '/',
+    			templateUrl: 'views/home.html'
+    		})
+    		.state('home.timeline', {
+    			url: 'timeline',
+    			templateUrl: 'views/home/timeline.html'
+    		})
+    		.state('home.notifications', {
+    			url: 'notifications',
+    			templateUrl: 'views/home/notifications.html'
+    		})
+    		.state('home.user', {
+    			url: 'user',
+    			templateUrl: 'views/home/user.html'
+    		})    		
+    	$urlRouterProvider.otherwise('/');	
+    });
+```
+
+and in our views/home.html
+```html
+<div class="settings">
+	<h4>Twitter Home</h4>
+
+	<nav><a ui-sref="home.timeline" ui-sref-active="active">Timeline</a> - <a ui-sref="home.notifications" ui-sref-active="active">Notifications</a> - <a ui-sref="home.user" ui-sref-active="active">User</a></nav>
+	
+	<div ui-view />
+</div>
+```
+
+# Testing Routing
+
+When we test our routes/states we should check that the URL is as we expect, that it's using the correct template and fetching the correct data that it needs.
+
+To get all of our states configuration, we can inject `$state` and use `$state.get` to retrieve the configuration object for that state. As we've registered all of our states with the `$stateProvider`, we can then access them all via `$state`.
+
+An example test would look like:
+
+```js
+describe('Routes', function () {
+	var $state;
+
+	beforeEach(module('app'));
+
+	beforeEach(inject(function ($injector) {
+		$state = $injector.get('$state');
+	}));
+
+	describe('Settings', function () {
+		var state;
+
+		it('should have the correct URL', function () {
+			state = $state.get('settings');
+
+			expect(state.url).toEqual('/settings');
+		});
+	});
+});
+```
+
+Here we're testing that the URL is correct. We can then test the `templateUrl` too:
+
+```js
+describe('Routes', function () {
+	var $state;
+
+	beforeEach(module('app'));
+
+	beforeEach(inject(function ($injector) {
+		$state = $injector.get('$state');
+	}));
+
+	describe('Settings', function () {
+		var state;
+
+		it('should have the correct URL', function () {
+			state = $state.get('settings');
+
+			expect(state.url).toEqual('/settings');
+		});
+
+		it('should use the correct template', function () {
+            expect(state.templateUrl).toEqual('views/settings.html');
+        });
+	});
+});
+```
+
+We'd then repeat this for all of our routes. This ensures that all of our routes are correct so that if we accidentally change a URL in the future, we won't be providing a bad user experience to the existing users!
+
+# Performance with Track By
+
+Now that we've started to build our Angular applications, we can start to think about scaling them. As we start to display more data and allow complex user interactions with that data, our application can become slow, much like if we build a one-way street and try and drive 5,000 cars in both directions. There are a few neat tricks we can use to improve performance.  Each performance enhancement we use in Angular is like adding an extra road, allowing things to become much quicker.
+
+## What is track by?
+
+Track by allows us to identify JavaScript objects in an `ng-repeat` list so that Angular won't `$destroy` or re-create DOM nodes unnecessarily.
+
+For example, if we were to have an `ng-repeat` repeating the news, Angular will display all of the news items on the page.
+
+Later on, if we were to refresh the data (refresh the news), Angular will have to rebuild every DOM node in the repeat, even if two of the articles are the same. Any change in the array will result in a rebuild of the DOM - Angular has no way of telling what items in the new array are the same in the last array.
+
+To prevent this, we can use `track by` in our `ng-repeat`s. This tells Angular what to use to identify the news article.
+
+If our data structure looks like this:
+
+```js
+var newsItems = [{
+	id: 2342339,
+	title: 'Apple customer goes to the top for iPhone battery answer',
+	timestamp: 1457697486000
+}, {
+	id: 2342320,
+	title: 'Android N brings split-screen multitasking apps',
+	timestamp: 1457609266000
+}];
+```
+
+Here we've got two items of news. Angular will then display these on the page. If we were then to refresh the news, and a new item of news comes in:
+
+```js
+var newsItems = [{
+	id: 2342342,
+	title: 'Computer wins series against Go master',
+	timestamp: 1457773283000
+}, {
+	id: 2342339,
+	title: 'Apple customer goes to the top for iPhone battery answer',
+	timestamp: 1457697486000
+}, {
+	id: 2342320,
+	title: 'Android N brings split-screen multitasking apps',
+	timestamp: 1457609266000
+}];
+```
+
+Angular would then delete the original two DOM nodes, and then render three DOM nodes in its place - this is because it doesn't know what makes each news article uniques (it can't tell what has changed, so assumes it all has).
+
+## Using track by
+
+As you can see, all of our news articles have unique IDs associated with these. Let's let Angular know about these!
+
+This:
+
+```
+<ul class="news">
+	<li ng-repeat="item in ctrl.news">
+		{{ item.title }}
+	</li>
+</ul>
+```
+
+Will turn into this:
+
+```
+<ul class="news">
+	<li ng-repeat="item in ctrl.news track by item.id">
+		{{ item.title }}
+	</li>
+</ul>
+```
+
+Letting Angular know to track by the `id` property on the news articles.
+
+If we go back to when we update the data - instead of removing two DOM nodes and creating three, Angular just creates one new DOM node at the top of the list - awesome!
 
 
