@@ -785,7 +785,7 @@ Let's play before and after the directive is mounted in the DOM
 - `compile($element, $attrs)` - ready to compile the directive
 - `controller($scope)` - manipulate all data **before** the directive is actually compiled
 - `pre-link($scope, $element, $attrs)` - the directive is **compiled** to DOM nodes, but isn't inserted into the DOM. Use it for DOM manipulation (moving nodes, changing HTML...)
-- `post-link($scope, $element, $attrs)` - the directive has been **inserted into the DOM** (**same as the link function**). Use it to add event listeners. Same as `link`.
+- `post-link($scope, $element, $attrs, $ctrl)` - the directive has been **inserted into the DOM** (**same as the link function**). Use it to add event listeners. Same as `link` (and if you use require you get more controller methods)
 
 ```js
 function SomeDirective() {
