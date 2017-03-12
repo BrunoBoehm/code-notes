@@ -5185,6 +5185,21 @@ We'll make a very small login form for `new.html.erb`,
 </form>
 ```
 
+We can also do
+```ruby
+<%= form_tag ({controller: 'sessions', action: 'create', method: 'post'}) do %>
+  <input name="name">
+  <input type=submit value='login'>
+<% end %>
+
+# or
+<%= form_tag(action="/sessions", method: :post) do %>
+	<%= label_tag :username %>
+	<%= text_field_tag :username %>
+	<%= submit_tag "Log In" %>
+<% end %>
+```
+
 Ordinarily, we would use `form_for @user`, but in this example, we don't have a user model at all! When the user submits the form, they'll be logged in!
 
 The log out flow is even simpler. We add a `SessionsController#destroy` method, which will clear the username out of the session.
@@ -5194,8 +5209,27 @@ def destroy
 end
 ```
 The most common way to route this action is to `post '/logout'`. This means that our logout link will actually be a submit button that we style to look like a link.
+```ruby
+<% if session[:name] %>
+	<h1>Hi, <%= session[:name] %>.</h1>
+	
+	<%= form_tag ({controller: 'sessions', action: 'destroy', method: 'post'}) do %>
+	  <input type=submit value='logout'>
+	<% end %>
+	
+<% else %>
+	<h1>Welcome to the APP</h1>
+	<%= link_to "log in", login_path %>
+<% end %>
+```
 
 It's tempting, but don't attach this to a `get` route. HTTP specifies that `get` routes don't change anything—logging out is definitely changing something. You don't actually want someone to be able to put a link to `http://www.yoursite.com/logout` in an email or message board post. It's not a security flaw, but it's pretty annoying to be logged out because of mailing list hijinks.
+```ruby
+# might be necessary to add these in config/routes.db
+  get '/login' => 'sessions#new'
+  post '/login' => 'sessions#create'
+  post '/logout' => 'sessions#destroy'
+```
 
 At its base, login is very simple: the user provides you with credentials in a POST, you verify those credentials and set a token in the `session`. In this example, our token was literally the username the user typed. In a more complex app, it would most likely be their user id.
 
@@ -5851,6 +5885,306 @@ The rules are: anyone can post. Registered users can edit their post after posti
 
 [CanCanCan]: https://github.com/CanCanCommunity/cancancan
 
+# Devise with Roles
+
+Let's say that our app is a message board. There are four kinds of users: guests, normal users, moderators, and administrators.
+
+Here's how they're defined and what they can do:
+
+   * guests can read posts
+   * normal users can do everything guests can do. They can also create posts and edit their own posts.
+   * moderators can do all that, and edit and delete the posts of other users.
+   * administrators can do everything.
+
+Roles are a way to express these different kinds of users within the `User` model, then use it for authorization.  Devise allows us to authenticate WHO you are, and devise's roles allow us to say (given what KIND of user you are) what you are authorized to do.
+
+## Using roles
+
+Let's look at how we might implement the schema described above.
+
+First, we'll put an [`enum`][ar_enum] in our `User` model to keep track of the `User`'s role:
+
+    class User < ActiveRecord::Base
+      enum role: [:normal, :moderator, :admin]
+    end
+
+ActiveRecord generates several helpful methods from this call. Given a `User`, we can ask,
+
+    user.admin?
+
+And ActiveRecord will translate that into:
+
+    user.role == 2
+
+As you can see, enums are stored as integers in the database. The list of allowable values, and their conversion into symbols, happens in Ruby.
+
+What about guests, or users who are either not logged in or not signed up for our service at all? We can detect whether a `User` is written to the database by calling `persisted?`, which will catch user objects which have been created, perhaps filled out in a `/signup` route, but not yet saved and validated. These users should be guests.
+
+Our `User` model updates like so,
+
+    class User
+      enum role: [:normal, :moderator, :admin]
+      def guest?
+        persisted?
+      end
+    end
+
+Note: `current_user.role` will never return `'guest'` with this approach, since being a guest is not technically a role.
+
+Devise's current_user method will always return to us the user object for the currently logged in user.  What happens if we call `current_user.guest?` and `current_user` is `nil` because nobody is currently signed in. We can address that like so:
+
+    class NilClass
+      def guest?
+        true
+      end
+    end
+
+This will cause `current_user.guest?` to return true if `current_user` is nil. It will also cause *any* `nil` value, even literally `nil` to respond to `guest?` with `true`, so be wary of overusing this approach. Another technique is to use ActiveSupport's `try` whenever we're using an object that might be nil:
+
+    if current_user.try(:admin?)
+      # current user is not nil and is an admin
+    else
+      # current user is nil or has a role that is not admin
+    end
+
+This is perhaps cleaner, since it delegates the bizarre re-opening of `NilClass` to `ActiveSupport#try`, but it is a little bit less readable than this:
+
+    if current_user.admin?
+      # current user is not nil and is an admin
+    else
+      # current user is nil or has a role that is not admin
+    end
+
+So use your discretion.
+
+## Using the pattern
+
+You can use this pattern whether you're just doing authorization checks in your controllers, or using a framework like CanCanCan.
+
+Using it bare in the controller,
+
+    class PostsController < ApplicationController
+      def update
+        @post = Post.find(params[:id])
+        return head(:forbidden) unless current_user.admin? ||
+	       			       current_user.moderator? ||
+				       current_user.try(:id) == @post.id
+        @post.update(post_params)
+      end
+      # more down here
+    end
 
 
+In a `CanCanCan` ability, we use the role (What type of user you are) to determine what you are authorized to do.
 
+    class Ability
+      include CanCan::ability
+
+      def initialize(user)
+        user.can :read, Post
+        return if user.guest?
+        
+        user.can :update, Post, {owner_id: user.id}
+        return if user.normal?
+        
+        user.can :update, Post
+        return if user.moderator?
+
+        user.can :manage, Post if user.admin?
+      end
+    end
+
+Note how the flow of the initializer creates cascading permissions. Since our permissions model is cascading—each new level of user can do everything the previous level can do, and then more—we start at the least-privileged user and add in the permissions for each level, returning when we reach the user's permission level.
+
+## Conclusion
+Roles sit somewhere between authorization and authentication.  By pre-defining what type of user each user is, and what each type of user is authorized to do, we can use roles to say who is allowed to do what.
+
+## Resources
+
+  * [ActiveRecord enum][ar_enum]
+  * [CanCanCan]
+  * [Devise]
+
+[ar_enum]: http://edgeapi.rubyonrails.org/classes/ActiveRecord/Enum.html
+[CanCanCan]: https://github.com/CanCanCommunity/cancancan
+[Devise]: https://github.com/plataformatec/devise
+
+# Devise and Pundit
+
+[CanCanCan](https://github.com/CanCanCommunity/cancancan) is pretty nice when you have a simple permissions model. For that matter, performing authorization checks in controllers is perfectly fine for simple applications.
+
+What happens when, inevitably, your application is no longer simple?
+
+You'll quickly find that your controllers are littered with authorization checks. Or, in CanCan, your `Ability` class will grow until it starts to be unmanageable.
+
+[Pundit] offers a way for us to organize our authorization code. With Pundit, you create `Policy` classes for your models, which define what users can do to those models. This gives you a straightforward, modular way to separate the concern of authorization from your controllers and your model logic.
+
+## Setup
+```ruby
+    # Gemfile
+    gem "pundit"
+
+    # app/controllers/application_controller.rb
+    class ApplicationController < ActionController::Base
+      include Pundit  # add this line
+      protect_from_forgery
+    end
+```
+Finally, `bundle` and run the generator:
+```ruby
+    rails g pundit:install
+```
+You'll have to restart Rails at this point for it to pick up the changes.
+
+## Writing simple policies
+
+Consider a message board with these roles:
+
+   * guests can only read posts
+   * normal users can do everything guests can do. They can also create posts and edit their own posts.
+   * moderators can do all that, and edit and delete the posts of other users.
+   * administrators can do anything.
+
+Let's implement this in Pundit with policies.
+
+In Pundit, you keep your authorization rules in `Policy` classes. A policy is a class named like `<model>Policy`. For example, `PostPolicy` describes the policy for a `Post` model. You keep these in `app/policies`. For example,
+```ruby
+   # app/policies/post_policy.rb
+   class PostPolicy < ApplicationPolicy
+     def update?
+       user.admin? || user.moderator? || record.try(:user) == user
+     end
+   end
+```
+This policy says that admins and moderators can update any post, and users who are neither of those things can update only posts they own.
+
+`record` is the name for the model object. It is set in the `ApplicationPolicy` generated by the installer. If you totally hate this, you can change it in your Policy classes by overriding the initializer:
+```ruby
+   class PostPolicy < ApplicationPolicy
+     attr_reader :post
+
+     def initialize(user, post)
+       super(user, post)
+       @post = record
+     end
+
+     def update?
+       user.admin? || user.moderator? || post.try(:user) == user
+     end
+   end
+```
+Though this seems not quite worth it to me. Saying `record` is fine.
+
+To use this policy, we call `authorize` within our controller,
+```ruby
+    class PostsController
+      def update
+        @post = Post.find(params[:id])
+        authorize @post
+	# perform an update
+      end
+    end
+```
+`authorize` is added to your controllers by adding `include Pundit` to your `ApplicationController`. By default, `authorize` calls the policy method of the same name as your controller action with a question mark after it. We're in the `update` route, and `@post` is a `Post` object, so `authorize` does the equivalent of this:
+```ruby
+    PostPolicy.new(current_user, @post).update?
+```
+Within your controllers, Pundit offers a helper for constructing the policy of a model:
+```ruby
+    policy(@post)
+    #which is equivalent to:
+    PostPolicy.new(current_user, @post)
+```
+This is particularly useful in views:
+```erb
+    <% if policy(@post).update? %>
+      <%= link_to "Edit post", edit_post_path(@post) %>
+    <% end %>
+```
+## Testing
+
+Pundit's data model makes testing your authorization code very easy. Where before you needed to write controller tests (which need to understand sessions and make requests to routes and so on), with Pundit, you can write simple unit tests that send in model objects and assert that the right thing happens.
+```ruby
+    class PostPolicyTest
+      test "users can't update others posts" do
+        amethyst = users(:amethyst)
+        post = posts(:garnet_private)
+        expect(post.user).not_to eq(amethyst)
+        expect(PostPolicy.new(amethyst, post).update?).to be false
+      end
+    end
+```
+## Scopes
+
+Let's add a feature to our message board: drafts. `Posts` now have a `published?` method, and only `admins` can see unpublished posts.
+
+In our `Post#index` route, we want to show the user all the posts they have access to. Pundit uses a `Scope` to give us easy access to that information, particularly in our views.
+
+To use it, you define a class named `Scope`, which inherits from `Scope`, inside your policy:
+```ruby
+   class PostPolicy < ApplicationPolicy
+     class Scope < Scope
+       def resolve
+         if user.admin?
+           scope.all
+         else
+           scope.where(:published => true)
+         end
+       end
+     end
+     # ...
+   end
+```
+The `Scope` class initializes with a `user` and a `scope`, which is an `ActiveRecord::Relation`—that is, exactly the kind of thing you get out of a `where` query. This lets you chain the policy with your queries, so for example I can see all the posts on a particular topic which only I can see.
+
+In your views, you use it like this:
+```erb
+    <% policy_scope(@user.posts).each do |post| %>
+      <p><%= link_to post.title, post_path(post) %></p>
+    <% end %>
+```
+# Updating parameters
+
+Pundit also gives you tools for controlling what attributes of a model a user can update. This is *fabulous*.
+
+To use it, add a `permitted_attributes` method to your Policy:
+```ruby
+    class PostPolicy < ApplicationPolicy
+      def permitted_attributes
+        if user.admin? || user.owner_of?(post)
+          [:title, :body, :tag_list]
+        else
+          [:tag_list]
+        end
+      end
+    end
+```
+Here we've added a feature where users can update the tags of any post, and edit the title and body of their own.
+
+In your controllers, you get a helper, `permitted_attributes`, which takes a model and returns which attributes are writable.
+```ruby
+    class PostsController
+      def update
+        @post = Post.find(params[:id])
+        if @post.update_attributes(permitted_attributes(@post))
+          redirect_to @post
+        else
+          render :edit
+        end
+      end
+    end
+```
+You will be surprised at how many of your `params.permit` headaches this will resolve.
+
+## Conclusion
+
+[Pundit] is a useful gem with a simple design. As the docs say, Pundit doesn't do anything you couldn't have easily done yourself. That said, that's true of a lot of programming, and it's nice that someone has made the design decisions already.
+
+The documentation is extremely useful, and I recommend reading through it. As you do, consider how Pundit is completing the whole picture. [Devise] gives us all the tools to figure out who someone is, and [Pundit] is a neat, expressive way to say what they can do. Together, you can build a lot with them.
+
+## Resources
+  * [Pundit]
+  * [Devise]
+
+[Devise]: https://github.com/plataformatec/devise
+[Pundit]: https://github.com/elabs/pundit
