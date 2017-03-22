@@ -3113,5 +3113,271 @@ Let's create a partial `app/views/comments/_comments.html.erb` to hold our templ
 
 This techniques enables to simplify the client side code. This enables to keep all the code into the rails stack, and has massive support from the Rails community. This technique is only in rails, and differs from the 2 previous methods, with a lot of client code, like in Ember, Angular, React and jQuery.
 
+# AJAX POST request
+Here's our HTML setup
+```html
+<div class="comments">
+  <%= render 'comments/comments' %>
+</div>
+
+<!-- same as <%#= form_for(@comment, url: post_comments_path(@post)) do |f|> -->
+<!-- posts/1/comments -->
+<%= form_for([@post, @comment]) do |f|>
+  <%= f.text_area :content %>
+  <%= f.submit %>
+<% end % >
+```
+Since we have a nested route for posts/comments we need to have this setup for our form_for.
+
+And in our PostsController we have
+```ruby
+def show
+  # before_action :set_post to @post
+
+  # data for the partial
+  @comments = @post.comments
+
+  # for our form_for
+  @comment = @post.comments.build
+end
+```
+
+Let's start by making it work without AJAX at all.
+```rb
+def create
+  @comment = @post.comments.build(comments_params)
+  # we have define a private comments_params method for strong params
+  if @comment.save
+    redirect_to @post
+  else
+    render 'posts/show'
+  end
+end
+```
+Now it should all work without ajax, when we submits it does the full request cycle and reloads the page (redirect_to).
+The backend logic is working, let's deal with the front end logic.
+
+1. We will start by hijacking the submit event of our form
+2. Take the form data and send it to the server with a POST request
+3. Take the data from the post request and create the right comments in the controller
+4. Send back HTML/JSON/JS of the comment that was added and inject into the comment OL of the DOM
+
+## Version 1 - Client Side Logic: Sending as data and requesting HTML
+Let's start with our event handler
+```js
+$(function(){
+  $("#new_comment").on("submit", function(e){
+    // alert("You clicked!")
+    // console.log(this)
+    var url = this.action;
+
+    var data = $(this).serialize();
+    // replaces all of this manual stuff below:
+    // var data = {
+    //   'authenticity_token': $("input[name='authenticity_token']").val();
+    //   'comment': {
+    //     'content': $('#comment_content').val();
+    //   }
+    // }
+
+    $.ajax({
+      type: "POST",
+      url: url,
+      data: data,
+      success: function(response){
+        // debugger
+      }
+    })
+
+    e.preventDefault();
+  })
+})
+```
+At this point the response would be a 302 redirect to @post and would give us all the layout.
+We'll update our create method, so that it renders a new layout `comments/show.html.erb` with just the li we want.
+```rb
+def create
+  @comment = @post.comments.build(comments_params)
+  # we have define a private comments_params method for strong params
+  if @comment.save
+    render 'comments/show', layout: false
+  else
+    render 'posts/show'
+  end
+end
+```
+And our template
+```html
+<li><%= @comment.content %></li>
+```
+Now if we use the debugger to see what the `response` is it will show the new LI we created.
+
+Let's update our ajax method to append the response to the OL.
+```js
+//...
+
+  $.ajax({
+    type: "POST",
+    url: url,
+    data: data,
+    success: function(response){
+      $('#comment_content').val('');  // we empty the form text_area
+      var $ol = $('div.comments ol');
+      $ol.append(response);
+    }
+  })
+
+//...
+```
+
+And now we have it, our final .js file should look like this:
+```js
+$(function(){
+  $("#new_comment").on("submit", function(e){
+
+    $.ajax({
+      type: ( $("input[name='_method']").val() || this.method ),
+      url: this.action,
+      data: $(this).serialize();,
+      // above is not specific and abstracted, below it's about this particular form
+      success: function(response){
+        $('#comment_content').val('');
+        var $ol = $('div.comments ol');
+        $ol.append(response);
+      }
+    })
+
+    e.preventDefault();
+  })
+})
+```
+
+## Version 2 - Client Side Logic: Sending as data and requesting JSON
+Quite similar but we receive and will insert the JSON instead of HTML.
+
+```js
+$(function(){
+  $("form#new_item").on("submit", function(e){
+    e.preventDefault();
+    var $form = $(this);
+    var action = $form.attr("action");
+    var params = $form.serialize();
+
+    $.ajax({
+      url: action,
+      data: params,
+      dataType: "json",
+      method: "POST"
+    })
+    .success(function(json){
+      // json is a JS object of the item that was just created
+      html = "";
+      html += "<li>" + json.name + "</li>";
+      $("ul.todo-list").append(html);
+    })
+    .error(function(response){
+      console.log("Broken", response);
+    });
+  });  
+})
+```
+
+### Using JS.prototype and Handlebars for complex template + JSON rendering
+We first need to add the Handlebars library to our asset pipeline or use a CDN.
+We need to
+- compile the Handlebars template
+- Send the ajax request with a serialized POST request
+- In case of success, we show to persisted response data by passing it to the Handlebars template and append it to the DOM
+- In case of error, we throw an alert
+
+
+```js
+function Item(attributes) {
+  this.description = attributes.description;
+  this.id = attributes.id;
+}
+
+// instance method on the (this) Item instance
+Item.prototype.renderLI = function() {
+  return Item.template(this)
+}
+
+$(function() {
+  // waits for the DOM to be ready before doing the compilation
+  Item.templateSource = $("#item-template").html();
+  Item.template = Handlebars.compile(Item.templateSource);
+  $("form#new_item").on("submit", Item.formSubmit);
+})
+
+Item.formSubmit = function(e) {
+  e.preventDefault();
+  var $form = $(this);
+  var action = $form.attr("action");
+  var params = $form.serialize();
+
+  $.ajax({
+    url: action,
+    data: params,
+    dataType: "json",
+    method: "post"
+  })
+  .success(Item.success)
+  .error(Item.error)
+}
+
+// callback class method
+Item.success = function(json) {
+  var item = new Item(json);
+  var itemLi = item.renderLI();  // calls the instance method onto the new Item object instance
+
+  $("ul.todo-list").append(itemLi);
+}
+
+// callback class method
+Item.error = function(response) {
+  console.log("The was an error", response)
+}
+```
+
+
+## Version 3 - Server Side Logic: Server responds with JS instructions
+We can get rid of our whole JS function.
+
+We will update our HTML
+```html
+<div class="comments">
+  <%= render 'comments/comments' %>
+</div>
+
+<%= form_for([@post, @comment]), remote: true do |f|>
+  <%= f.text_area :content %>
+  <%= f.submit %>
+<% end % >
+```
+
+In the controller we will explicitly tell that we want to render the .js format using a specific/custom file 'create.js.erb'
+```rb
+def create
+  @comment = @post.comments.build(comments_params)
+  # we have define a private comments_params method for strong params
+  if @comment.save
+    render 'create.js', layout: false
+  else
+    render 'posts/show'
+  end
+end
+```
+
+Let's create this 'create.js' file
+```js
+$('#comment_content').val();
+var $ol = $('div.comments ol')
+$ol.append("<%= j(render('comments/comment', comment: @comment)) %>");
+```
+
+Our 'comments/comment' partial is defined as
+```html
+<li><%= comment.content %></li>
+```
 
 
