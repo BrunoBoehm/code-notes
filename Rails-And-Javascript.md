@@ -2887,6 +2887,231 @@ With our controller code in place, we need to make some additions to our templat
 Very similar to what we've been doing when we use AJAX to `get()` a resource, we just parse the JSON and add it to the DOM. To keep it simple, we just have one `<DIV>` that has placeholders for the data, and we fill it in when we get that response.
 
 
+# AJAX GET in Rails
+The basic process:
+1. Hijack the click event
+2. Once we're in the click event, we fire and AJAX request to GET the data  
+3. Once we have the data we need to place it in the DOM
+
+Our HTML setup for the interface we create has a link and should load comments in a specific div once we click that link
+```html
+  <%= link_to "Load Comments", post_comments_path(@post), :class => "load_comments" %>
+
+  <div class="comments"></div>
+```
+
+## First version: the server responds with HTML
+
+### Using $.ajax()
+In it's simplest form hijacking a link means:
+```js
+$("a[href='/posts/1/comments']").on("click", function(e){
+  e.preventDefault();
+  alert("You clicked on the link!")
+  })
+```
+
+Let's put our js in the app/assets/javascripts folder that describes our page: post.js (let's not use coffee script).
+To make sure to get our javascript fire since it is called from the <head>, we need to put it in a `$(document).ready()` function.
+
+So now we can target this link and use the low level jQuery `.ajax()` function
+```js
+// shorthand to $(document).ready(function){...}
+$(function(){
+
+  $("a.load_comments").on("click", function(e){
+
+    $.ajax({
+        method: "GET",
+        url: this.href
+    }).success(function(response){ // success is when the server responds with a 2xx
+        // console.log(data)
+        // debugger (debugger is our binding.pry)
+        $('.comments').html(response);
+    }).error(function(error){
+        alert("We broke!")
+    });
+
+    e.preventDefault();
+  });
+})
+```
+
+This ajax call will now send a request to our CommentsController#index method
+```ruby
+def index
+  @comments = @post.comments
+  # implicit rendering of the full layout + comments.index.html (render 'comments/index') if we say nothing
+  # we want it without the layout
+  render 'comments/index', layout: false
+  # we could actually just write
+  # render layout: false
+end
+```
+This would render whatever we have defined in out 'comments/index' template, like
+```erb
+<ol>
+  <% @comments.each do |comment| %>
+    <li><%= comment.content %></li>
+  <% end %>
+</ol>
+```
+but of course with the data, like '<ol><li>First comment</li><li>Another one</li><li>And again</li></ol>'.
+
+Not that we can test our `.error()` handler by raising an error in our controller:
+```ruby
+def index
+  @comments = @post.comments
+  raise "Error!!!!".inspect
+  render 'comments/index', layout: false
+end
+```
+
+### using $.get()
+We can use the `jQuery.get();`
+
+It makes our javascript simpler:
+```js
+$(function(){
+
+  $("a.load_comments").on("click", function(e){
+
+    $.get(this.href).success(function(response){
+      $('.comments').html(response);
+    });
+
+    e.preventDefault();
+  });
+})
+```
+
+CONCLUSION: This method sending back HTML is great because it's really quick. But sometimes you don't have control over the server so you cannot request HTML. Let's see what happens when you're given JSON.
+
+## Second Version: the server responds with JSON
+What we basically want first, is to be able to view
+`localhost:3000/posts/1/comments.json`
+
+The Rails convention for rendering JSON is
+```rb
+def index
+  @comments = @post.comments
+  render json: @comments
+  # instead of our previous
+  # render layout: false
+end
+```
+This will automatically take the @comments object and convert it to JSON.
+
+So let's do our request:
+```js
+$(function(){
+
+  $("a.load_comments").on("click", function(e){
+
+    $.get(this.href).success(function(json){
+      // debugger
+    });
+
+    e.preventDefault();
+  });
+})
+```
+Out $.get() request is smart enough to realize that the string returned by the server is actually a JSON, and it parses it. In the past you'd have to use $.getJSON() explicitly, or use $.ajax() and declare a dataType: "json".
+
+What we'll do is changing just a bit the html.erb setup of our view to be working simply with <li> tags
+```html
+  <%= link_to "Load Comments", post_comments_path(@post), :class => "load_comments" %>
+
+  <div class="comments">
+    <ol>
+    </ol>
+  </div>
+```
+
+So let's do our request:
+```js
+$(function(){
+
+  $("a.load_comments").on("click", function(e){
+
+    $.get(this.href).success(function(json){
+      var $ol = $('div.comments ol')  // $ is a convention for variable that are jQuery object
+      $ol.html("")                    // we make sure to empty the <ol>
+
+      // we iterate, just like a block in ruby
+      json.forEach(function(comment){
+        $ol.append("<li>" + comment.content + "</li>")
+      })
+    });
+
+    e.preventDefault();
+  });
+})
+```
+
+## Third version: using getScript (remote true)
+Instead of manually triggering ajax, where the browser knows what to do when you click on the link, we will create a server side ajax model.
+
+We want to get a response that is made of javascript, and contains instructions of what to do.
+```js
+$(function(){
+
+  $("a.load_comments").on("click", function(e){
+
+    $.ajax({
+      url: this.href,
+      dataType: 'script'
+    })
+
+    e.preventDefault();
+  });
+})
+```
+
+And we can actually abstract this even more and comment it all out if we use `remote: true`
+```html
+  <%= link_to "Load Comments", post_comments_path(@post), :class => "load_comments", :remote => true %>
+
+  <div class="comments">
+    <ol>
+    </ol>
+  </div>
+```
+This basically says that rails will automatically fire an ajax request when the link is clicked, asking for a .js file at the indicated URL and then process the js view that contains all of the indications to make the final rendering.
+
+We're going back to rendering the normal layout (this is rendered if the client asks for html)
+```rb
+def index
+  @comments = @post.comments
+
+  render layout: false
+  # this implicitly replaces the whole:
+  # respond_to do |format|
+  #   format.html {render 'index.html', layout: false}
+  #   format.js   {render 'index.js', layout: false}
+  # end
+end
+```
+and create a new file: `views/comments/index.js.erb`. Even tough it's technically javascript, we're in our rails stack and can use erb and our instance variables. Rails will process first, then respond to the request by sending the processed js file, containing instructions.
+
+This file will now be rendered by using the naming convention, if the client asks for javascript (dataType: 'script').
+```js
+var html = "<%= j(render 'comments/comments') %>"
+
+$("div.comments").append(html);
+```
+We use the `j` actionView method because we want to escape html and serve a valid javascript string.
+
+Let's create a partial `app/views/comments/_comments.html.erb` to hold our template that we'll then insert into the dom.
+```html
+<ol>
+  <% @comments.each do |comment| %>
+    <li><%= comment.content %></li>
+  <% end %>
+</ol>
+```
+
+This techniques enables to simplify the client side code. This enables to keep all the code into the rails stack, and has massive support from the Rails community. This technique is only in rails, and differs from the 2 previous methods, with a lot of client code, like in Ember, Angular, React and jQuery.
 
 
 
