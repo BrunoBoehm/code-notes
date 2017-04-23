@@ -806,3 +806,54 @@ The most common tags used follow:
 - @param: This tag shows the type and description of a function or method parameter. The format is type $element_name element description.
 - @return: The type and description of the return value of a function or method are provided in this tag. The format is type return element description.
 
+## Variables Scope
+The [scope](http://php.net/manual/en/language.variables.scope.php) of a variable is the context within which it is defined. For the most part all PHP variables only have a single scope. **Any variable used inside a function is by default limited to the local function scope.**
+
+```php
+<?php
+$a = 1; /* global scope */ 
+
+function test()
+{ 
+    echo $a; /* reference to local scope variable */ 
+} 
+
+test();
+?>
+```
+
+This script will not produce any output because the echo statement refers to a local version of the $a variable, and it has not been assigned a value within this scope. You may notice that this is a little bit different from the C language in that global variables in C are automatically available to functions unless specifically overridden by a local definition. This can cause some problems in that people may inadvertently change a global variable. **In PHP global variables must be declared global inside a function if they are going to be used in that function.**
+
+```php
+<?php
+$a = 1;
+$b = 2;
+
+function Sum()
+{
+    global $a, $b;
+
+    $b = $a + $b;
+} 
+
+Sum();
+echo $b;
+?>
+```
+By declaring $a and $b global within the function, all references to either variable will refer to the global version.
+
+A second way to access variables from the global scope is to use the special PHP-defined `$GLOBALS` array. The previous example can be rewritten as:
+```php
+<?php
+$a = 1;
+$b = 2;
+
+function Sum()
+{
+    $GLOBALS['b'] = $GLOBALS['a'] + $GLOBALS['b'];
+} 
+
+Sum();
+echo $b;
+?>
+```
