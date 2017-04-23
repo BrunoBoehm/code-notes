@@ -568,3 +568,23 @@ getRidOfBox.onclick = function() {
         alert('component is unmounted')
 }
 ```
+
+Another great example is `getDefaultProps()`, that provides us a life cycle method for initializing default properties for our components.
+
+```js
+var Box = React.createClass({
+    getDefaultProps() {
+        return {
+            backgroundColor: 'purple',
+            height: 200,
+            width: 200
+        }
+    },
+    render() {
+        return (<div id='myDiv'>
+                    <div style={this.props}></div>
+                    <section style={this.props}></section>
+                </div>)
+    }
+})
+```
