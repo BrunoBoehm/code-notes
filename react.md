@@ -249,3 +249,243 @@ var Checkbox = React.createClass({
 ReactDOM.render(<Checkbox/>, 
     document.getElementById('react-container'))
 ```    
+
+Let's improve our note system
+```js
+var Note = React.createClass({
+    getInitialState() {
+        return {editing: false}
+    },
+    edit() {
+        this.setState({editing: true})
+    },
+    save() {
+        this.setState({editing: false})
+    },
+    remove() {
+        alert("Removing Note")
+    },
+    renderForm() {
+        return (
+            <div className="note">
+              <textarea></textarea>
+              <button onClick={this.save}>SAVE</button>
+            </div>
+        )
+    },
+    renderDisplay() {
+        return ( 
+            <div className="note">
+                <p>{this.props.children}</p>
+                <span>
+                  <button onClick={this.edit}>EDIT</button>
+                  <button onClick={this.remove}>X</button>
+                </span>
+            </div>
+            )
+    },
+    render() {
+      return (this.state.editing) ? this.renderForm()
+                                  : this.renderDisplay()
+
+    }
+})
+
+ReactDOM.render(<Note>Hello World</Note>, 
+    document.getElementById('react-container'))
+```
+
+## Using Refs
+To grab data from our app we need to use a ref tag. Anytime you need to reach out to a form element or something where you can't access the value via Props and State, a Reference might be useful.
+
+On our `renderForm()` method we add the ref tag
+```js
+renderForm() {
+    return (
+        <div className="note">
+          <textarea ref="newText"></textarea>
+          <button onClick={this.save}>SAVE</button>
+        </div>
+    )
+}
+```
+
+Let's update our `save()` method
+```js
+save() {
+    var val = this.refs.newText.value
+    alert('Later we will save this value: ' + val)
+    this.setState({editing: false})
+},
+```
+
+## Props
+Prop types are an optional feature, and serve as documentation about how we wish components to work, and what values you expect for them.
+
+Let's create a new Board component and validate its props
+
+```js
+var Board = React.createClass({
+    propTypes: {
+        count: function(props, propName) {
+            if(typeof props[propName] !== "number") {
+                return new Error("the count must be a number")
+            } 
+
+            if(props[propName] > 100) {
+                return new Error('Creating ' + props[propName] + ' notes is ridiculous')
+            }
+        }
+    },
+    render() {
+        return (<div className='board'>
+            {this.props.count}
+            </div>)
+    }
+})
+
+ReactDOM.render(<Board count={5000}/>, 
+    document.getElementById('react-container'))
+```
+
+Let's update this code to put some dummy notes
+
+```js
+var Board = React.createClass({
+    propTypes: {
+        count: function(props, propName) {
+            if(typeof props[propName] !== "number") {
+                return new Error("the count must be a number")
+            } 
+
+            if(props[propName] > 100) {
+                return new Error('Creating ' + props[propName] + ' notes is ridiculous')
+            }
+        }
+    },
+    getInitialState() {
+        return {
+            notes: [
+              'Call Bob',
+              'Email Sarah',
+              'Eat lunch',
+              'Finish proposal'
+            ]
+        }
+    },
+
+    render() {
+        return (<div className='board'>
+            {this.state.notes.map((note, i) => {
+                return <Note key={i}>{note}</Note>
+            })}
+            </div>)
+    }
+})
+
+ReactDOM.render(<Board count={10}/>, 
+    document.getElementById('react-container'))
+```  
+
+## Update and Delete
+The final code looks like
+
+```js
+var Note = React.createClass({
+    getInitialState() {
+        return {editing: false}
+    },
+    edit() {
+        this.setState({editing: true})
+    },
+    save() {
+        this.props.onChange(this.refs.newText.value, this.props.id)
+        this.setState({editing: false})
+    },
+    remove() {
+        this.props.onRemove(this.props.id)
+    },
+    renderForm() {
+        return (
+            <div className="note">
+              <textarea ref="newText"></textarea>
+              <button onClick={this.save}>SAVE</button>
+            </div>
+        )
+    },
+    renderDisplay() {
+        return ( 
+            <div className="note">
+                <p>{this.props.children}</p>
+                <span>
+                  <button onClick={this.edit}>EDIT</button>
+                  <button onClick={this.remove}>X</button>
+                </span>
+            </div>
+            )
+    },
+    render() {
+      return (this.state.editing) ? this.renderForm()
+                                  : this.renderDisplay()
+
+    }
+})
+
+var Board = React.createClass({
+    propTypes: {
+        count: function(props, propName) {
+            if(typeof props[propName] !== "number") {
+                return new Error("the count must be a number")
+            } 
+
+            if(props[propName] > 100) {
+                return new Error('Creating ' + props[propName] + ' notes is ridiculous')
+            }
+        }
+    },
+    getInitialState() {
+        return {
+            notes: [
+              {id: 0, note: 'Call Bob'},
+              {id: 1, note: 'Email Sarah'},
+              {id: 2, note: 'Eat Lunch'},
+              {id: 3, note: 'Finish proposal'}
+            ]
+        }
+    },
+    update(newText, id) {
+        var notes = this.state.notes.map(
+            note => (note.id !== id) ?
+               note : 
+                {
+                    ...note, 
+                    note: newText
+                }
+            )
+        this.setState({notes})
+    },
+    remove(id) {
+        var notes = this.state.notes.filter(note => note.id !== id)
+        this.setState({notes})
+    },
+    eachNote(note) {
+        return (<Note key={note.id}
+                      id={note.id}
+                      onChange={this.update}
+                      onRemove={this.remove}>
+                  {note.note}
+                </Note>)
+    },
+    render() {
+        return (<div className='board'>
+                   {this.state.notes.map(this.eachNote)}
+                </div>)
+    }
+})
+
+ReactDOM.render(<Board count={10}/>, 
+    document.getElementById('react-container'))
+```
+
+We're passing property data up and down the tree from parent to child, and child to parent.
+
