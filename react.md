@@ -545,3 +545,26 @@ The component lifecycle also provides methods for updating
 - `componentDidUpdate()` fires right after everything in the DOM has been updated
 
 `componentWillUnmount()` is called right before the component is unmounted, to clean up DOM elements and invalidate timers. When it is called on the parent, all of the children are unmounted as well.
+
+```js
+var Box = React.createClass({
+    componentWillMount() {
+        alert('Component is about to mount')
+    },
+    componentDidMount() {
+        alert('Component just mounted')
+    },
+    render() {
+        return <div id='myDiv'></div>
+    }
+})
+ReactDOM.render(<Box />, 
+    document.getElementById('react-container'))
+
+var getRidOfBox = document.getElementById('myDiv')
+getRidOfBox.onclick = function() {
+    ReactDOM.unmountComponentAtNode(
+        document.getElementById('react-container'))
+        alert('component is unmounted')
+}
+```
