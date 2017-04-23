@@ -126,7 +126,7 @@ $x = true;
 $y = false;
 ```
 
-### Array
+### Array and associative arrays
 An array stores multiple values in one single variable.
 
 ```php
@@ -134,6 +134,43 @@ An array stores multiple values in one single variable.
 $cars = array("Volvo","BMW","Toyota");
 var_dump($cars);
 // array(3) { [0]=> string(5) "Volvo" [1]=> string(3) "BMW" [2]=> string(6) "Toyota" }
+?>
+
+<?php
+$cars = array("Volvo", "BMW", "Toyota");
+echo "I like " . $cars[0] . ", " . $cars[1] . " and " . $cars[2] . ".";
+?>
+
+<?php
+$cars = array("Volvo", "BMW", "Toyota");
+echo count($cars);
+?>
+
+<?php
+$cars = array("Volvo", "BMW", "Toyota");
+$arrlength = count($cars);
+
+for($x = 0; $x < $arrlength; $x++) {
+    echo $cars[$x];
+    echo "<br>";
+}
+?>
+```
+
+Associative arrays
+```php
+<?php
+$age = array("Peter"=>"35", "Ben"=>"37", "Joe"=>"43");
+echo "Peter is " . $age['Peter'] . " years old.";
+?>
+
+<?php
+$age = array("Peter"=>"35", "Ben"=>"37", "Joe"=>"43");
+
+foreach($age as $x => $x_value) {
+    echo "Key=" . $x . ", Value=" . $x_value;
+    echo "<br>";
+}
 ?>
 ```
 
@@ -305,6 +342,23 @@ foreach ($colors as $value) {
 ?>
 ```
 
+### Sorting arrays
+PHP has the following array sort functions:
+
+- sort() - sort arrays in ascending order
+- rsort() - sort arrays in descending order
+- asort() - sort associative arrays in ascending order, according to the value
+- ksort() - sort associative arrays in ascending order, according to the key
+- arsort() - sort associative arrays in descending order, according to the value
+- krsort() - sort associative arrays in descending order, according to the key
+
+```php
+<?php
+$cars = array("Volvo", "BMW", "Toyota");
+rsort($cars);
+?>
+```
+
 ## Functions
 Besides the built-in PHP functions, we can create our own functions. A function is a block of statements that can be used repeatedly in a program. A function will not execute immediately when a page loads. A function will be executed by a call to the function.
 
@@ -370,3 +424,385 @@ PHP has 4 include functions `include`, `include_once`, `require` and `require_on
 Require has a sense of being mandatory. If the file can't be found the script goes no further. But if your using include the rest of the script is executed even if the include file can't be found.
 
 PHP uses a relative path to find the include. If the document is in the same folder, use `./`.
+
+## OOP
+### Magic constants
+There are nine magical constants that change depending on where they are used.
+All these "magical" constants are resolved at compile time, unlike regular constants thats resolved at runtime. These special constants are case-insensitive and are as follows:
+
+Name | Description
+--- | ---
+__LINE__	| The current line number of the file.
+__FILE__	| The full path and filename of the file with symlinks resolved. If used inside an include, the name of the included file is returned.
+__DIR__	| The directory of the file. If used inside an include, the directory of the included file is returned. This is equivalent to dirname(__FILE__). This directory name does not have a trailing slash unless it is the root directory.
+__FUNCTION__	| The function name.
+__CLASS__	| The class name. The class name includes the namespace it was declared in (e.g. Foo\Bar). Note that as of PHP 5.4 __CLASS__ | works also in traits. When used in a trait method, __CLASS__ is the name of the class the trait is used in.
+__TRAIT__	| The trait name. The trait name includes the namespace it was declared in (e.g. Foo\Bar).
+__METHOD__	| The class method name.
+__NAMESPACE__	| The name of the current namespace.
+ClassName::class	| The fully qualified class name.
+
+```php
+<?php
+ 
+class MyClass
+{
+  public $prop1 = "I'm a class property!";
+ 
+  public function __construct()
+  {
+      echo 'The class "', __CLASS__, '" was initiated!<br />';
+  }
+ 
+  public function __destruct()
+  {
+      echo 'The class "', __CLASS__, '" was destroyed.<br />';
+  }
+ 
+  public function setProperty($newval)
+  {
+      $this->prop1 = $newval;
+  }
+ 
+  public function getProperty()
+  {
+      return $this->prop1 . "<br />";
+  }
+}
+ 
+// Create a new object
+$obj = new MyClass;
+ 
+// Get the value of $prop1
+echo $obj->getProperty();
+ 
+// Output a message at the end of the file
+echo "End of file.<br />";
+
+# The class "MyClass" was initiated!
+# I'm a class property!
+# End of file.
+# The class "MyClass" was destroyed.
+?>
+```
+When the end of a file is reached, PHP automatically releases all resources. To explicitly trigger the destructor, you can destroy the object using the function `unset($obj);`.
+
+### Methods visibility
+For added control over objects, methods and properties are assigned visibility. This controls how and from where properties and methods can be accessed. There are three visibility keywords: `public`, `protected`, and `private`. In addition to its visibility, a method or property can be declared as `static`, which allows them to be accessed without an instantiation of the class.
+
+#### Protected
+When a property or method is declared `protected`, it can only be accessed **within the class itself or in descendant classes** (classes that extend the class containing the protected method).
+
+```php
+<?php
+ 
+class MyClass
+{
+  public $prop1 = "I'm a class property!";
+ 
+  public function __construct()
+  {
+      echo 'The class "', __CLASS__, '" was initiated!<br />';
+  }
+ 
+  public function __destruct()
+  {
+      echo 'The class "', __CLASS__, '" was destroyed.<br />';
+  }
+ 
+  public function __toString()
+  {
+      echo "Using the toString method: ";
+      return $this->getProperty();
+  }
+ 
+  public function setProperty($newval)
+  {
+      $this->prop1 = $newval;
+  }
+ 
+  protected function getProperty()
+  {
+      return $this->prop1 . "<br />";
+  }
+}
+ 
+class MyOtherClass extends MyClass
+{
+  public function __construct()
+  {
+      parent::__construct();
+echo "A new constructor in " . __CLASS__ . ".<br />";
+  }
+ 
+  public function newMethod()
+  {
+      echo "From a new method in " . __CLASS__ . ".<br />";
+  }
+}
+ 
+// Create a new object
+$newobj = new MyOtherClass;
+ 
+// Attempt to call a protected method
+echo $newobj->getProperty();
+ 
+ 
+# The class "MyClass" was initiated!
+# A new constructor in MyOtherClass. 
+# Fatal error: Call to protected method MyClass::getProperty() from context '' in /Applications/XAMPP/xamppfiles/htdocs/testing/test.php on line 55 
+?>
+```
+Now let's call it from inside the class
+
+```php
+<?php
+ 
+class MyClass
+{
+  public $prop1 = "I'm a class property!";
+ 
+  public function __construct()
+  {
+      echo 'The class "', __CLASS__, '" was initiated!<br />';
+  }
+ 
+  public function __destruct()
+  {
+      echo 'The class "', __CLASS__, '" was destroyed.<br />';
+  }
+ 
+  public function __toString()
+  {
+      echo "Using the toString method: ";
+      return $this->getProperty();
+  }
+ 
+  public function setProperty($newval)
+  {
+      $this->prop1 = $newval;
+  }
+ 
+  protected function getProperty()
+  {
+      return $this->prop1 . "<br />";
+  }
+}
+ 
+class MyOtherClass extends MyClass
+{
+  public function __construct()
+  {
+      parent::__construct();
+echo "A new constructor in " . __CLASS__ . ".<br />";
+  }
+ 
+  public function newMethod()
+  {
+      echo "From a new method in " . __CLASS__ . ".<br />";
+  }
+ 
+  public function callProtected()
+  {
+      return $this->getProperty();
+  }
+}
+ 
+// Create a new object
+$newobj = new MyOtherClass;
+ 
+// Call the protected method from within a public method
+echo $newobj->callProtected();
+ 
+?>
+```
+
+#### Private
+A property or method declared `private` is accessible **only from within the class that defines it**. This means that even if a new class extends the class that defines a private property, that property or method will not be available at all within the child class.
+
+#### Static
+A method or property declared `static` can be accessed without first instantiating the class; you simply supply the class name, scope resolution operator, and the property or method name.
+
+```php
+<?php
+ 
+class MyClass
+{
+  public $prop1 = "I'm a class property!";
+ 
+  public static $count = 0;
+ 
+  public function __construct()
+  {
+      echo 'The class "', __CLASS__, '" was initiated!<br />';
+  }
+ 
+  public function __destruct()
+  {
+      echo 'The class "', __CLASS__, '" was destroyed.<br />';
+  }
+ 
+  public function __toString()
+  {
+      echo "Using the toString method: ";
+      return $this->getProperty();
+  }
+ 
+  public function setProperty($newval)
+  {
+      $this->prop1 = $newval;
+  }
+ 
+  private function getProperty()
+  {
+      return $this->prop1 . "<br />";
+  }
+ 
+  public static function plusOne()
+  {
+      return "The count is " . ++self::$count . ".<br />";
+  }
+}
+ 
+class MyOtherClass extends MyClass
+{
+  public function __construct()
+  {
+      parent::__construct();
+      echo "A new constructor in " . __CLASS__ . ".<br />";
+  }
+ 
+  public function newMethod()
+  {
+      echo "From a new method in " . __CLASS__ . ".<br />";
+  }
+ 
+  public function callProtected()
+  {
+      return $this->getProperty();
+  }
+}
+ 
+do
+{
+  // Call plusOne without instantiating MyClass
+  echo MyClass::plusOne();
+} while ( MyClass::$count < 10 );
+ 
+?>
+```
+When accessing static properties, the dollar sign ($) comes after the scope resolution operator.
+
+## Comparing Procedural and OOP in PHP
+### Procedural
+```php
+<?php
+ 
+function changeJob($person, $newjob)
+{
+  $person['job'] = $newjob; // Change the person's job
+  return $person;
+}
+ 
+function happyBirthday($person)
+{
+  ++$person['age']; // Add 1 to the person's age
+  return $person;
+}
+ 
+$person1 = array(
+  'name' => 'Tom',
+  'job' => 'Button-Pusher',
+  'age' => 34
+);
+ 
+$person2 = array(
+  'name' => 'John',
+  'job' => 'Lever-Puller',
+  'age' => 41
+);
+ 
+// Output the starting values for the people
+echo "<pre>Person 1: ", print_r($person1, TRUE), "</pre>";
+echo "<pre>Person 2: ", print_r($person2, TRUE), "</pre>";
+ 
+// Tom got a promotion and had a birthday
+$person1 = changeJob($person1, 'Box-Mover');
+$person1 = happyBirthday($person1);
+ 
+// John just had a birthday
+$person2 = happyBirthday($person2);
+ 
+// Output the new values for the people
+echo "<pre>Person 1: ", print_r($person1, TRUE), "</pre>";
+echo "<pre>Person 2: ", print_r($person2, TRUE), "</pre>";
+ 
+?>
+```
+
+### OOP
+There's a little bit more setup involved to make the approach object oriented, but after the class is defined, creating and modifying people is a breeze; a person's information does not need to be passed or returned from methods, and only absolutely essential information is passed to each method.
+
+```php
+<?php
+ 
+class Person
+{
+  private $_name;
+  private $_job;
+  private $_age;
+ 
+  public function __construct($name, $job, $age)
+  {
+      $this->_name = $name;
+      $this->_job = $job;
+      $this->_age = $age;
+  }
+ 
+  public function changeJob($newjob)
+  {
+      $this->_job = $newjob;
+  }
+ 
+  public function happyBirthday()
+  {
+      ++$this->_age;
+  }
+}
+ 
+// Create two new people
+$person1 = new Person("Tom", "Button-Pusher", 34);
+$person2 = new Person("John", "Lever Puller", 41);
+ 
+// Output their starting point
+echo "<pre>Person 1: ", print_r($person1, TRUE), "</pre>";
+echo "<pre>Person 2: ", print_r($person2, TRUE), "</pre>";
+ 
+// Give Tom a promotion and a birthday
+$person1->changeJob("Box-Mover");
+$person1->happyBirthday();
+ 
+// John just gets a year older
+$person2->happyBirthday();
+ 
+// Output the ending values
+echo "<pre>Person 1: ", print_r($person1, TRUE), "</pre>";
+echo "<pre>Person 2: ", print_r($person2, TRUE), "</pre>";
+ 
+?>
+```
+
+## Commenting with DocBlocks
+While not an official part of OOP, the DocBlock commenting style is a widely accepted method of documenting classes. Aside from providing a standard for developers to use when writing code, it has also been adopted by many of the most popular software development kits (SDKs), such as Eclipse and NetBeans, and will be used to generate code hints.
+
+The real power of DocBlocks comes with the ability to use tags, which start with an at symbol (@) immediately followed by the tag name and the value of the tag. DocBlock tags allow developers to define authors of a file, the license for a class, the property or method information, and other useful information.
+
+The most common tags used follow:
+
+- @author: The author of the current element (which might be a class, file, method, or any bit of code) are listed using this tag. Multiple author tags can be used in the same DocBlock if more than one author is credited. The format for the author name is John Doe <john.doe@email.com>.
+- @copyright: This signifies the copyright year and name of the copyright holder for the current element. The format is 2010 Copyright Holder.
+- @license: This links to the license for the current element. The format for the license information is http://www.example.com/path/to/license.txt License Name.
+- @var: This holds the type and description of a variable or class property. The format is type element description.
+- @param: This tag shows the type and description of a function or method parameter. The format is type $element_name element description.
+- @return: The type and description of the return value of a function or method are provided in this tag. The format is type return element description.
+
