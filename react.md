@@ -488,4 +488,44 @@ ReactDOM.render(<Board count={10}/>,
 ```
 
 We're passing property data up and down the tree from parent to child, and child to parent.
+Note we have a `key` property: each child in an array, or iterator should have a unique key property. This is to ensure that the state and the identity of our components is maintained through multiple renders.
+
+## Create 
+We use the spread operator from ES6, that takes whatever is in the state of notes and makes those the first items in the array. Then we're adding a new item in the array: an object with an ID and note text.
+
+Inside of our Board component let's add a button to add a note
+```js
+render() {
+    return (<div className='board'>
+               {this.state.notes.map(this.eachNote)}
+               <button onClick={() => this.add('New Note')}>+</button>
+            </div>)
+}
+```
+
+In our Board component let's now make sure we have the method to handle the `onClick`: the `.add()` function.
+We also make sure to create an Id for each note by creating a `nextId()` function.
+
+```js
+...
+getInitialState() {
+    return {
+        notes: []
+    }
+},
+nextId() {
+    this.uniqueId = this.uniqueId || 0
+    return this.uniqueId++
+},
+add(text) {
+    var notes = [
+        ...this.state.notes,
+        {
+            id: this.nextId(),
+            note: text
+        }
+    ]
+    this.setState({notes})
+}
+```
 
