@@ -529,3 +529,19 @@ add(text) {
 }
 ```
 
+## Components lifecycle
+The component lifecycle provides hooks for creation, lifetime, and teardown of components. These methods allow you to do things like add libraries, load data, and more at very specific times.
+
+- `getInitialState()` is going to be called once and will set the default for a state
+- `componentWillMount()` is called right before the render, and it's the last chance to effect state prior to the render
+- `render()`, that is the only required method
+- `componentDidMount()` is going to fire right after a successful render
+
+The component lifecycle also provides methods for updating
+
+- `componentWillReceiveProps()` gives the opportunity to change the object and effect state
+- `shouldComponentUpdate()` and `componentWillUpdate()` are invoked right before rendering and are used for optimization
+- `render()` method again as it is part of the updating lifecycle as well
+- `componentDidUpdate()` fires right after everything in the DOM has been updated
+
+`componentWillUnmount()` is called right before the component is unmounted, to clean up DOM elements and invalidate timers. When it is called on the parent, all of the children are unmounted as well.
