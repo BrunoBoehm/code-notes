@@ -1,4 +1,4 @@
-#Wordpress
+# Wordpress
 
 ## Creating a theme
 `style.css` contains the meta information for the theme (and not styleS.css)
@@ -758,6 +758,7 @@ The equivalnet for setting the hook instead of `do_action()` is `echo apply_filt
 
 ## Get started on a child theme
 In function.php:
+*To note that Bill Erickson has another approach to [theme setup](https://github.com/cdils/in-the-beginning/issues/5).* 
 ```php
 <?php
 //* Start the engine
@@ -1060,11 +1061,110 @@ function hueman_page_title() {
 }
 ```
 
+## Using WordPress global variables
+WordPress-specific [global variables](https://codex.wordpress.org/Global_Variables) are used throughout WordPress code for various reasons. Almost all data that WordPress generates can be found in a global variable. To access a global variable in your code, you first need to globalize the variable with `global $variable;`.
 
+By using the global keyword, we are declaring that we are accessing the $post global variable. Once the variable has been globalized, the various values available to be accessed can be retrieved using the following source code:
 
+```php
+<div id="primary" class="content-area">
+ 
+    <div id="content" class="site-content" role="main">
+ 
+    <?php
+ 
+        // Start the Loop.
+ 
+       while ( have_posts() ) : the_post();
+ 
+       //Include the page content template.
+ 
+       get_template_part( 'content', 'page' );
+ 
+       // Paste Snippet Here
+ 
+       global $post;
+       print_r( $post );
+        
+       // End Snippet 
+ 
+       // If comments are open or we have at least one comment
+ 
+      if ( comments_open() || get_comments_number() ) {
+ 
+        comments_template();
+ 
+      }
+ 
+endwhile;
+ 
+?>
+ 
+</div><!-- #content -->
+ 
+</div> <!-- #primary -->
+```
 
+This shoudl give us ![print_r](https://lh4.googleusercontent.com/luIMhc7ik8o3Gi5S0pZhJEDWRwWG9ykVrAG9Mm_-ZDJ7C6r42OlERQSzIQFu1p1J00IoIlvRPkzWJZTCSSISej_roazfvHX5x_WgX_1060e_sdATHLQpyl7y7wAjOgYQIw)
 
+As you can see we now have various details of the latest post printed in a human readable format from the $post global variable. We can access each of the individual values by invoking them as follows:
 
+```php
+<?php
+ 
+    echo $post->post_date;    // To Print the Date of the Post
+    echo $post->post_status;  // To print the status of the Post
+```
 
+Here's a concrete usage example:
+```php
+<?php
+function tutsplus_display_three_posts() {
+ 
+    global $authordata, $post;  //Declare Global Variables
+ 
+    $authors_three_posts = get_posts( 
+                            array(
+                                'author'         => $authordata->ID, 
+                                'posts_per_page' => 3
+                            )
+                           );                          
+ 
+    echo '<h5>Latest Posts</h5>';
+     
+    $output = '<ul>';
+    foreach ( $authors_three_posts as $authors_post ) {
+        $output .= '<li><a href="' . get_permalink( $authors_post->ID ) . '">' . get_the_title($authors_post->ID) . '</a></li>';
+     
+    }
+    $output .= '</ul>';
+     
+    return $output;
+ 
+}
+```
 
-
+And then let's use this function from our template
+```php
+<div id="primary" class="content-area">
+    <div id="content" class="site-content" role="main">
+ 
+    <?php
+    while ( have_posts() ) : the_post();
+     
+        get_template_part( 'content', get_post_format() );
+     
+        echo tutsplus_display_three_posts();
+     
+        twentyfourteen_post_nav();
+     
+        if ( comments_open() || get_comments_number() ) {
+            comments_template();
+        }
+     
+    endwhile;
+    ?>
+ 
+    </div><!-- #content -->
+</div><!-- #primary -->
+```
