@@ -13,7 +13,7 @@ Use echo and print or the shorthand method (if supported by your server - php 5.
 
 /* in the HTML */
 
-<?php echo $variable; ?>
+<?php echo strtoupper($variable); // string to upper function ?>
 <?php print $variable; ?>
 
 <?= $variable; ?>
@@ -22,3 +22,4 @@ Use echo and print or the shorthand method (if supported by your server - php 5.
 <?= "$name $surname"; ?>
 /* this will not work with single quotes ' '  */
 ```
+
