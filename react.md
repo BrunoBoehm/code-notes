@@ -1,9 +1,309 @@
 # ReactJS
 
-React is a JavaScript library that's used for building user interfaces. It's an open source project, that started at Facebook, and is maintained by developers at Facebook and Instagram, and also a large community of contributors. One of the benefits and goals of the React project is to make developing a large scale, single page application easier.
+React is a JavaScript *library* (not a framework - as opposed to Angular) that's used for building user interfaces. It's an open source project, that started at Facebook, and is maintained by developers at Facebook and Instagram, and also a large community of contributors. One of the benefits and goals of the React project is to make developing a large scale, single page application easier.
 React is also included in the larger movement in the world of JavaScript, the functional programming movement. You may have heard about functional JavaScript, a programming paradigm that emphasizes function composition over object orientation. React also aims to follow the principles of immutable data. So we create copies of objects and replace them, instead of mutating the originals. React is commonly used in enterprise applications, by companies including PayPal, AirBnB, Apple, Uber, and, of course, Facebook.
 
+React encourages us to write small, laser-focused components that compose together in an elegant manner.
+
 React has a virtual DOM that writes to the browser DOM only when it needs to. It only interacts with the virtual DOM, that JavaScript object in between the JavaScript logic and the actual DOM. When we call the `render` function, React will update the virtual DOM. That will push only the necessary changes all the way to the real DOM.
+
+## ES6
+[ES6](https://nodejs.org/en/docs/es6/) is the next specification for JavaScript, and it's finally started to appear in a major way in browsers and on servers thanks to Node.js 5.
+
+We'll use `"use strict";` - generally, it turns silent failures into thrown errors, and it helps prevent variables sneaking into the global scope. You can use it at the top of the current script — strict mode then applies to the entire script. Alternatively, you can apply strict mode to individual functions.
+
+Strict mode does just as its name implies: it enforces stricter rules on the execution of your code. Note that some transpilers (like babel) can set strict mode for you.
+Strict mode also enables some newer features that ES6 developers wanted to make sure users explicitly opted in to.
+
+There are a lot of new features, like
+
+* [`const` and `let`](#block-scoping)
+* [Classes](#classes-use-strict)
+* [Arrow Functions](#arrow-functions)
+* [Promises](#promises)
+* [Object Literal Extensions](#object-literal-extensions)
+* [Spread Operator](#spread-operator)
+* [Template Strings](#template-strings)
+* [Destructuring](#destructuring)
+
+### Block Scoping
+
+#### `let` ("use strict")
+
+The keyword [`let`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let) is a new way of declaring local variables. How does it differ from good ol' `var`? Variables declared with `let` have block-level scope:
+
+```javascript
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let#Scoping_rules
+function letTest() {
+  let x = 31;
+  if (true) {
+    let x = 71;  // different variable
+    console.log(x);  // 71
+  }
+  console.log(x);  // 31
+}
+```
+
+Notice how `x` declared outside of the `if` block differs from the `x` declared inside the block. Block-level scope means that the variable is available only in the block (`if`, `for`, `while`, etc.) in which it is defined; it differs from JavaScript's normal function-level scope, which restricts the variable to the function in which it is defined (or `global`/`window` if it's a global variable).
+
+#### `const`
+
+The keyword [`const`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/const) does not require strict mode. Like `let`, it declares a variable with block-level scope; additionally, it prevents its variable identifier from being reassigned.
+
+That means that the following will throw an error:
+
+```javascript
+const myVariable = 1;
+
+myVariable = 2; // syntax error
+```
+
+However, this does not mean that the variable's value is immutable — the value can still change.
+
+```javascript
+const myObject = {};
+
+// this works
+myObject.myProperty = 1;
+
+// 1
+console.log(myObject.myProperty)
+```
+
+### Classes ("use strict")
+
+```javascript
+class Polygon {
+  constructor(height, width) {
+    this.height = height;
+    this.width = width;
+  }
+
+  // whaaaaat -- getters!
+  get area() {
+    return this.calcArea();
+  }
+
+  calcArea() {
+    return this.height * this.width;
+  }
+}
+
+const rectangle = new Polygon(10, 5);
+
+console.log(rectangle.area);
+```
+
+Let's extend it:
+
+```javascript
+class Square extends Polygon {
+  constructor(sideLength) {
+    super(sideLength, sideLength)
+  }
+}
+
+const mySquare = new Square(5);
+
+// Square { height: 5, width: 5 }
+mySquare;
+
+// [Function: Square]
+mySquare.constructor;
+
+// 25
+mySquare.area;
+```
+
+### Arrow functions
+
+[Arrow functions](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/Arrow_functions) provide not only a terser way to define a function but also _lexically bind the current `this` value_. This ain't your grandpa's JS.
+
+```javascript
+const greet = (greeting, person) => {
+  return greeting + ', ' + person + '!';
+};
+
+// 'Hello, Marv'
+greet('Hello', 'Marv');
+
+var a = [
+  'Hydrogen',
+  'Helium',
+  'Lithium',
+  'Beryl­lium'
+];
+
+// compare this implementation...
+var a2 = a.map(function(s){ return s.length });
+
+// ... to this implementation with the fat arrow
+var a3 = a.map(s => s.length);
+```
+
+Fat arrows also have implicit returns — the following are equivalent:
+
+```javascript
+var a3 = a.map(s => s.length);
+var a4 = a.map(s => {
+  return s.length;
+});
+```
+
+If the function only accepts one argument, parentheses are optional:
+
+```javascript
+// this...
+var a3 = a.map(s => s.length);
+
+// ... is the same as this
+var a3 = a.map((s) => s.length);
+```
+
+If there are zero or two or more arguments, though, you must use parens:
+
+```javascript
+var evens = [1, 2, 3, 4].reduce((memo, i) => {
+  if (i % 2 === 0) {
+    memo.push(i)
+  }
+
+  return memo;
+}, []);
+```
+
+### Promises
+
+[Promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) offer a new way of handling asynchronicity.
+
+```javascript
+const promise = new Promise((resolve, reject) => {
+  return someIntenseTask().then(result => {
+    if (result.success) {
+      return resolve(result)
+    }
+
+    return reject(result.error)
+  })
+})
+
+promise.then(result => {
+  return doSomething(result);
+}).catch(error => handleError(error))
+```
+
+### Object literal extensions
+
+ES6 gives us a number of handy [new ways to deal with objects](https://github.com/lukehoban/es6features#enhanced-object-literals). They're features that you either wish JavaScript had, or ones you didn't know you needed.
+
+```javascript
+const prop = function() {
+  return "I'm a prop!";
+}
+
+const myObj = {
+  // computed (dynamic) property names
+  ['foo' + 'bar']: 'something',
+
+  // methods
+  shout() {
+    return 'AH!'
+  },
+
+  // short for `prop: prop`
+  prop
+}
+
+// 'something'
+myObj.foobar
+
+// "I'm a prop!"
+myObj.prop()
+
+// 'AH!'
+myObj.shout()
+```
+
+### Spread operator
+
+The [spread operator](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Spread_operator) — `...` — is unassuming but incredibly powerful.
+
+We can use it for arrays:
+
+```javascript
+const a = [1, 2, 3]
+const b = [0, ...a, 4, 5]
+
+// [0, 1, 2, 3, 4, 5]
+b
+```
+
+functions:
+
+```javascript
+function printArgs() {
+  // recall that every function gets an `arguments`
+  // object
+  console.log(arguments);
+}
+
+// using `a` from above
+// { '0': 1, '1': 2, '2': 3 }
+printArgs(...a);
+```
+
+### Template Strings
+
+[Template strings](https://nodejs.org/en/docs/es6/) in ES6 are most commonly used for string interpolation. Instead of writing:
+
+```javascript
+var foo = 'bar';
+var sentence = 'I went to the ' + foo + ' after working in ES5 for too long.';
+```
+
+we can now write:
+
+```javascript
+var foo = 'bar';
+var sentence = `I went to the ${foo} after working in ES5 for too long.`;
+```
+
+You can also use _tagged template literals_ to perform more advanced manipulation:
+
+A _tag_ is simply a function whose first argument is an array of strings and whose subsequent arguments are the values of the substitution expressions (the things in `${}`).
+
+Here's the example from [MDN](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_template_literals):
+
+```javascript
+var a = 5;
+var b = 10;
+
+function tag(strings, ...values) {
+  console.log(strings[0]); // "Hello "
+  console.log(strings[1]); // " world "
+  console.log(values[0]);  // 15
+  console.log(values[1]);  // 50
+
+  return "Bazinga!";
+}
+
+tag`Hello ${ a + b } world ${ a * b }`;
+// "Bazinga!"
+```
+
+### Destructuring
+
+Destructuring makes it easier than ever to pull values out of objects and arrays and store them in variables. We destructure an array by putting our new variable names at the corresponding index and an object by giving our variable the same name as the key we are interested in.
+
+```js
+const [a, b] = [1, 2];
+// a === 1 && b === 2
+
+const { a, b } = { a: 1, b: 2 }
+// a === 1 && b === 2
+```
+
+To see what other amazing things we can to with destructuring, check out the [docs](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment).
 
 ## Hello World
 From the react website let's take the dev source files
