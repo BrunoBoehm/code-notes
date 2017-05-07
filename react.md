@@ -330,6 +330,8 @@ xhr.send();
 Sure, it works, but that's a lot of setup to just say "give me some JSON from this URL".
 Things get a little better with jQuery's `$.ajax`, except then we have to tightly couple ourselves to jQuery, and ultimately, it's just syntactic sugar over `XMLHttpRequest`.
 
+### GET
+
 The `fetch()` function is a new API for fetching resources. It's a global function, which means no creating new XHR objects, and it vastly streamlines simple resource requests. Let's try that call to the Github commits API again.
 
 ```js
@@ -378,6 +380,38 @@ As you can see, `fetch` provides us with such a clean, low-maintenance way to fe
 
 Keep in mind that, while it is increasing, [browser support](http://caniuse.com/#feat=fetch) for `fetch` is still limited primarily to current versions of Chrome, Firefox, and Opera. So if you're supporting older browsers, don't let XHR and jQuery Ajax go just yet. They're still powerful and useful tools for creating dynamic applications.
 
+### POST
+
+While `GET` operations are straightforward, when we're building out full applications, we often need to use other HTTP verbs, such as `POST`, to write data as well as read it. Luckily, it's very easy to `POST` with `fetch` as well.
+
+Let's look at an example of posting a new comment to a commit with the GitHub API. Replace the commit with a commit from one of your repositories, and use your token if you want to try this out.
+
+```js
+const token = 'YOUR_TOKEN_HERE';
+const postData = {
+  body: 'Great stuff'
+};
+
+fetch('https://api.github.com/repos/:your_ghname/:your_repo/commits/:sha/comments', {
+  method: 'POST',
+  body: JSON.stringify(postData),
+  headers: {
+    Authorization: `token ${token}`
+  }
+}).then(res => console.log(res));
+```
+
+Here we created an object called `postData` that we will pass as a JSON string using `JSON.stringify` in the request `body`. We're also setting the method to `'POST'`, and finally using our `Authorization` header like we did before, since any write action is going to require authorization.
+
+All of these additional settings go in that `options` argument, which is just an object that we can pass as the second argument to `fetch`.
+
+Finally, we can examine the response in our `then` function just the same as we did with a `GET` request.
+
+**Top-tip:** Make sure you read the API documentation carefully! They will often specify which fields are required and which are optional, as well as the format of the request body. GitHub expects JSON data in the body, but another API might want form data (which you can create with `new FormData()` or XML or something else. Always read the docs!
+
+- [`fetch()`](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API)
+- [GitHub API](https://developer.github.com/v3/)
+- [Handlebars](http://handlebarsjs.com)
 
 ## Hello World
 From the react website let's take the dev source files
