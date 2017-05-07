@@ -7,6 +7,23 @@ React encourages us to write small, laser-focused components that compose togeth
 
 React has a virtual DOM that writes to the browser DOM only when it needs to. It only interacts with the virtual DOM, that JavaScript object in between the JavaScript logic and the actual DOM. When we call the `render` function, React will update the virtual DOM. That will push only the necessary changes all the way to the real DOM.
 
+Virtual DOM is a technique employed by several front-end libraries and frameworks, most notably React. In a nutshell, virtual DOM builds a virtual representation of what our document should look like. When we're ready to render things to the screen, the virtual DOM will take a look at the existing DOM and change only what needs to be changed (in more technical terms, it's diffing and re-rendering the changes).
+
+The performance gains here are not to be underestimated. Virtual DOM is created by a bunch of super smart people using extremely efficient algorithms. Most virtual DOMs also batch their updates to the DOM, ensuring that the real DOM gets modified as little as possible.
+
+This means that we don't need to write imperative code to update every tiny bit of our application, *we just declare what the end result should look like, and the virtual DOM will do the rest*! The ability to simply declare what our component should look like and how it should behave is a huge win. That means we can think more about how our UI fits together, rather than how we're supposed to be updating it!
+
+- [Why did we build React?](https://facebook.github.io/react/blog/2013/06/05/why-react.html)
+- [The difference between Virtual DOM and DOM](http://reactkungfu.com/2015/10/the-difference-between-virtual-dom-and-dom/)
+- [React (Virtual) DOM Terminology](https://facebook.github.io/react/docs/glossary.html)
+
+## Declarative Programming
+Let's say we have some kind of search component that allows us to filter a list of results. When the input updates, we filter the list data and then display the updated results in our component. 
+
+In React, we just tell it what we want the component to look like (i.e. display these items that have been filtered), whereas in a non-declarative application, we'd have to slog through manually updating our DOM — removing the results that are not relevant anymore, and adding the new ones to the list.
+
+[Declarative programming](http://stackoverflow.com/questions/33655534/difference-between-declarative-and-imperative-in-react-js) allows us to focus on what our application should look like — as opposed to being concerned with manually updating DOM, adding and removing classes, and so on. That stuff is all done for us in React: we just tell React what the end result should be. It'll do the heavy lifting for us.
+
 ## ES6
 [ES6](https://nodejs.org/en/docs/es6/) is the next specification for JavaScript, and it's finally started to appear in a major way in browsers and on servers thanks to Node.js 5.
 
