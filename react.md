@@ -305,6 +305,80 @@ const { a, b } = { a: 1, b: 2 }
 
 To see what other amazing things we can to with destructuring, check out the [docs](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment).
 
+
+## Making requests using XHR, $.ajax and fetch()
+Getting remote data in JavaScript has classically required a fair amount of plumbing to make things happen.
+It's not that it's *hard* to get data out of `XMLHttpRequest`, but it does take quite a bit of setup. 
+Let's make a simple request of the Github repository commits API.
+
+```js
+let xhr = new XMLHttpRequest();
+xhr.open('GET', 'https://api.github.com/repos/jquery/jquery/commits');
+xhr.responseType = 'json';
+
+xhr.onload = function() {
+  console.log(xhr.response);
+};
+
+xhr.onerror = function() {
+  console.log('Booo');
+};
+
+xhr.send();
+```
+
+Sure, it works, but that's a lot of setup to just say "give me some JSON from this URL".
+Things get a little better with jQuery's `$.ajax`, except then we have to tightly couple ourselves to jQuery, and ultimately, it's just syntactic sugar over `XMLHttpRequest`.
+
+The `fetch()` function is a new API for fetching resources. It's a global function, which means no creating new XHR objects, and it vastly streamlines simple resource requests. Let's try that call to the Github commits API again.
+
+```js
+fetch('https://api.github.com/repos/jquery/jquery/commits')
+  .then(res => res.json())
+  .then(json => console.log(json));
+```
+
+In JavaScript, a `Promise` object represents a value that may not be available yet, but will be resolved at some point in the future. Essentially, the promise is an object that represents the result of an operation, whenever it occurs. This allows us to write more flexible asynchronous code than simply passing callback functions to asynchronous functions.
+
+All promises implement a `then` function that is called when the promise is *fulfilled*, or completed successfully. So this is very similar to the idea of a callback on success that we'd use with `XMLHttpRequest` or `$.ajax`.
+
+The interesting thing about this `fetch` code is that it highlights a powerful feature of a `thenable` object — we can chain each `then` call, and the next one receives the result of the previous one as its argument.
+
+```js
+fetch('https://api.github.com/repos/jquery/jquery/commits')
+  .then(res => res.json())
+  .then(json => console.log(json));
+```
+
+the line `then(res => res.json())` is getting the response `res` from `fetch` and using the `json` method (more on this in a bit) to turn it into JSON. Then it's passing the JSON to the next line, `then(json => console.log(json))`, to be handled by that function.
+
+The `fetch` API includes a *mixin*, or additional code, called [Body](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#Body), which has functions that specialize in transforming the `body` of a request or response.
+
+In an `XMLHttpRequest`, you would potentially have to `JSON.parse` the `responseText` data to turn it into JSON. The `Body` mixin takes that a step further, giving us handy ways to parse many formats, including JSON, plain text, and even blobs for binary or image data.
+
+So calling `res.json()` in our `fetch` is just a nice shorthand for saying "give me the `body` of the response parsed as JSON".
+
+GitHub's API uses [OAuth2](https://developer.github.com/v3/oauth/) for authorization. In a production setting, you would register an application with GitHub and receive an application ID and secret. This allows GitHub to track and monitor API access, and ensure that its users are protected by only granting authorization through registered apps.
+
+```js
+const token = 'YOUR_TOKEN_HERE'
+fetch('https://api.github.com/user/repos', {
+  headers: {
+    Authorization: `token ${token}`
+  }
+}).then(res => res.json()).then(json => console.log(json));
+```
+
+We just pass the desired headers as part of a second options argument to `fetch` and we are in business. Easy as that!
+
+
+**Top-Tip:** Don't ever give out your access token or store it in a publicly accessible place or a shared GitHub repository. We're just using these for learning purposes. In a production setting, user's access tokens would be stored securely in a database and not exposed to other people.
+
+As you can see, `fetch` provides us with such a clean, low-maintenance way to fetch and work with resources. You may be wondering why you'd ever use XHR again.
+
+Keep in mind that, while it is increasing, [browser support](http://caniuse.com/#feat=fetch) for `fetch` is still limited primarily to current versions of Chrome, Firefox, and Opera. So if you're supporting older browsers, don't let XHR and jQuery Ajax go just yet. They're still powerful and useful tools for creating dynamic applications.
+
+
 ## Hello World
 From the react website let's take the dev source files
 Here's an example on [codepen](http://codepen.io/gaearon/pen/ZpvBNJ?editors=0010)
