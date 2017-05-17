@@ -628,10 +628,24 @@ Note we add a `type="text/babel"` to our script tag.
 ## Components
 Components are small user interface elements that display data as it changes over time. These components can display data, handle state, and be nested inside of one another. React can be used for an entire site or just for smaller features, like a form, or an image carousel.
 
+While HTML elements are the basic building blocks of an application (for example, a `<div>`), a React application usually consists of several React _components_ combined together. Unlike the simple HTML elements, React components are smarter and bigger. They allow you to add event handlers, store internal state, communicate with parent components, and so on.
+
 Components names are always capitalized, it's a best practice.
 Render is always required when we create a component, because it tells react what we want to render to the DOM.
 
-### Component with `.createClass`
+### Component with `.createClass` (old school)
+While this method of creating React components is outdated (in a sense), it's important to know what its syntax looks like. Most React tutorials and guides still use this syntax, so if you see it in the wild, now you know what it is!
+
+```js
+const Button = React.createClass({
+  render() {
+    return React.createElement('button', {}, 'Click me!');
+  }
+});
+```
+
+`React.createClass()` takes one argument: an object that is basically the specification of your component. The _only_ requirement for this specification is that your object has a `render()` method — everything else is optional. The reason for `render()` being required is, of course, that React needs to know _what_ it should show on our screen! More specifically, `render()` needs to return a _single_ child (that optionally has children of its own).
+
 ```html
 <!DOCTYPE html>
 <html>
@@ -661,9 +675,44 @@ Render is always required when we create a component, because it tells react wha
 </html>
 ```
 
+Another example: a component with some children without using JSX
+
+```js
+const ShoppingList = React.createClass({
+  render() {
+    return React.createElement('ul', {}, [
+      React.createElement('li', {}, 'Bananas'),
+      React.createElement('li', {}, 'Vanilla ice cream'),
+      React.createElement('li', {}, 'Chocolate'),
+    ]);
+  }
+});
+```
+
+Instead of passing in a string, we can also pass in a React component! For example, to create a `<div>` with two `Button` components, we would do the following:
+
+```js
+const nestedButtons = React.createElement('div', {}, [
+  React.createElement(Button),
+  React.createElement(Button),
+]);
+```
+
 When React was first introduced, create class was the only way to create a component. Since then, two other techniques have emerged.
 
-### Component with a ES6 class
+### Component with a ES6 class (new school)
+With the introduction and widespread adoption of ES2015, we can create React component classes. We're extending the base `React.Component` class, and adding in any methods for our component specification. In this case, that's just the `render()` method.
+
+```js
+class Button extends React.Component {
+  render() {
+    return React.createElement('button', {}, 'Click me!');
+  }
+}
+```
+
+Using JSX we can do something like:
+
 ```js
 class MyComponent extends React.Component {
     render() {
