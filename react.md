@@ -1353,6 +1353,119 @@ add(text) {
 }
 ```
 
+## Using Props
+Props allow us to pass values into our components. These values can be anything: a string, an array, functions, and so on. They give us the opportunity to make our components more dynamic, and a **lot more** reusable. For example, say we have a `<MovieCard />` component. A movie has a title, a poster image, and many other attributes (or **prop**erties!). Our component would kind of look like this, with _hardcoded_ data:
+
+```js
+import React from 'react';
+import ReactDOM from 'react-dom';
+
+class MovieCard extends React.Component {
+  render() {
+    return (
+      <div className="movie-card">
+        <img src="http://image.tmdb.org/t/p/w342/kqjL17yufvn9OVLyXYpvtyrFfak.jpg" alt="Mad Max: Fury Road" />
+        <h2>Mad Max: Fury Road</h2>
+        <small>Genres: Action, Adventure, Science Fiction, Thriller</small>
+      </div>
+    );
+  }
+}
+
+ReactDOM.render(
+  <MovieCard />,
+  document.getElementById('main')
+);
+```
+
+To pass props to a component, you add them as attributes when you render them:
+
+```js
+<MyComponent propName={propValue} />
+```
+
+The value of a prop is passed in through curly braces, like above.
+
+Armed with that knowledge, let's update our `ReactDOM.render()` call to include the data for the Mad Max movie in our props:
+
+```js
+ReactDOM.render(
+  <MovieCard
+    title="Mad Max: Fury Road"
+    poster="http://image.tmdb.org/t/p/w342/kqjL17yufvn9OVLyXYpvtyrFfak.jpg"
+    genres={['Action', 'Adventure', 'Science Fiction', 'Thriller']} 
+  />,
+  document.getElementById('main')
+);
+```
+
+Notice how we passed in the genres as an inline array? We could also pass in variables instead, like this:
+
+```js
+const madMaxGenres = ['Action', 'Adventure', 'Science Fiction', 'Thriller'];
+
+ReactDOM.render(
+  <MovieCard
+    title="Mad Max: Fury Road"
+    poster="http://image.tmdb.org/t/p/w342/kqjL17yufvn9OVLyXYpvtyrFfak.jpg"
+    genres={madMaxGenres} 
+  />,
+  document.getElementById('main')
+);
+```
+
+Now that we've passed in our props, let's change our hardcoded data in the `render()` method to make use of the props we pass in instead. Props in a component can be accessed through `this.props` in the `render()` method (and most other component methods):
+
+```js
+class MovieCard extends React.Component {
+  render() {
+    return (
+      <div className="movie-card">
+        <img src={this.props.poster} alt={this.props.title} />
+        <h2>{this.props.title}</h2>
+        <small>Genres: {this.props.genres.join(', ')}</small>
+      </div>
+    );
+  }
+}
+```
+
+What if we didn't have a poster image for a movie? Ideally, we'd have a default poster image for that instead. Instead of passing in that default poster image in case we don't have one, we can tell update our `MovieCard` component to use a default value instead, if the `poster` prop was not provided. To do that, we add the `propTypes` property to our `MovieCard` class:
+
+```js
+class MovieCard extends React.Component {
+  render() {
+    // ... The render stuff from before
+  }
+}
+
+MovieCard.defaultProps = {
+  poster: 'http://i.imgur.com/bJw8ndW.png'
+};
+```
+
+Now, whenever we omit the `poster` prop, or if it's undefined, the `MovieCard` component will use this default prop instead.
+
+If we were still writing our components using `React.createClass()` instead of the ES2015 way, this is how we would add default props to that component:
+
+```js
+const MovieCard = React.createClass({
+  getDefaultProps() {
+    return {
+      poster: 'http://i.imgur.com/bJw8ndW.png'
+    };
+  },
+  render() {
+    // ... The render stuff from before
+  }
+})
+```
+
+Note that the order of the method definitions does _not_ matter: `getDefaultProps()` could be added below the `render()` method too. Generally, though, it's best to keep your `render()` method last when declaring methods, and keeping the code for the initial state and props for the component all the way up top.
+
+- [React Default Prop Values](https://facebook.github.io/react/docs/reusable-components.html#default-prop-values)
+- [Babel: transform-class-properties](http://babeljs.io/docs/plugins/transform-class-properties/)
+
 ## Components lifecycle
 The component lifecycle provides hooks for creation, lifetime, and teardown of components. These methods allow you to do things like add libraries, load data, and more at very specific times.
 
