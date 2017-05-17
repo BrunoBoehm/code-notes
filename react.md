@@ -1318,6 +1318,7 @@ Note we have a `key` property: each child in an array, or iterator should have a
 We use the spread operator from ES6, that takes whatever is in the state of notes and makes those the first items in the array. Then we're adding a new item in the array: an object with an ID and note text.
 
 Inside of our Board component let's add a button to add a note
+
 ```js
 render() {
     return (<div className='board'>
@@ -1465,6 +1466,76 @@ Note that the order of the method definitions does _not_ matter: `getDefaultProp
 
 - [React Default Prop Values](https://facebook.github.io/react/docs/reusable-components.html#default-prop-values)
 - [Babel: transform-class-properties](http://babeljs.io/docs/plugins/transform-class-properties/)
+
+### PropTypes
+Let's pretend we're running a super modern ice cream store where orders are done through the computer and shown in the browser using React. This means that we'd need some kind of `<Order />` component to represent all the delicious items that people have ordered.
+
+We'll take a moment to stop and think about how we want to represent our order. Which data (i.e.) props do we need? What are the options? Are some of them required? Let's list them:
+
+- `cone` — a boolean indicating if the ice cream should be in a cone, defaults to true
+- `size` — a string to indicate the size of the order, defaults to `'regular'`
+- `scoops` — an array of ice cream flavors
+- `orderInfo` — an object containing data about the ice cream order
+
+Our `<Order />` component would roughly look like this:
+
+```js
+class Order extends React.Component {
+  render() {
+    return (
+      <div className="order">
+        <ul>
+          <li>{this.props.cone ? 'Cone' : 'Cup'}</li>
+          <li>{this.props.size}</li>
+          <li>{this.props.scoops.length} scoops: {this.props.scoops.join(', ')}</li>
+          <li>Ordered by {this.props.orderInfo.customerName} at {this.props.orderInfo.orderedAt}.</li>
+        </ul>
+      </div>
+    );
+  }
+}
+```
+
+Now that we know what our component will look like, let's add our default props (see the props list above). Afterwards, we'll start adding PropTypes to validate all the props being passed in. We do so by setting the `propTypes` property (which is an object) on the `Order` class:
+
+```js
+class Order extends React.Component {
+  render() {
+    // ...
+  }
+}
+
+Order.defaultProps = {
+  cone: true,
+  size: 'regular'
+};
+
+Order.propTypes = {
+  cone: React.PropTypes.bool,
+  size: React.PropTypes.string,
+  scoops: React.PropTypes.arrayOf(React.PropTypes.string).isRequired,
+  orderInfo: React.PropTypes.object.isRequired
+};
+```
+
+### Defining "shape" for object PropTypes
+We told the `orderInfo` prop to expect an object, but can we be more specific? We don't just need any object, we want an object with the properties (`customerName` and `orderedAt`) that we care about!
+
+Good news: we can! Using `React.PropTypes.shape`, we can tell our component to expect the prop to have a certain _shape_:
+
+```js
+Order.propTypes = {
+  cone: React.PropTypes.bool,
+  size: React.PropTypes.string,
+  scoops: React.PropTypes.arrayOf(React.PropTypes.string).isRequired,
+  orderInfo: React.PropTypes.shape({
+    customerName: React.PropTypes.string.isRequired,
+    orderedAt: React.PropTypes.number.isRequired // We're using UNIX timestamps here
+  }).isRequired
+};
+```
+
+- [PropTypes reference](https://facebook.github.io/react/docs/reusable-components.html#prop-validation)
 
 ## Components lifecycle
 The component lifecycle provides hooks for creation, lifetime, and teardown of components. These methods allow you to do things like add libraries, load data, and more at very specific times.
