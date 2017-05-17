@@ -724,10 +724,12 @@ class MyComponent extends React.Component {
 }
 
 ReactDOM.render(<MyComponent />,
-    document.getElementById('react-container'))
-```    
+    document.getElementById('react-container')) 
+```    
 
-Since createElement is just plain JavaScript, you can mix in loops, if statements, and anything else JavaScript allows. You can also easily substitute in data stored in JSON.
+
+Since createElement is just plain JavaScript, you can mix in loops, if statements, and anything else JavaScript allows.
+You can also easily substitute in data stored in JSON.
 
 ```js
 var contacts = [
