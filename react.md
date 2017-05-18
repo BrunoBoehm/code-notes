@@ -1709,6 +1709,358 @@ export default class SomeComponent extends React.Component {
 - [Explanation on Children](https://facebook.github.io/react/docs/multiple-components.html#children)
 - [React.Children API](https://facebook.github.io/react/docs/top-level-api.html#react.children)
 
+## State
+Let's quickly talk about what _state_ is in React. State is basically data that is mutated in your component. Like with any state, this state can also **change**. That's an important part: while a component can't change its own props, it _can_ change its state.
+
+State is used to handle several things in your component:
+
+- Interactivity (e.g. changing data when a user clicks a button)
+- Fetching remote data (remote data is, by definition, not available right away when the component is mounted — state gives us a way of updating the component once that data arrives)
+- Reacting to the passing of time (i.e. setting an interval or timeout)
+
+The best way to figure out if data should go in props or state is to ask ourselves _'Will this data ever change?'_. If not, it's a prop. If it will, it should go in state! Keep in mind that whenever props _and/or_ state change, the component will run its `render()` method again.
+
+### Setting Initial State
+Let's say we have a `<ToggleButton />` component. A toggle button has an on and off state. Using props for that value wouldn't work, since we can't actually change our props! Let's use state for this instead. We'll assume that the default state of this component is to be in the _off_ state. Let's call that state property `isEnabled`. Setting the initial state is done in the `constructor` of our ES2015 class component:
+
+```js
+class ToggleButton extends React.Component {
+  constructor() {
+    super();
+    
+    this.state = {
+      isEnabled: false
+    };
+  }
+
+  render() {
+    return (
+      <div className="toggle-button">I am toggled {this.state.isEnabled ? 'on' : 'off'}.</div>
+    );
+  }
+}
+```
+
+If, for some reason, we were still using `React.createClass()`, we would add a method called `getInitialState()` that returns our state object:
+
+```js
+const ToggleButton = React.createClass({
+  getInitialState() {
+    return {
+      isEnabled: false
+    };
+  },
+
+  render() {
+    return (
+      <div className="toggle-button">I am toggled {this.state.isEnabled ? 'on' : 'off'}.</div>
+    );
+  }
+});
+```
+
+Our component would show 'I am toggled off.' on the screen, since the initial state has set the `isEnabled` property to `false`. Not very exciting yet, but we'll get there!
+
+### Keep state slim!
+It's important to try and keep your state **as small as possible**. You should strive for a minimal amount of data in your state and compute the rest. For example, let's say we have a component `<Address />` that takes in two props: the `street` and the `city`. We'll add those two together to show the user a complete address. An example of having computed data in your state would be this:
+
+```js
+class Address extends React.Component {
+  constructor(props) {
+    super();
+    
+    this.state = {
+      fullAddress: `${props.street}, ${props.city}`
+    }
+  }
+
+  render() {
+    return (
+      <div className="address">{this.state.fullAddress}</div>
+    );
+  }
+}
+```
+
+While this is all perfectly valid React code, storing computed values in your state (in this case, `fullAddress`) should be avoided. There's no good reason for the full address to go into our state, since we're just using props to 'compute' the full address. Instead, we should use the component's props directly:
+
+
+```js
+class Address extends React.Component {
+  render() {
+    return (
+      <div className="address">{this.props.street}, {this.props.city}</div>
+    );
+  }
+}
+```
+
+While component state is a very powerful feature, it should be used as sparingly as possible. State is hard to manage and can be very easy to lose sight of.
+
+- [Official React docs on state](https://facebook.github.io/react/docs/interactivity-and-dynamic-uis.html#components-are-just-state-machines)
+- [Props vs. state](https://github.com/uberVU/react-guide/blob/master/props-vs-state.md)
+- [Props in getInitialState Is an Anti-Pattern](https://facebook.github.io/react/tips/props-in-getInitialState-as-anti-pattern.html)
+
+Another example
+
+```js
+import React from 'react';
+
+class Bomb extends React.Component {
+  constructor(props) {
+    super();
+
+    this.state = {
+      secondsLeft: props.initialCount
+    }
+  };
+
+  render() {
+    const message = this.state.secondsLeft === 0 ? 'Boom!' : `${this.state.secondsLeft} seconds left before I go boom!`;
+
+    return(
+      <div>{message}</div>
+    )
+  };
+}
+
+module.exports = Bomb;
+```
+
+## React Event System
+React has its own event system with special event handlers called `SyntheticEvent`. The reason for having a specific event system instead of using native events is cross-browser compatibility.
+
+It's important to keep in mind that they are the  _exact same events_, just implemented in a consistent way! That means these events also have methods like `preventDefault()`, `stopPropagation()`, and so on.
+
+We attach event handlers to an element much like how we'd add a prop. The handler name is always comprised of `on`, and the event name itself — for example `click`. These are joined together and camel-cased, so if we wanted to add a click handler, we'd call the prop `onClick`. This prop takes a function as a value — it can either be a reference to a method on the class (like our `tickle()` method), or an inline function. Most of time, we'll use a function reference. It looks like this:
+
+```js
+class Tickler extends React.Component {
+  constructor() {
+    super();
+    
+    this.tickle = this.tickle.bind(this);
+  }
+  
+  tickle() {
+    console.log('Tee hee!');
+  }
+
+  render() {
+    return (
+      <button onClick={this.tickle}>Tickle me!</button>
+    );
+  }
+}
+```
+
+The important bit here is the `constructor()`, where we're binding our `tickle()` method. Note that this is _not_ required in this example (since we're not accessing the component's `this`). Realistically, all methods in a React component class will almost always use `this` in one way or another, so it's a good idea to get the binding out of the way, even if you don't explicitly need it yet.
+
+There are a lot of event handlers we can add to an element, for example `onKeyUp`, `onMouseDown`, `onFocus`, `onSubmit`, and many more. Check out the [complete list of supported events](https://facebook.github.io/react/docs/events.html#supported-events) to see what else you can play around with!
+
+- [React Synthetic Events](https://facebook.github.io/react/docs/events.html)
+- [Supported-events](https://facebook.github.io/react/docs/events.html#supported-events)
+
+### Accessing event data
+Let's take a deeper look at the actual event being passed through. A `SyntheticEvent` event has all of its usual properties and methods. These includes its type, target, mouse coordinates, and so on. As a reminder, we add an event handler to a component, and then we can use the event's data like this:
+
+```js
+export default class Clicker extends React.Component {
+  constructor() {
+    super();
+    
+    this.handleClick = this.handleClick.bind(this);
+  }
+  
+  handleClick(event) {
+    console.log(event.type); // prints 'click'
+  }
+
+  render() {
+    return (
+      <button onClick={this.handleClick}>Click me!</button>
+    );
+  }
+}
+```
+
+For example, if we wanted to get the target of an event, we'd use `event.target`. If we want to prevent a default action whenever an event happens, we call `event.preventDefault()`. This is all super similar to regular browser events and should feel very familiar!
+
+### Event Pooling
+Event pooling means that whenever an event fires, its event data (an object) is sent to the callback. The object is then immediately cleaned up for later use. This is what we mean by 'pooling': the event object is in effect being sent back to the pool for use in a later event. It's something that trips up a lot of people, and you might have run into it yourself when inspecting `SyntheticEvent` in the browser.
+
+If we click the button of our `Clicker` component and then inspect the logged out object in our console, we notice that all properties are `null` again. By the time we inspect the object in our browser, the event object will have already been returned to the pool. This means that we can't access event data in an asynchronous manner by saving it in the state, or running a timeout and _then_ accessing the event again.
+
+You usually don't need to access your event data in an asynchronous manner like described above, but if you do, there are two options: you either store the data you need in a variable (e.g. `const target = event.target`), _or_ we can make the event persistent by calling that method: `event.persist()`.
+
+```js
+import React from 'react';
+
+class DelayedButton extends React.Component {
+  constructor(){
+    super();
+
+    this.handleClick = this.handleClick.bind(this);
+  }
+
+  handleClick(event){
+    event.persist();
+    setTimeout(() => {
+      this.props.onDelayedClick(event);
+    }, this.props.delay);
+  }
+
+  render(){
+    return (
+      <button onClick={this.handleClick}></button>
+    )
+  }
+}
+
+module.exports = DelayedButton;
+```
+
+## Updating State
+While a React component can have initial state, the real power is in updating its state — after all, if we didn't need to update the state, the component shouldn't _have_ any state. State is only reserved for data that _changes_ in our component and is visible in the UI.
+
+Instead of directly modifying the state using `this.state`, we use `this.setState()`. This is a function available to all React components, and allows us to let React know that the component state has changed. This way the components knows it should re-render, because its state has changed and its UI will most likely also change. 
+
+Using a setter function like this is very performant. While other frameworks like Angular.js use "dirty checking" (continuously checking for changes in an object) to see if a property has changed, React _already knows_ because we use a built-in function to let it know what changes we'd like to make!
+
+For example, let's say we have a component with a button, and a bit of text to indicate whether that button has been pressed yet. To update our state, we use `this.setState()` and pass in an object. This object will get merged with the current state. When the state has been updated, our component re-renders automatically.
+
+```js
+class ClickityClick extends React.Component {
+  constructor() {
+    super();
+    
+    // Define the initial state:
+    this.state = {
+      hasBeenClicked: false,
+    };
+    
+    this.handleClick = this.handleClick.bind(this);
+  }
+  
+  handleClick() {
+    this.setState({
+      hasBeenClicked: true,
+    });
+  }
+
+  render() {
+    return (
+      <div>
+        <p>I have {this.state.hasBeenClicked ? 'not' : null} been clicked yet!</p>
+        <button onClick={this.handleClick}>Click me!</button>
+      </div>
+    );
+  }
+}
+```
+
+### How State gets merged
+When updating state, we don't have to pass in the entire state, just the property we want to update. For example, consider the following state for our component:
+
+```
+{
+  hasBeenClicked: false,
+  currentTheme: 'blue',
+}
+```
+
+If we updated the `hasBeenClicked` using `this.setState()` like we did above, it would _merge_ the new state with the existing state, resulting in this new state:
+
+```
+{
+  hasBeenClicked: true,
+  currentTheme: 'blue',
+}
+```
+
+One super important thing to note is that it only merges things on the first level.
+
+A deep merge means that the merge will happen recursively, leaving any unchanges properties intact. For example, consider the following code sample:
+
+```js
+const house = {
+  kitchen: {
+    cabinets: 'white',
+    table: {
+      legs: 4
+    }
+  }
+};
+
+// Note: `deepMerge()` isn't actually a built-in function
+const updatedHouse = deepMerge(house, {
+  kitchen: {
+    table: {
+      legs: 8
+    }
+  }
+});
+```
+
+Deeply merging like this would only update the `legs` property with a value of `8`, but the rest of the `kitchen` and `house` objects' structure will remain intact.
+
+We can also use `Object.assign()` by merging the `addressInfo` object with the new data ourselves:
+
+```
+{
+  theme: 'blue',
+  addressInfo: {
+    street: null,
+    number: null,
+    city: null,
+    country: null
+  },
+}
+```
+
+We can update the city like so:
+
+```js
+this.setState({
+  addressInfo: Object.assign({}, this.state.addressInfo, {
+    city: 'New York City',
+  }),
+});
+```
+
+### Setting state is not synchronous
+One thing to keep in mind is that setting state is _not_ synchronous. For all intents and purposes, it might seem that way, since our components update right away. State updates, however, are _batched_ internally and then executed simultaneously whenever React feels it's appropriate. This might result in some unexpected behavior. Going back to our `ClickityClick` component above, let's log the state after we've set it using `this.setState()`:
+
+```js
+handleClick() {
+  this.setState({
+    hasBeenClicked: true,
+  });
+  console.log(this.state.hasBeenClicked); // prints false
+}
+```
+
+The console output says `false`... but we just set it to `true`! What is this madness?
+
+State changes, however instant they might appear, happen _asynchronously_. If we want to access our new state after it has been updated, we can optionally add a callback as a second argument to the `this.setState()` function. This callback will fire once the state has been updated, ensuring that `this.state` is now the new, shiny updated state. In code:
+
+```js
+handleClick() {
+  this.setState(
+    { hasBeenClicked: true },
+    function () {
+      console.log(this.state.hasBeenClicked); // prints true
+    }
+  );
+}
+```
+
+### State changes vs. prop changes
+It's important to note the difference between changes in state and changes in props. Changes in state and/or props will both trigger a re-render of our React component. However, changes in state can only happen _internally_ due to components changing their own state. Changes in props can only happen _externally_, due to changes in prop values being passed in.
+
+- [Transferring props](https://facebook.github.io/react/docs/transferring-props.html)
+- [Component API](https://facebook.github.io/react/docs/component-api.html)
+
 ## Components lifecycle
 The component lifecycle provides hooks for creation, lifetime, and teardown of components. These methods allow you to do things like add libraries, load data, and more at very specific times.
 
