@@ -3451,3 +3451,528 @@ Extracting out the logic for finding individual users based on id reduces code r
 
 - [React: Flux Overview](https://facebook.github.io/flux/docs/overview.html)
 - [Actions and the Dispatcher](https://facebook.github.io/flux/docs/actions-and-the-dispatcher.html#content)
+
+## Towards Unidirectional Data Flow
+
+### Using Change Listeners
+
+To understand what "unidirectional data flow" actually means, let's first consider a real-world example: We want to implement a simple application that allows us to organize tasks in some form of project board, similar to Trello:
+
+![Trello Screenshot](./assets/Trello.png)
+
+Trello allows you to raise issues, represented by "cards", assign them and move them into different columns, whereas each column represents a distinct step of your workflow.
+
+When create an application like that, it's always helpful to first think about how one would go about organizing the underlying data:
+
+Each card can be represented by a JSON object:
+
+```js
+{
+  "title": "Create Mockups",
+  "id": 123
+}
+```
+
+Each card can only ever be in exactly one column. Each column has a name and a distinct set of cards associated with it:
+
+```js
+{
+  "name": "TODO",
+  "id": 456,
+  "cards": [{
+    {
+      "title": "Create Mockups",
+      "id": 123
+    }
+  }]
+}
+```
+
+Now that we have a set of well-defined models and a beautifully designed UI, we can go about structuring our component hierarchy. In this case, the most basic screen is fairly simple. We have a project, which can be represented by a single, stateful component, multiple columns and a variety of card components.
+
+In other words, this is what our project's render function could look like:
+
+```js
+class Board extends React.Component {
+  render () {
+    const { columns } = this.props;
+    return (
+      <div>
+        {columns.map(({cards, id}) => <Column key={id} id={id} cards={cards} />)}
+      </div>
+    );
+  }
+}
+```
+
+Fairly trivial, right? A board has an arbitrary number of columns and each column can have some number of cards "pinned" to it:
+
+```js
+class Column extends React.Component {
+  render () {
+    const {cards} = this.props;
+    return (
+      <div>
+        {cards.map(({title, id}) => <Card key={id} title={title} />)}
+      </div>
+    );
+  }
+}
+```
+
+The only problem with this approach so far is that it becomes incredibly hard to update deeply nested cards. We kind of just "accepted" that fact that the `columns` props gets passed down into the `<Board />` component, but where would this essential application state be actually located? Most likely we would have some form of `<App />` component that has an `this.state.board = {...}`. Upon being mounted, it would do some form of HTTP request and fetch the latest board state.
+
+```js
+class App extends React.Component {
+  constructor (props) {
+    super(props);
+    this.state = { board: [] };
+  }
+  componentDidMount () {
+    fetchBoard().then(board => this.setState({ board }));
+  }
+  render () {
+    const {board} = this.state;
+    return <Board board={board} />;
+  }
+}
+```
+
+And that's great and works beautifully. Until... it doesn't. So far all our board does is it displays cards, we can't edit them. Now who would want a read-only collaborative project management tool? — Exactly, nobody! So let's go ahead and add some handler functions!
+
+Let's assume for a moment that we want to be able to edit the `title` of individual cards. In the old days, we would simply create a listener function on the card and delegate to the parent component (`<Column />`) once we're done editing (typically on `blur`). By delegate we mean "notifying the parent" about our changed data (in this case the changed title).
+
+Now we all know how to attach change listeners by now, so we're going to skip this part. Let's concentrate on the remaining components instead.
+
+The only place where we can update the state of our board / application is in the the `<App />` component.
+
+**Remember** Components can't ever update their `props`, they can only mutate their own state.
+
+Our `<Column />` component would attach an `onChangeTitle` listener to the
+`<Card />` component:
+
+```js
+class Card extends React.Component {
+  render () {
+    const {cards} = this.props;
+    return (
+      <div>
+        {cards.map(({title, id}, cardIndex) =>
+          <Card
+            key={id}
+            title={title}
+            onChangeTitle={this.handleChangeCardTitle.bind(this, cardIndex)}
+          />
+        )}
+      </div>
+    );
+  }
+}
+```
+
+The `handleChangeCardTitle` itself would actually "delegate" itself to its parent component, in this case the actual `<Board />` component:
+
+```js
+  handleChangeCardTitle (cardIndex, ev) {
+    this.props.onChangeCardTitle(this.props.id, cardIndex, ev)
+  }
+```
+
+The board would delegate to **its** parent, which is the actual `<App />` component:
+
+```js
+  handleChangeCardTitle (columnIndex, cardIndex, ev) {
+    this.props.onChangeCardTitle(columnIndex, cardIndex, ev)
+  }
+```
+
+The `<App />` component itself would now **actually** update the underlying state:
+
+```js
+class App extends React.Component {
+  constructor (props) {
+    super(props);
+    this.state = { board: [] };
+  }
+  componentDidMount () {
+    fetchBoard().then(board => this.setState({ board }));
+  }
+  // Magic comes in here:
+  handleChangeCardTitle (columnIndex, cardIndex, ev) {
+    // Actually we wouldn't even want to mutate this.state directly. Ideally we
+    // should make a copy of the respective card and apply our change there.
+    this.state.board[columnIndex][cardIndex].title = ev.target.value;
+    updateBoard(this.state).then(() => {
+      // Do some more magic here.
+    });
+  }
+  render () {
+    const {board} = this.state;
+    return <Board board={board} onChangeCardTitle={this.hanldeChangeCardTitle(ev)} />;
+  }
+}
+```
+
+### Change Listeners? — We don't need them!
+
+Now this _would_ work, but it's complicated beyond measures. It's much easier and less error-prone to move our state out into a separate store.
+
+Let's take a step back and have a look at what our current architecture looks like.
+
+```
+<App /> (can update this.state.board)
+  <Board /> (has to delegate to parent component)
+    <Column /> (has to delegate to parent component)
+      <Card /> (has to delegate to parent component)
+      <Card /> (has to delegate to parent component)
+    <Column /> (has to delegate to parent component)
+      <Card /> (has to delegate to parent component)
+```
+
+The store could then handle the card updates in one form or another. The `<App />` component could subscribe to the store and all components would happy! No needless event handlers, just one, flat state tree.
+
+But let's take a step back first and summarize why the above solution is problematic:
+
+1. We had to add a separate event handler on each level.
+2. Needless redundancy: `<Column />` and `<Board />` share _almost_ the same handler function — **almost**.
+3. Adding a separate component "in-between" our existing components would complicated beyond measure — just imagine adding a separate `<BoardVersion />` component as a child of `<Board />`.
+
+Clearly moving the state out into a separate, completely isolated store is the desired solution here. Instead of communicating via components that "pass through" events, we directly update the store (at least for now) and render subsequent changes by passing down updated `props`.
+
+### Towards a Centralized Store
+
+Having an isolated store is key in this scenario. We start by implementing our own little `BoardStore`, which is going to manage our `board`, `column` and `card` records.
+
+Our store can be a simple even emitted that also wraps some custom data:
+
+```js
+class BoardStore {
+  constructor (initialState = { columns: [] }) {
+    this.state = initialState;
+  }
+
+  setState (state) {
+    this.state = state;
+  }
+
+  getState () {
+    return this.state;
+  }
+}
+
+module.exports = new BoardStore();
+```
+
+Preferably we don't always want to implement our own eventing system every time we write a custom store, so in this case, we're simply going to inherit from `EventEmitter` (available via `events`) and use a single `change` event:
+
+```js
+const EventEmitter = require('events').EventEmitter;
+
+class BoardStore extends EventEmitter {
+  constructor (initialState = { columns: [] }) {
+    this.state = initialState;
+    super();
+  }
+
+  addListener (listener) {
+    EventEmitter.prototype.addListener.call(this, 'change', listener)
+  }
+
+  removeListener (listener) {
+    EventEmitter.prototype.removeListener.call(this, 'change', listener)
+  }
+
+  setState (state) {
+    this.emit('change', state);
+    this.state = state;
+  }
+
+  getState () {
+    return this.state;
+  }
+}
+```
+
+**Advanced** Having a single store might not always be the most desirable solution. "Classical" Flux can be implemented using multiple stores.
+
+And... BOOM! We have our store! Now let's have a look at our `<App />` component and wire it up!
+
+### Subscribing to store changes `<App />`
+
+Our `<App />` component is simply going to listen for store changes and encapsulate the corresponding application state whenever a store change occurs:
+
+```js
+class App extends React.Component {
+  constructor (props) {
+    // ...
+    this.listener = this.listener.bind(this);
+    this.setState({ board: boardStore.getState() });
+  }
+  componentDidMount () {
+    boardStore.addListener(this.listener);
+  }
+  componentWillUnmount () {
+    // We shouldn't forget this! Otherwise we would get a memory leak!
+    boardStore.removeListener(this.listener);
+  }
+  listener (board) {
+    // Update `<App />` state and trigger a re-render.
+    this.setState({ board });
+  }
+  // ...
+}
+```
+
+Our card can now update the store whenever someone changes its title. For now, we're going to add a method on the `BoardStore` to handle this logic. In subsequent lessons we're going to extract this update logic out event further.
+
+```js
+class BoardStore extends EventEmitter {
+  // ...
+  updateCardTitle (cardId, updatedTitle) {
+    for (const column of this.state.columns) {
+      const card = column.cards.find(card => card.id === cardId);
+
+      // Ideally we should treat our store as an immutable data structure,
+      // meaning instead of updated properties on cards directly, we should
+      // create new cards to replace the one that should be updated. For now,
+      // let's just set the title property and worry about the rest later.
+      card.title = updatedTitle;
+    }
+    this.setState(this.state);
+  }
+  // ...
+}
+```
+
+Stores are globally unique singletons. There will only ever be one `BoardStore`. Therefore our card component can just require it in and update the store directly by calling the `updateCardTitle` method with the updated title.
+
+```js
+class Card extends React.Component {
+  constructor (props) {
+    super(props);
+    this.state = { title: '' };
+  }
+  handleChangeTitle (ev) {
+    this.setState({ title: ev.target.value });
+  }
+  handleTitleBlur () {
+    boardStore.updateCardTitle(this.props.id, this.state.title);
+  }
+  render () {
+    // ...
+  }
+}
+```
+
+And we're done! Instead of passing down dozens of event handlers, we simply extracted out our state into a global store. The global store can be subscribed to and other components can update it. We essentially decoupled our component hierarchy (everything between `<App />` and `<Board />`) from our global store.
+
+This makes adding new components and possibly bigger changes to our application structure much easier. It's significantly less code and also much easier to debug. If there is an error, it's guaranteed to be in one of the components that actually render or update the corresponding date, not in a completely unrelated "intermediary" component that simply passes down the data.
+
+- [Redux](http://redux.js.org/)
+- [Flux](https://facebook.github.io/flux/docs/overview.html)
+
+## Component State vs Store State: ie do you really need Redux?
+
+While our previous lessons extensively focused on moving state **out** of individual components, we don't always have to. In fact, sometimes it might even introduce more complexity than needed. Using `setState` and "local" component-level state is a perfectly fine choice in most cases.
+
+In general, we should not start out by putting all our state into some form of global store (or multiple stores).
+
+When architecting a user interface, try to use local state and parent props **first**. If we end up constantly passing down tons of props, we should consider connecting the component in question with the respective Flux store.
+
+E.g. let's say we want to render some form of carousel, something like the [Bootstrap's Carousel component] (http://getbootstrap.com/javascript/#carousel):
+
+A carousel is a perfect example on where using a store to extract out component state doesn't necessarily make things easier (or would simply be a massive overkill).
+
+Writing the essential handler functions for the component in question using "classical" React-style without **any** "outside" state is trivial:
+
+```js
+class Carousel extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      // We start out rendering the first slide. 0 denotes the index of the
+      // active item.
+      currentSlide: 0,
+    };
+  }
+  /**
+   * Handler function that transitions to the next slide in the carousel.
+   * This is the function that will be run once the user clicks the "next"
+   * button.
+   */
+  goNext = () => {
+    const previousSlide = this.state.currentSlide;
+    this.setState({ currentSlide: previousSlide + 1 });
+  }
+  /**
+   * Equivalent to `goNext`. Handler function that will be invoked when clicking
+   * the "back" button.
+   */
+  goBack = () => {
+    const previousSlide = this.state.currentSlide;
+    this.setState({ currentSlide: previousSlide - 1 });
+  }
+  render() {
+    // Magic goes here
+  }
+}
+```
+
+In this case, using the local state of the component has a couple of advantages over using an external store:
+
+1. The state is **by definition** bound to the component
+
+When rendering a very long list of carousels, keeping the state stored in the store in sync with the _actual_ list of rendered components is hard. Let's say  we render one carousel for each photo "collection" — which could for example be represented by an array for image sources — keeping the array length in sync with whatever data structure we would use in the store for representing the selected slide index is unnecessarily complex. For example, when adding a photo collection, we need to add the `currentSlide` property to the store as well.
+
+Simply distinguishing between "component UI" state and global application state radically simplified the architecture in the above case, since component state can by definition not exist without a matching component (and vice versa).
+
+2. Simplified Testing
+
+Testing React components is extremely easy compared to other frameworks, such as Angular. Reason being that React components are by definition declarative, while Angular heavily relies on imperative APIs.
+
+Using stores doesn't necessarily break this abstraction, but it makes it much harder to properly test all the possible states that a component can be in, since a store might contain state that isn't directly consumed by the component to be tested.
+
+But more importantly, we now need to manage a store during testing. This means we need to make sure we **always** restore it to its previous state before every test case, otherwise this can lead to hard to debug failed tests. In Mocha, we can use `beforeEach` to run a function before every test case (`it(...)`).
+
+Instead of restoring the store's state, we can also mock it out. This eliminates the need to reset the store.
+
+3. Reusing the component is possible
+
+While we focused on implementing our own set of stores, some people prefer to use Redux, Rx, mobx or some other library for managing state and implementing unidirectional data flow.
+
+By storing state in an external store, we implicitly couple the component to whatever architecture we chose for our main application. If we're implementing an accordion component using Flux, it means everyone using our component will have to use Flux in order to interact with it (even though it might be hidden though the public API of the component).
+
+Hence using component state (and props) instead of stores is the preferred way when creating reusable components.
+
+### Connecting components using lifecycle methods
+
+So far we oftentimes "connected" components to stores by adding an event listener on the store in the component's lifecycle methods:
+
+```js
+class MyCounter extends React.Component {
+  componentDidMount() {
+    this.removeListener = store.addListener(count => {
+      this.setState({ count });
+    });
+  }
+  componentWillUnmount() {
+    this.removeListener();
+  }
+}
+```
+
+In `componentDidMount` we add an event listener that updates the component's state based on the store's state, thus triggering a re-rendering.
+
+In `componentWillUnmount` we remove the event listener. Typically `addListener` returns a function that — when invoked — removes the event listener from the store. In other cases people might subclass the `EventEmitter` class directly in order to implement a store, hence there are cases in which we actually have to call `removeListener` on the store itself.
+
+Whether or not we use `componentDidMount` instead of `componentWillMount` doesn't make a difference here. We can call `setState` in both.
+
+### Presentational vs Container Components
+
+**Container components** are components that are directly **connected** to our store, e.g. using the `addListener` method. They are primarily concerned with holding state, managing it and passing it to other components using props.
+
+Container components have handler functions that dispatch actions or mutate state. They contain the "business logic" of our application.
+
+In single page apps, a good rule of thumb is to make each page of your application (or component attached to a sub-route) a container component. While it isn't necessarily a bad idea to use nested container components, passing props to pure components tends to be easier to test and reason about.
+
+**Presentational components** are modular, reusable (and typically small) components that are concerned with "how stuff looks". They are not connected to a particular store, can be used in different applications and are usually stateless (as in "pure").
+
+Usually UI elements (with a bit of interaction) are presentational components and therefore not concerned with the actual state of the application. E.g. a modal, accordion, or button should not be container components.
+
+Deciding whether or not something should be a container or presentational component is not a definitive decision. Making presentational components stateful by wiring them up to a store is usually quite easy and gets rid of a lot of indirection. For example passing down a lot of different props 5 levels deep is much more error prone than simply connecting the "leaf" component to the store.
+
+It also means we don't need to rerender all the components in between the presentational leaf component that is due to be rendered and the intermediate components that simply pass down the state via props from the container component.
+
+- [Interactivity and Dynamic UIs](https://facebook.github.io/react/docs/interactivity-and-dynamic-uis.html)
+- [You Might Not Need Redux](https://medium.com/@dan_abramov/you-might-not-need-redux-be46360cf367#.7v3xs9al2)
+- [Presentational and Container Components](https://medium.com/@dan_abramov/smart-and-dumb-components-7ca2f9a7c7d0#.jp0dni40i)
+
+## What makes a component "presentational"?
+
+The answer to this question, as you may have guessed, is that a presentational component is a component whose primary responsibility is to render some piece of the beautiful user interfaces that we get to build as web developers. Their job, in other words, is to look good!
+
+![I'm So Pretty](https://media.giphy.com/media/oLz0TmduZsUjm/giphy.gif)
+
+There is, however, a bit more thinking that we need to do here, just so we understand precisely what it means when we say that a component is of the type "presentational." Very often when we speak of classes or categories of things in the world of programming, the types or classes that we are discussing are actually formalized in the libraries or languages themselves. Think, for example, of when we declare a React `Component.` When we do that we write either `React.createClass()` or (using the ES2015 format) `class SomeComponent extends Component`. Either way, we are creating an actual instance of `Component`.
+
+But here's the rub. When we say that some component is "presentational" *we definitely do not mean* that the component is a formal type or class defined by the React library. There is no such thing as type `PresentationalComponent` in the React library. Rather, what we are dealing with here is simply a useful *convention*, or, better yet, a *programming pattern* that coders who have used React have found themselves following over and over again as they compose their component-based React UIs.
+
+So what defines the presentational component pattern? Here's a list of defining features:
+* Presentational components are primarily concerned with how things look;
+* they probably only contain a render method;
+* they do not know how to load or alter the data that they render;
+* they rarely have any internally changeable `state` properties;
+* and, they are best written as stateless functional components.
+
+Okay, so there's our pattern description. Now let's jump into some code and see how presentation components actually look in practice.
+
+### Surprise, you've already written presentational components!
+
+Yep, this is true. Think about it. If a presentational component is simply a component that doesn't know anything about how to get the data it displays, and is mainly responsible for presentation, then you've been doing this from the beginning. A simple `HelloWorld` component, for example, is almost certainly presentational. Let's see if that's right &mdash; we'll even give our component the ability to take a prop:
+
+```javascript
+const HelloWorld = React.createClass({
+  render: function() {
+    return <div class="hello-world">Hello {this.props.message || 'World' }</div>;
+  }
+})
+```
+
+So does this fit our pattern? Absolutely, it does. Here is a component that does nothing but render a piece of our UI; that has no notion of how to fetch or reload the `message` data that it takes in as a `prop`; that has no changeable state; and that only contains a render method. So, I think we can safely say it fits the pattern well.
+
+### Great, but when would we need such a simple component?
+
+Good question! Our `HelloWorld` example is obviously not a very real-world example, but consider this: let's say we are working on a massive web application, and we'd like to standardize as well as place some limits on the characteristics of the  text inputs used throughout the application's forms.
+
+In this case, we could certainly establish a style guide in our development team that dictates that all uses of `<input>` use a specific set of CSS classes, defined in our stylesheets, but this leaves our app open to a lot of human error. People would have to consistently follow the convention over time. And while we could certainly add props to our inputs by doing something like this -- `<input className='field' {...props}>` -- we've left the types of props that can be provided to our inputs wide open.
+
+With React, we can do much better! Consider this `TextField` component:
+
+```javascript
+const defaultLimit = 100
+
+export default class TextField extends React.Component {
+  render() {
+    return (
+      <input
+        className="field field-light"
+        onChange={this.props.onChange}
+        maxLength={this.props.limit || defaultLimit} />
+    );
+  }
+}
+```
+
+First off, notice that here again, what we have a component that fits the presentational pattern. It's a simple wrapper around an `<input>`. But look how powerful it is! This simple wrapper establishes the CSS classes we will use in one place for every single input used throughout the app. Think of how easy it would be to change if we later decided we wanted a different look! But that's not all we've accomplished here. The component also establishes a straightforward API for all our text fields consisting of an `onChange` callback -- because in most cases our `<input>`s are going to need to perform some action when the users type -- and a `limit` for the amount of characters that a user can enter in the field. So although our presentational component is simple, it can still have a degree of interactivity through the addition of callbacks.
+
+Now, of course, we can argue about whether wrapping the `<input>` field in this way is a good idea. After all, `<input>`s are nice simple implementations in their own right. But providing a component-based interface to text inputs as we have in the field above is potentially a great win for simplicity in our app. It specifically defines what we mean by a text input; it does so in a way that arguably covers the majority of use-cases we can imagine for a simple text input; and it provides this definition in one place that can be found and updated easily in the future. Win, win, win. Are we beginning to see the power of presentational components? Good.
+
+Now imagine that it's not just the `TextField` that our team has executed in this way, but say we've also defined a `<Header />` and a `<Footer />`, as well as other more unique and customized modules that are still primarily presentational. Imagine further that we've composed the majority of our UI out of these simple presentational components -- all of them almost entirely stateless, all of them designed to do one thing and one thing well: they just receive `props` from their parent components and render! That's it. They are simple and beautiful and because they aren't doing much, because they are mostly stateless, they have a better chance of remaining blissfully bug free!
+
+This is the power and importance of presentational components. They are simple and they just work. So therefore we should strive to use them as much as possible.
+
+### The "Stateless Functional" Component & "Pure" Functions
+
+What if I told you we can actually make our presentational components even simpler? Well we can, and here's why: Remember how one of the principles in our checklist for the presentational component pattern was that the component (probably) does not have state? Well, if in fact we can create a component that has no state, that means that our component doesn't even really need to be a JavaScript object of type `Component` at all. It can just be a simple function &mdash; one that takes an input and returns a (portion of) the UI.
+
+So what's this look like? Here's our `TextField` component rendered as a so-called "functional stateless" component (a feature available in React since v0.14):
+
+```javascript
+const defaultLimit = 100
+
+export default function TextField(props) {
+  return (
+    <input
+      className="field field-light"
+      onChange={this.props.onChange}
+      limit={this.props.limit || defaultLimit} />
+  );
+}
+```
+Now isn't that just beautiful? It really is. It's just so concise. We've discarded all that ugly boilerplate. But it's not only concision that makes this beautiful. By transforming our component into a stateless function, we have made our `TextField` component an extremely stable and predictable part of our application.
+
+The predictability comes from the fact -- and here we can see the influence of the principles of functional programming on React -- that this function will always return the same UI output if given the same `props`. There are no state variables here that could be set to different values at different times that might lead the function to return something that we didn't predict. What we have here, then, is what in functional terms is called a "pure" or "referentially transparent"  function.  Our UI has become just a bit more predictable. And, as web developers who've worked on the front-end, we know what a boon that is, don't we? (To review pure functions at greater length, see [this lesson](https://github.com/learn-co curriculum/javascript-pure-functions) on the theme.)
+
+- ["Software Design Patterns"](https://en.wikipedia.org/wiki/Software_design_pattern) (Wikipedia)
+- Dan Abramov, ["Presentational and Container Components"](https://medium.com/@dan_abramov/smart-and-dumb-components 7ca2f9a7c7d0#.quaiihhh3)
+- [Stateless Functions](https://facebook.github.io/react/docs/reusable-components.html#stateless-functions)
