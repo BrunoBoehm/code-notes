@@ -2555,3 +2555,899 @@ Called only once, just before the component is removed form the DOM:
 - [React: Component Specs and Lifecycle](https://facebook.github.io/react/docs/component-specs.html)
 - [Understanding the React Component Lifecycle](http://busypeoples.github.io/post/react-component-lifecycle/)
 
+## Changing State
+React is all about rendering _stuff_: A React component takes some data, builds some virtual representation of how our DOM is *supposed* to look like and returns it:
+
+```js
+class BlogPost extends React.Component {
+  render () {
+    return (
+      <article>
+        <h1>{this.props.title}</h1>
+        <p>{this.props.body}</p>
+      </article>
+    );
+  }
+}
+```
+
+The above `BlogPost` component renders an article consisting of a `title` and `body`. Those are being passed down as `props`. So whenever we want to re-use the `BlogPost` component, we can simply give it a `title` and `body`:
+
+```js
+class Blog extends React.Component {
+  render () {
+    return (
+      <div>
+        <BlogPost title={'Hello World!'} body={'Hello, this is my blog.'} />
+        <BlogPost title={'Good bye!'} body={'I\'m busy. I\'m shutting this blog down.'} />
+      </div>
+    );
+  }
+}
+```
+
+This is incredibly powerful, since it allows us to gradually remove complexity by re-structuring our application into smaller, easier to test units. `props` decouple our components.
+
+As we just saw, props can be seen as arguments for pure components. Pure components don't rely on any internal state or side-effects: They simply return a virtual representation of how they want to "look" like.
+
+There is only one problem: props are always being "passed down" from the component's immediate ancestor. So for example, the `Blog` component passes the blog post data to the `BlogPost` component. But where does the blog *data* actually come from?
+
+```js
+class Blog extends React.Component {
+  render () {
+    return (
+      <div>
+        <BlogPost title={'Hello World!'} body={'Hello, this is my blog.'} />
+        <BlogPost title={'Good bye!'} body={'I\'m busy. I\'m shutting this blog down.'} />
+      </div>
+    );
+  }
+}
+```
+
+In the above example, we simply hard-coded the blog titles and bodies. Obviously this isn't really what we want, otherwise we might as well just render everything on the server — not very *reactive* at all.
+
+Instead we typically want to dynamically load the data from some API endpoint, for instance `GET /api/posts`. So whenever we render a new blog component, we do a XHR call and load the blog posts that we want to render.
+
+```js
+class Blog extends React.Component {
+  componentDidMount () {
+    fetch('http://localhost:4000/api/posts')
+      .then(response => response.json())
+      .then(posts => {
+          console.log('Yey! I got some posts!', posts);
+      });
+  }
+  render () {
+    return (
+      <div>
+          <BlogPost title={'Hello World!'} body={'Hello, this is my blog.'} />
+          <BlogPost title={'Good bye!'} body={'I\'m busy. I\'m shutting this blog down.'} />
+      </div>
+    );
+  }
+}
+```
+
+This means that whenever we `mount` this component by rendering it as a child of some other part of our application, e.g. using `<Blog />`, React executes the `componentDidMount` method that requests data from our API.
+
+Once we receive those blog posts, we `console.log` them. While `console.log`ging them is certainly fun, our users won't be too happy about having to open the Chrome DevTools in order to read our blog. So instead of just printing them to the console, the `Blog` component should somehow "keep track of them".
+
+The most intuitive solution would be to "set" them as a property on the component. React provides a method for that called... `setState`! `setState` allows components to keep track of their **internal** state.
+
+So let's change our component to update the state of the blog component once we receive the requested blog posts from our API:
+
+```js
+  componentDidMount () {
+    fetch('http://localhost:4000/api/posts')
+      .then(response => response.json())
+      .then(posts => {
+        console.log('Yey! I got some posts!', posts);
+
+        // Let's update the state here:
+        this.setState({ posts: posts });
+
+        // or shorter: this.setState({ posts });
+      });
+  }
+```
+
+Now that we updated the component's state using `setState`, we want to render our posts using the `BlogPost` component, so we need to update our component's render method:
+
+```js
+  render () {
+    return (
+      <div>
+        {
+          this.state.posts.map((post) =>
+            <BlogPost title={post.title} body={post.body} />
+          )
+        }
+      </div>
+    );
+  }
+```
+
+Keep in mind that we didn't change the `BlogPost` component *at all* — ideally we should try to keep the majority of our components "stateless".
+
+At this point, you might wonder why we had to use `setState`, if all `setState` does is... well... setting `this.state`. There is a very simple reason for that:
+
+React needs to "know" that a state change happened, since whenever a component's "data" (state or props) changes, React has to re-render the component (runs its render function to figure out "what changed").
+
+### State vs Props
+
+At this point you might wonder when to use `props` and when to use `state`, but there is a good rule of thumb when laying out our application's architecture:
+
+* Use `state` for adding interactivity to our component:
+
+    A dropdown menu for example can be in an `expanded` or `collapsed` state, a modal dialog can be `open` or `closed`.
+
+* Move the state "up":
+
+    In our blog example, the `BlogPost` component could also "manage" its own state by doing a separate XHR request. Nevertheless, this isn't an elegant solution, since the blog needs to "know" about the blog posts anyways (how else would it "decide" how many `<BlogPost />` components should be rendered in the first place?).
+
+    Moving **application state** higher up generally speaking simplifies the architecture of our application and allows us to keep the majority of the components stateless.
+
+    State is hard to manage and difficult to test. You should always try to keep our components as pure as possible.
+
+* Start with props:
+
+    When creating the layout of your project, you typically start with a static version and then add interactivity once we reach a certain point.
+
+    During this initial phase, there is almost never a need for state. Everything can be done using props during those initial minutes. Try to keep your components as encapsulated and isolated as possible while we're gradually adding interactivity to individual parts of your application.
+
+    For our `<Blog />` example, we first hardcoded the `<BlogPost />` component's props and then added an API call that updated the `Blog` component's state.
+
+In general, it's usually a good idea to start with a rather static version of your application, in which all data is being rendered by gradually passing down `props` to child components. Then — as a next step — we can add custom user interactions to your app, e.g. what happens when a user presses this button? Should it open a dialog by doing `this.setState({dialogOpen: true})`?
+
+### `setState` in detail
+
+Now that we built our blog, let's have a look at something something a bit more interesting: A modal.
+
+![Modal](https://s3.amazonaws.com/learn-verified/react-changing-state-readme-modal.png)
+
+Let's first start off laying out our component structure:
+
+```js
+class App extends React.Component {
+  render () {
+    return (
+      <div>
+        <Modal />
+      </div>
+    );
+  }
+}
+```
+
+A modal can either be open or closed, so our application needs to keep track of that. The `<Modal />` component itself only _knows_ whether or not it is open, it can't "open" itself — instead it has to expose some API for other components for opening it.
+
+Therefore we need to keep track of whether or not the modal is open in its parent component. In this case, that's the `<App />` component. On page load, the modal shouldn't be open. The initial state of the modal is closed (`isModalOpen = false`). We can initialize a component's state in its constructor:
+
+```js
+class App extends React.Component {
+  constructor (props) {
+    super(props);
+    this.state = {
+      // modal should be closed on page load
+      isModalOpen: false
+    };
+  }
+  // ...
+}
+```
+
+We then need to "tell" the `<Modal />` component whether or not it is open. The only way to communicate with the component is via its `props`. In this case, we would add a new `isOpen` prop to the `Modal` component:
+
+```js
+class App extends React.Component {
+  // ...
+  render () {
+    return (
+      <div>
+        <Modal isOpen={this.state.isModalOpen} />
+      </div>
+    );
+  }
+}
+```
+
+Obviously our users are going to be very disappointed if they aren't able to open the popup, so let's add a separate button that triggers the modal:
+
+```js
+class App extends React.Component {
+  // ...
+  openModal () {
+    this.setState({ isModalOpen: true })
+  }
+  render () {
+    return (
+      <div>
+        <button onClick={this.openModal}>Open the modal!</button>
+        <Modal isOpen={this.state.isModalOpen} />
+      </div>
+    )
+  }
+}
+```
+
+Now if we click the `Open the modal!` button, we update the `<App />` component's internal state, thus enforcing an update on the `<App />` component.
+
+Since `this.state.isModalOpen` evaluates to `true` now, the modal is being opened:
+
+```js
+  render () {
+    return (
+      <div>
+        <button onClick={this.openModal}>Open the modal!</button>
+        <Modal isOpen={true} />
+      </div>
+    );
+  }
+```
+
+But what does our modal component actually look like? Up until now, we didn't talk about the `<Modal />` component's render method.
+
+As we just saw, the modal accepts an `isOpen` prop, which it then uses in order to add an `modal--is-open` class to its container:
+
+```js
+class Modal extends React.Component {
+  render() {
+    const { isOpen } = this.props;
+
+    return (
+      <div className={isOpen ? 'modal modal--is-open' ? 'modal'}>
+        <button>close</button>
+
+        <p>Hello! I am a modal.</p>
+      </div>
+    );
+  }
+}
+```
+
+Perfect! Now we can simply specify whether or not the modal is open using its `isOpen` prop.
+
+As you might have noticed, the modal also has a "close" button. Currently it doesn't do anything, so let's think about what should happen if the close button is being pressed:
+
+1. The user clicks the close button.
+2. The `<Modal />` component needs to update the `<App />` component's `isModalOpen` state.
+
+For convenience, we're now going to add a `closeModal` method on the `<App />` components:
+
+```js
+class App extends React.Component {
+  // ...
+  openModal () {
+    this.setState({ isModalOpen: true })
+  }
+  closeModal () {
+    this.setState({ isModalOpen: false })
+  }
+  // ...
+}
+```
+
+The `<Modal />` component now needs to be able to call the `<App />` component's `closeModal` method. But React components can't directly access their ancestors, so instead we have to pass the `App`'s `closeModal` method as a handler to the `Modal`:
+
+```js
+class Modal extends React.Component {
+  render () {
+    const { isOpen, onClose } = this.props;
+
+    return (
+      <div className={isOpen ? 'modal modal--is-open' ? 'modal'}>
+        <button onClick={onClose}>close</button>
+
+        <p>Hello! I am a modal.</p>
+      </div>
+    );
+  }
+}
+```
+
+```js
+class App extends React.Component {
+  // ...
+  render () {
+    return (
+      <div>
+        <button onClick={this.openModal}>Open the modal!</button>
+        <Modal isOpen={this.state.isModalOpen} onClose={this.closeModal}/>
+      </div>
+    );
+  }
+  // ...
+}
+```
+
+And that's it! Now the modal is able to communicate with the `<App />` by calling the passed in handler.
+
+There is only one problem: When we click `close`, we get the following error:
+
+```
+TypeError: onClose is not a function
+```
+
+Uh? That's a bit weird. What happened?
+
+We forgot to bind our handler functions! Typically we would bind all you component's public methods in the constructor (click handlers etc.):
+
+```js
+class App extends React.Component {
+  constructor (props) {
+    super(props);
+    this.state = {
+        // modal should be closed on page load
+        isModalOpen: false
+    };
+    this.openModal = this.openModal.bind(this);
+    this.closeModal = this.closeModal.bind(this);
+  }
+  // ...
+}
+```
+
+Now everything works as expected. Good job, we just implemented a React modal!
+
+**Advanced:** If you're ever looking for an actual React modal to use in a production application, [`react-modal`](https://github.com/reactjs/react-modal) has a very similar API to the component we just implemented.
+
+- [React: Communicate Between Components](https://facebook.github.io/react/tips/communicate-between-components.html)
+- [Autobinding, React and ES6 Classes](http://www.ian-thomas.net/autobinding-react-and-es6-classes/)
+
+## Toggling State
+
+One way to communicate between components by is by passing around handler functions, e.g. a button usually has an `onClick` handler, while a custom modal component might accept an `onClose` function.
+
+While it's certainly possible to structure your component hierarchy using `on...` handlers, this approach is rather inflexible  and leads to a lot of code duplication in the long term.
+
+In this lesson we're going to be learning how decoupling those functions into isolated `actions` allows us to de-couple handlers from the component they operate on.
+
+A lot of components have two states:
+
+- a toggle button for instance is either "on" or "off"
+- an input field can be enabled or disabled
+- a checkbox can either be ticked or unticked
+- a log paragraph of text could either be collapsed or expanded
+
+### Toggle Button
+
+Let's first have a look at a simple example: A toggle button.
+
+![Toggle Button States](./assets/toggle_buttons.png)
+
+A toggle button can either be enabled or disabled.
+
+Using what we already learned about state, we could easily implement such a switch:
+
+```js
+class ToggleButton extends React.Component {
+  constructor (props) {
+    super(props);
+    this.state = {
+      // initially our `ToggleButton` is 
+      enabled: false
+    };
+  }
+  handleClick () {
+    this.setState({
+      // negate enabled
+      enabled: !this.state.enabled
+    });
+  }
+  render () {
+    return (
+      <button onClick={this.handleClick}>
+        {this.state.enabled ? 'Enabled' : 'Disabled'}
+      </button>
+    );
+  }
+}
+```
+
+Our component renders a button. If the toggle button is in the `enabled` state, we display the "Enabled" lable, otherwise we consider the button to be "Disabled".
+
+### Enabled / Disabled Inputs
+
+Not only toggle buttons can be toggled, but also checkboxes. A checkbox is either enabled or disabled.
+
+Implementing a form containing a checkbox (e.g. for one of those legal disclaimers) is trivial:
+
+![Order chocolate](./assets/order_chocolate.png)
+
+Similar to the toggle button above, the checkbox would have an enabled and disabled state.
+
+```js
+class ChocolateDisclaimer extends React.Component {
+  constructor (props) {
+    super(props);
+    this.state = {
+      // a customer first has to promise not to store the chocolate in the
+      // fridge
+      enabled: false
+    };
+  }
+  handleClick () {
+    this.setState({
+      enabled: !this.state.enabled
+    });
+  }
+  render () {
+    return (
+      <form>
+        <label>
+          <input type='checkbox' checked={this.state.enabled} onClick={this.handleClick} />
+          I agree to never, ever store chocolate in the fridge.
+        </label>
+        <button onClick={...} disabled={this.state.enabled}>Submit order</button>
+      </form>
+    )
+  }
+}
+```
+
+As we can see, this component looks fairly similar to the toggle button above. The only real difference is that instead of a toggle "button", we now have an input of type `checkbox`. Other than that, everything remains the same.
+
+Wouldn't it be nice if we could de-duplicate this logic and extract out the redundant `handleClick` handler?
+
+### Modularizing actions
+
+If we look at the code of the toggle button and chocolate disclaimer, we notice that the click handlers are completely **identical**.
+
+Code redundancy is never a good thing, therefore we should try to extract out our `handleClick` function.
+
+One way would be to have a super-class `Toggleable` that both `ChocolateDisclaimer` and `ToggleButton` inherit from:
+
+```js
+class Toggleable extends React.Component {
+  toggleState () {
+    this.setState({
+      enabled: !this.state.enabled
+    });
+  }
+}
+```
+
+`ToggleButton` could then inherit from this superclass:
+
+```js
+class ToggleButton extends Toggleable {
+  constructor (props) {
+    super(props);
+    this.state = {
+      // initially our `ToggleButton` is 
+      enabled: false
+    };
+  }
+  render () {
+    return (
+      <button onClick={this.toggleState}>
+        {this.state.enabled ? 'Enabled' : 'Disabled'}
+      </button>
+    );
+  }
+}
+```
+
+This is already a bit better, but becomes quickly unmanageable. A component might for instance be `Toggleable` and `Submittable`… which becomes a bit messy very quickly. JavaScript doesn't support multiple-inheritance (inheriting from more than one class at once) and building our own mixin system is a bit unnecessary.
+
+Instead, we can extract out our handler into a separate "action".
+
+An action is just a plain function that accepts a context (`ctx`) and arbitrary additional arguments (for instance the event itself in case we want to
+`.preventDefault()`):
+
+```js
+function toggleState (ctx, ev) {
+  ctx.setState({
+    enabled: !ctx.state.enabled
+  });
+}
+```
+
+`ctx` is the `this` context of the component that the action is "bound" to.
+
+The above action could be used in the `ToggleButton` as well as the `ChocolateDisclaimer`.
+
+In both cases, the context would be `this`. The action would be bound inside the component's constructor function:
+
+```js
+class ToggleButton extends React.Component {
+  constructor (props) {
+    super(props);
+    this.state = { enabled: false };
+    this.toggleState = () => toggleState(this);
+  }
+  render () {
+    // ...
+  }
+}
+```
+
+Instead of using an arrow function, we could also "curry" the `toggleState` function. Currying a functions means converting a function that accepts multiple arguments into a function that accepts one argument at a time:
+
+```js
+function toggleState (ctx, ev) {
+  ctx.setState({
+    enabled: !ctx.state.enabled
+  });
+}
+```
+
+could also be written as
+
+```js
+const toggleState = ctx => {
+  // actual event handler
+  return ev => {
+    ctx.setState({
+      enabled: !ctx.state.enabled
+    });
+  }
+}
+```
+
+or, if you want to keep it really concise:
+
+```js
+const toggleState = ctx => ev =>
+  ctx.setState({
+    enabled: !ctx.state.enabled
+  });
+```
+
+This has the advantage that we no longer need to wrap our `toggleState` function inside the component's constructor:
+
+```js
+class ToggleButton extends React.Component {
+  constructor (props) {
+    // ...
+    this.toggleState = () => toggleState(this);
+  }
+  // ...
+}
+```
+
+could instead be written as without the outer arrow function:
+
+```js
+class ToggleButton extends React.Component {
+  constructor (props) {
+    // ...
+    this.toggleState = toggleState(this);
+  }
+  // ...
+}
+```
+
+And that's it! Now we modularized our `toggleState` handler! Instead of duplicating our `handleClick` handler, we can now apply the `toggleState` function to anything that can be toggled or turned on / off. It doesn't matter if it's a button, "Collapse"-button, input or lightsaber. Everything that can be enabled or disabled can be toggled by our `toggleState` function.
+
+- [Flux: Actions](https://facebook.github.io/react/blog/2014/07/30/flux-actions-and-the-dispatcher.html)
+
+## What is a store?
+
+A store is basically just a plain JavaScript object that allows components to share state.
+
+In a way, we can think of a store as a database. On the most fundamental level, both constructs allow us to store data in some form or another.
+
+In Flux-terms, a store typically has a couple of methods that we're going to go into more detail as part of this lesson. Usually we won't create our own stores from scratch, but instead simply customize one of the stores provided by library that we're using (usually [facebook/flux](https://www.npmjs.com/package/flux)).
+
+### Stores — singletons by design
+
+Singletons are application-level singletons. While there might be a variety of different stores (such as a `UserStore`, `FeedStore`, `MessageStore` etc.), there won't be multiple instances of the same store. Typically this means exporting an individual store object and globally exposing it to all component's that `require` it.
+
+This is somewhat analogous to our database metaphora: We might store different "kinds" of data that we store in different databases (e.g. we might unstructured data in MongoDB and relational data in something like PostgreSQL), but all clients share the "same" database. Each application node has access to the same data.
+
+On the most fundamental level, a store encapsulates state. We can easily model this using a ES6 class:
+
+```js
+class Store {
+  constructor (initialState) {
+    this.state = initialState;
+  }
+
+  setState (state) {
+    this.state = state;
+  }
+
+  getState () {
+    return this.state;
+  }
+}
+
+module.exports = new Store({});
+```
+
+### Subscribing to stores
+
+Of course having a store that simply wraps our state object isn't too useful yet. React components are data-driven. If we update their state using `setState`, React re-evaluates the component's `render` function and updates the rendered DOM structure.
+
+Hence we need a way to wire up our components to our global store. In some way, components need to be able to "listen" for state changes that occur in out store:
+
+![Flux Store](./assets/Flux - Store.png)
+
+An arbitrary number of components can subscribe to state changes that occur in the store. Component's can then react to the  state change by updating their own state and thus triggering a re-render.
+
+But how can component's register themselves at the store?
+
+Let's look at an example component for that!
+
+### A `<Profile />` component
+
+Let's assume for a moment that our store stores user data, e.g. the name and profile descriptions of individual members (something like Facebook profile).
+
+Each user can be represented by a flat object:
+
+```js
+{
+  id: 0,
+  firstName: 'Konrad',
+  lastName: 'Zuse',
+  bio: 'I like building stuff.'
+}
+```
+
+Our store simply wraps an array of user records:
+
+```js
+class UserStore {
+  constructor (initialState) {
+    this.state = initialState;
+  }
+
+  setState (state) {
+    this.state = state;
+  }
+
+  getState () {
+    return this.state;
+  }
+}
+
+module.exports = new UserStore([]);
+```
+
+Our profile component now renders the state of the `UserStore` component:
+
+```js
+const userStore = require('../stores/userStore');
+
+class Profile extends React.Component {
+  render () {
+    const { userId } = this.props;
+    const profile = userStore.find((user) => user.id === userId);
+
+    if (!profile) {
+      return (
+        <div>Loading...</div>
+      );
+    }
+
+    return (
+      <dl>
+        <dt>First Name</dt>
+        <dd>{profile.firstName}</dd>
+        <dt>Last Name</dt>
+        <dd>{profile.lastName}</dd>
+        <dt>Bio</dt>
+        <dd>{profile.bio}</dd>
+      </dl>
+    );
+  }
+}
+```
+
+We're almost there now. Currently we assume that the user that should be rendered is available in the store at the point when we render the `<Profile />` component.
+
+This might not always be the case. E.g. our users are most likely going to be loaded from some sort of API. What if we render the component before respective HTTP request receives a response? In this case, our profile component would simply display `Loading...` forever.
+
+We therefore need to notify subscribed components about eventual state changes. This sounds conceptually very similar to an event emitter and in fact that's exactly what we're going to implement!
+
+We can either inherit from some event emitter (e.g. `require('events').EventEmitter`) or we can implement our own. To recap the inner-workings of how an event emitter works, let's implement our own for now!
+
+### Turning our store into an `EventEmitter`
+
+Our store needs to expose an API for registering components that depend on its state. Analogous to an `EventEmitter`, we call the respective method `addListener` and `removeListener`.
+
+Both methods accept a listener function that will be called with the updated state object whenever the store's state changes.
+
+To start off, we need to store an array of those listener functions on the initiated store object:
+
+```js
+class UserStore {
+  constructor (initialState) {
+    this.state = initialState;
+
+    // Our listener functions will be stored on UserStore#listeners.
+    this.listeners = [];
+  }
+
+  // ...
+}
+```
+
+Now components can register themselves using `UserStore.addListener`. The `addListener` function is simply going to add the listener to the `listeners` array.
+
+```js
+class UserStore {
+  // ...
+  addListener (listener) {
+    this.listeners.push(listener);
+  }
+}
+```
+
+The `UserStore` iterates through all registered event listeners whenever a state change occurs. All listeners will be called with the updated state as a first argument:
+
+```js
+class UserStore {
+  // ...
+  setState (state) {
+    this.state = state;
+    for (const listener of this.listeners) {
+      listener(state);
+    }
+  }
+}
+```
+
+And the `<Profile />` component can now call this method in order to register for subsequent state changes. In order to trigger a re-render whenever the store gets updated, we copy the store's state onto the component's state:
+
+```js
+class Profile extends React.Component {
+  componentDidMount () {
+    userStore.addListener((state) => {
+      this.setState(state)
+    });
+    this.setState(userStore.getState())
+  }
+  render () {
+    const { userId } = this.props;
+
+    // We're now accessing `this.state` instead of `userStore`.
+    const profile = this.state.find((user) => user.id === userId);
+
+    // ...
+  }
+}
+```
+
+And Voila! Our component is now wired up to our store. There is just one small (but very important!) issue which we didn't address,yet!
+
+What happens when the component is being unmounted? In other words, what happens when the user leaves the profile page and goes somewhere else?
+
+Subsequent store updates would trigger a `setState` on an unmounted component! Not only is this going to trigger a warning in React, it's also a very common source for memory leaks in Flux architectures. Whenever we register components on a store, we have to make sure we remove all listeners at the point where the component is being unmounted.
+
+`EventEmitter`s usually expose a `removeListener` method for cleaning up event listeners, but it's quite common for Flux stores to simply return a function from `addListener` that when called removes the listener from the store. Sounds complicated? Let's look at the code!
+
+```js
+class UserStore {
+  addListener (listener) {
+    this.listeners.push(listener);
+    const removeListener = () => {
+      this.listeners = this.listeners.filter((l) => listener !== l);
+    };
+    return removeListener;
+  }
+}
+```
+
+Now we can update our `<Profile />` component's lifecycle methods to trigger the `removeListener` method on "unmount":
+
+```js
+class Profile extends React.Component {
+  // ...
+  componentDidMount () {
+    // We store a reference to the added event listener.
+    this.removeListener = userStore.addListener((state) => {
+      this.setState(state);
+    });
+    this.setState(userStore.getState());
+  }
+  componentWillUnmount () {
+    // Destroy the listener when the component unmounts.
+    this.removeListener();
+  }
+  // ...
+}
+```
+
+And that's it! Our `<Profile />` component gets updated whenever we `UserStore` gets updated.
+
+### Store API
+
+Let's take a moment and revisit the store methods we just added:
+
+#### `addListener(listener) #=> removeListener()`
+
+Called by components to register a listener function. The listener function will be called with the updated state object.
+
+The returned `removeListener` function de-registers the previously registered listener function.
+
+#### `getState() #=> state`
+
+Used by components to get the initial state of the store. Returns the currently encapsulated state object.
+
+#### `setState(state)`
+
+Explicitly stores the passed in state on the store instance. In the next lesson we're going to explore how to generalize data flow in our application to allow actions to mutate stores via a kind of central event bus ("Dispatcher"). We're slowly moving towards an architecture in which stores are being updated using external action handlers rather than explicit function calls. But we aren't quite there yet!
+
+#### Custom Getters
+
+So far our store only has a single method for extracting all the user records that have been stored in it.
+
+This can be a bit messy, since in our above example, the `<Profile />` component actually stores **all** received user objects, even though it only ever renders a single one.
+
+In scenarios like that, it's quite common to add this "filtering" logic to the underlying store.
+
+Instead of finding the matching user object in the `<Profile />` component's render method, we can instead add a new method to the `UserStore` in order to enable us to use similar logic in other components that might also render users (such as a list of friends):
+
+```js
+class UserStore {
+  // ...
+  getUserById (id) {
+    return this.state.find(user => user.id === id);
+  }
+}
+```
+
+Our `<Profile />` component can now simply call this method in order to update its own state accordingly.
+
+```js
+class Profile extends React.Component {
+  componentDidMount () {
+    // ...
+    const user = userStore.getUserById(this.props.userId);
+    this.setState({ user });
+  }
+}
+```
+
+And our render method no longer has to iterate over all user records:
+
+```js
+class Profile extends React.Component {
+  render () {
+    const {user} = this.state;
+
+    if (!user) {
+      return <div>Loading...</div>;
+    }
+
+    return (
+      <dl>
+        <dt>First Name</dt>
+        <dd>{user.firstName}</dd>
+        <dt>Last Name</dt>
+        <dd>{user.lastName}</dd>
+        <dt>Bio</dt>
+        <dd>{user.bio}</dd>
+      </dl>
+    );
+  }
+}
+```
+
+This has a couple of advantages over copying over the "entire" `UserStore` state.
+
+1. Performance Improvement
+
+Computers are pretty fast, so unless there is a huge number of users, the performance difference won't be noticeable. Nevertheless, small improvements add up, so not re-rendering the `<Profile />` component whenever **any** user is definitely desirable.
+
+Further more, we could implement a `shouldComponentUpdate` method on the `<Profile />` component:
+
+  ```js
+  shouldComponentUpdate ({ user }) {
+    return user !== this.state.user;
+  }
+  ```
+
+Which would ignore store updates that are unrelated to our actual user record.
+
+2. Better modularity
+
+Potentially, there could be all kinds of components that render user object. E.g. a chat sidebar could display each user using an individual component, a friend component or modal could equally be wired up to the shared store.
+
+Extracting out the logic for finding individual users based on id reduces code redundancy in those cases.
+
+- [React: Flux Overview](https://facebook.github.io/flux/docs/overview.html)
+- [Actions and the Dispatcher](https://facebook.github.io/flux/docs/actions-and-the-dispatcher.html#content)
